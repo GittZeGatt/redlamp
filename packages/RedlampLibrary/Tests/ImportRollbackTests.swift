@@ -115,8 +115,8 @@ struct ImportRollbackTests {
         let left = try #require(rollback.left.first)
         #expect(rollback.left.count == 1 && left.path == changed.path && left.message.contains("changed since"))
         #expect(try Data(contentsOf: changed) == Data("saved over by another app".utf8))
-        // Its copy at the backup, still the one the import made, went; it stays in the library at the destination.
-        #expect(!Self.exists(sandbox.backup.appending(path: "IMG_0002.JPG")))
+        // The photo stays whole: its copy at the backup, still the one the import made, and its place in the library.
+        #expect(ImportSandbox.files(in: sandbox.backup).keys.sorted() == ["IMG_0002.JPG"])
         #expect(try await sandbox.rows(below: sandbox.destination).keys.sorted() == ["IMG_0002.JPG"])
         let entry = try #require(try await session.importer().entries().first { $0.id == plan.id })
         #expect(entry.done == 1 && entry.rolledBack == 2)

@@ -51,9 +51,9 @@ extension Importer {
     /// it made at the destination and the backup goes to the Trash, with the `.redlamp` sidecars beside its
     /// photos at the destination; its photos' rows leave the index; the folders it made (`newFolders`) that are
     /// left empty are removed, but the library's roots. A photo file is taken only while it's the copy the
-    /// import made: of its size, with its content key. A target where one isn't keeps all of that photo, and
-    /// the rollback says so. What the import staged under hidden names is removed. The sources are never
-    /// touched.
+    /// import made: of its size, with its content key. A photo one of whose files isn't stays whole, at every
+    /// target, and the rollback says so. What the import staged under hidden names is removed. The sources
+    /// are never touched.
     ///
     /// It's journaled in the import's log, as the import is: once its state is `rollingBack`, each file moved
     /// to the Trash and each photo taken back gets a line. Cancelling stops it between batches of photos,
@@ -176,7 +176,6 @@ extension Importer {
         for index in batch {
             let item = plan.items[index]
             let verified = logged.verified[index] ?? [:]
-            var whole = !verified.isEmpty
             for number in plan.roots.indices {
                 for copy in item.copies {
                     let staging = ImportCopier.staging(for: plan.targets(of: copy)[number])
@@ -184,32 +183,40 @@ extension Importer {
                         try? fileSystem.removeItem(at: staging)
                     }
                 }
-                let made = item.copies.indices.filter { verified[$0]?[number] != nil }
-                var photos: [(copy: ImportPlan.Copy, target: URL, present: Bool)] = []
-                var changed = false
-                for copy in made.map({ item.copies[$0] }) where copy.role == .photo {
+            }
+            guard !verified.isEmpty else { continue }
+            // A photo one of whose files isn't the copy the import made any more stays whole, at every target.
+            var photos: [(number: Int, copy: ImportPlan.Copy, target: URL, present: Bool)] = []
+            var changed: [ImportRollback.Left] = []
+            for number in plan.roots.indices {
+                for (place, copy) in item.copies.enumerated()
+                    where copy.role == .photo && verified[place]?[number] != nil {
                     let target = plan.targets(of: copy)[number]
                     switch check(copy, at: target, fileSystem: fileSystem) {
-                    case .made: photos.append((copy, target, true))
-                    case .gone: photos.append((copy, target, false))
+                    case .made: photos.append((number, copy, target, true))
+                    case .gone: photos.append((number, copy, target, false))
                     case let .other(message):
-                        changed = true
-                        part.left.append(ImportRollback.Left(photo: item.photo, path: target.path, message: message))
+                        changed.append(ImportRollback.Left(photo: item.photo, path: target.path, message: message))
                     }
                 }
-                guard !changed else {
-                    whole = false
-                    continue
-                }
-                var files = photos.filter(\.present).map(\.target)
-                for copy in made.map({ item.copies[$0] }) where copy.role != .photo {
+            }
+            guard changed.isEmpty else {
+                part.left += changed
+                continue
+            }
+            var whole = true
+            targets: for number in plan.roots.indices {
+                let here = photos.filter { $0.number == number }
+                var files = here.filter(\.present).map(\.target)
+                for (place, copy) in item.copies.enumerated()
+                    where copy.role != .photo && verified[place]?[number] != nil {
                     let target = plan.targets(of: copy)[number]
                     if fileSystem.exists(target) {
                         files.append(target)
                     }
                 }
                 if number == 0 {
-                    for photo in photos {
+                    for photo in here {
                         let sidecars = [SidecarLocator.besidePhoto(photo.target), locator.onThisMac(photo.target)]
                         for sidecar in sidecars.compactMap(\.self) where !files.contains(sidecar) {
                             if fileSystem.exists(sidecar) {
@@ -219,6 +226,11 @@ extension Importer {
                     }
                 }
                 var moved = Set<String>()
+                defer {
+                    for photo in here where !photo.present || moved.contains(photo.target.path) {
+                        part.gone.append(Part.Gone(path: LibraryIndexer.path(photo.target), key: photo.copy.contentKey))
+                    }
+                }
                 for file in files {
                     let place: URL
                     do {
@@ -229,14 +241,11 @@ extension Importer {
                             photo: item.photo, path: file.path,
                             message: "it couldn't be moved to the Trash: \(ImportCopyError.message(error))",
                         ))
-                        break
+                        break targets
                     }
                     try log.trashed(index, from: file, to: place)
                     part.trashed.append(ImportRollback.Trashed(from: file.path, to: place.path))
                     moved.insert(file.path)
-                }
-                for photo in photos where !photo.present || moved.contains(photo.target.path) {
-                    part.gone.append(Part.Gone(path: LibraryIndexer.path(photo.target), key: photo.copy.contentKey))
                 }
             }
             if whole {
