@@ -45,6 +45,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var proposalsObservation: LibraryObservation?
     /// The proposals of the Library Health check shown, which its cells draw (LIB-40).
     lazy var proposals = model.healthProposals
+    private var softFramesObservation: LibraryObservation?
+    /// What the soft-frame check proposes for the photos shown, which their cells draw (LIB-42).
+    lazy var softFrames = model.librarySoftFrames
     private var trackers: [Tracker] = []
     /// The cells on screen, by item (a row of the photos, or grouped, a header or a photo), and those out of
     /// sight waiting to be used again.
@@ -163,6 +166,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         groupsObservation = nil
         stacksObservation = nil
         proposalsObservation = nil
+        softFramesObservation = nil
         trackers.forEach { $0.cancel() }
         trackers = []
         wasShown = false
@@ -177,6 +181,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         groupsObservation = model.gridGroups.observe { [weak self] change in self?.groupsChanged(change) }
         stacksObservation = model.gridStacks.observe { [weak self] change in self?.stacksChanged(change) }
         proposalsObservation = proposals.observe { [weak self] in self?.proposalsChanged() }
+        softFramesObservation = softFrames.observe { [weak self] in self?.proposalsChanged() }
+        softFrames.refresh()
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -777,6 +783,7 @@ extension LibraryGridView {
         } ?? (nil, nil)
         cell.isFocusSuggested = suggestedFrames.contains(item.url)
         cell.healthMark = proposals.mark(for: item.url)
+        cell.softFrame = softFrames.mark(of: photoID(ofItem: index))
         cell.isMenuTarget = index == menuItem
         cell.root.isHidden = false
         if cell.image == nil || cell.edge < edge || cell.shownEdit != edit {

@@ -20,7 +20,7 @@ final class LibraryGridCell {
     private var badges: [Badge: CALayer] = [:]
 
     private enum Badge: Hashable {
-        case flag, stack, edited, rating, cloud, mark, stackCount, pairText, proposal
+        case flag, stack, edited, rating, cloud, mark, stackCount, pairText, proposal, softness
     }
 
     /// The dashed frame of a photo a Library Health check's batch acts on (LIB-40).
@@ -31,6 +31,16 @@ final class LibraryGridCell {
     var healthMark: HealthMark? {
         didSet {
             if healthMark != oldValue {
+                showBadges(of: item)
+            }
+        }
+    }
+
+    /// What the soft-frame check proposes for the photo while it's undecided (LIB-42): a dashed pick or reject in
+    /// the flag's place, a dashed frame, and how much softer a soft frame is than its burst's sharpest.
+    var softFrame: SoftFrames.Entry? {
+        didSet {
+            if softFrame != oldValue {
                 showBadges(of: item)
             }
         }
@@ -204,12 +214,25 @@ final class LibraryGridCell {
         row = -1
         stackBadges = (nil, nil)
         healthMark = nil
+        softFrame = nil
     }
 
     /// The proposal badge shown, for the tests.
     var proposalShown: GridBadges.Kind? {
         guard let layer = badges[.proposal], !layer.isHidden, let healthMark else { return nil }
         return GridBadges.proposal(healthMark, width: geometry.image.width)
+    }
+
+    /// The soft-frame check's marks shown, for the tests: the proposed pick or reject in the flag's place, the
+    /// softness pill's frame and the dashed frame's.
+    var softFrameMarks: (proposed: GridBadges.Kind?, softness: CGRect?, frame: CGRect?) {
+        // swiftlint:disable:next force_cast
+        let flag = badges[.flag].flatMap { $0.isHidden ? nil : $0.contents.map { $0 as! CGImage } }
+        let proposed = [GridBadges.Kind.proposedPick, .proposedReject].first { kind in
+            flag.map { $0 === GridBadges.image(kind, scale: scale) } ?? false
+        }
+        let softness = badges[.softness].flatMap { $0.isHidden ? nil : $0.frame }
+        return (proposed, softness, proposalFrame?.isHidden == false ? proposalFrame?.path?.boundingBoxOfPath : nil)
     }
 
     /// The proposal badge's frame in the cell and the dashed frame's, while they're shown, for the tests.
@@ -247,10 +270,11 @@ final class LibraryGridCell {
         let shows = geometry.style != .none
         let slots = geometry.style == .expanded && item != nil
         let metadata = item?.metadata ?? PhotoMetadata()
+        let proposed: GridBadges.Kind? = softFrame.map { $0.verdict == .proposed ? .proposedPick : .proposedReject }
         let flag: GridBadges.Kind? = switch metadata.flag {
         case .pick: .pick
         case .reject: .reject
-        case nil: slots ? .flagSlot : nil
+        case nil: proposed ?? (slots ? .flagSlot : nil)
         }
         set(.flag, shows ? flag : nil, centre: geometry.flag)
         let document = item.map { SupportedFormats.isStack($0.url) } == true
@@ -270,6 +294,11 @@ final class LibraryGridCell {
         ))
         showStackBadges(besideDocument: shows && badges[.stack]?.isHidden == false)
         showProposal()
+        let image = geometry.image
+        let softness = softFrame.flatMap { GridBadges.softness($0, width: image.width) }
+        set(.softness, shows && metadata.flag == nil ? softness : nil, centre: CGPoint(
+            x: image.midX, y: image.maxY - (softness?.size.height ?? 0) / 2 - 4,
+        ))
         let colour = GridBadges.color(of: metadata)
         if shows, let colour {
             let layer = label ?? makeLayer { label = $0 }
@@ -323,7 +352,8 @@ final class LibraryGridCell {
     private func showProposal() {
         guard let healthMark, item != nil else {
             set(.proposal, nil)
-            proposalFrame?.isHidden = true
+            let undecided = item?.metadata.flag == nil
+            showProposalFrame(undecided ? softFrame.map { GridBadges.frameColor(of: $0.verdict) } : nil)
             return
         }
         let image = geometry.image
@@ -332,16 +362,21 @@ final class LibraryGridCell {
             ? CGPoint(x: image.midX, y: image.maxY - kind.size.height / 2 - 4)
             : CGPoint(x: image.midX, y: image.midY)
         set(.proposal, kind, centre: centre)
-        guard healthMark.isFramed else {
+        showProposalFrame(healthMark.isFramed ? GridBadges.frameColor(of: healthMark.proposal) : nil)
+    }
+
+    /// The dashed frame just outside the thumbnail, inside the selection's outline, in `color`; hidden for nil.
+    private func showProposalFrame(_ color: CGColor?) {
+        guard let color else {
             proposalFrame?.isHidden = true
             return
         }
         let frame = proposalFrame ?? makeProposalFrame()
-        let outline = image.insetBy(dx: -2.5, dy: -2.5)
+        let outline = geometry.image.insetBy(dx: -2.5, dy: -2.5)
         if frame.path?.boundingBoxOfPath != outline {
             frame.path = CGPath(roundedRect: outline, cornerWidth: 3, cornerHeight: 3, transform: nil)
         }
-        frame.strokeColor = GridBadges.frameColor(of: healthMark.proposal)
+        frame.strokeColor = color
         frame.isHidden = false
     }
 

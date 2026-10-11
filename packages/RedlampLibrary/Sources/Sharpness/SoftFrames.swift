@@ -20,7 +20,7 @@ import Foundation
 ///
 /// Nothing is written to sidecars: the verdicts are worked out again from the index's measurements and the frames'
 /// decisions whenever either changes.
-public struct SoftFrames: Sendable {
+public struct SoftFrames: Sendable, Equatable {
     /// What's proposed.
     public enum Mode: String, Sendable, Hashable, CaseIterable, Codable {
         /// The sharpest frame of each moment.
@@ -32,8 +32,8 @@ public struct SoftFrames: Sendable {
 
         public var title: String {
             switch self {
-            case .onePerMoment: "One Pick per Moment"
-            case .bestTwo: "Best Two per Moment"
+            case .onePerMoment: "One per Moment"
+            case .bestTwo: "Two per Moment"
             case .runsOnly: "Bursts Only"
             }
         }
@@ -66,6 +66,11 @@ public struct SoftFrames: Sendable {
         public var verdict: Verdict
         /// Its sharpness over its burst's sharpest frame's, 0 ... 1; nil for a frame not judged in a burst.
         public var relative: Float?
+
+        public init(verdict: Verdict, relative: Float? = nil) {
+            self.verdict = verdict
+            self.relative = relative
+        }
     }
 
     /// The entries of the photos with a verdict, by photo ID.

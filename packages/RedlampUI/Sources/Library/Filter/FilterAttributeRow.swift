@@ -4,9 +4,10 @@ import RedlampDocument
 import RedlampLibrary
 
 /// The filter bar's Attribute section, as Lightroom Classic's: flags, the rating with its comparison,
-/// colour labels, edited or not, kinds of file, marked photos, offline and damaged ones (LIB-40), and the
-/// moments without a pick (LIB-41). Each button sets its field's filter in the query, which the text shows.
-/// Missing photos have none: only Library Health's Missing check lists them (DEC-59).
+/// colour labels, edited or not, kinds of file, marked photos, offline and damaged ones (LIB-40), the
+/// moments without a pick (LIB-41), and the soft-frame check's Proposals menu (LIB-42). Each button sets its field's
+/// filter in the query, which the text shows. Missing photos have none: only Library Health's Missing check lists
+/// them (DEC-59).
 final class FilterAttributeRow: NSView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -27,6 +28,7 @@ final class FilterAttributeRow: NSView {
     private let unpicked = FilterToggle(
         symbol: "flag.slash", identifier: "library.filter.unpicked-moments", tip: "Only Moments without a Pick",
     )
+    private let proposals = FilterProposalsMenu()
 
     init(model: EditorModel) {
         self.model = model
@@ -78,6 +80,16 @@ final class FilterAttributeRow: NSView {
         offline.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.offline) }
         damaged.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.damaged) }
         unpicked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.unpickedMoment) }
+        proposals.onChoose = { [weak self] choice in
+            guard let model = self?.model else { return }
+            if let mode = choice.mode {
+                model.showProposals(mode)
+            } else if let trait = choice.trait {
+                model.libraryFilters?.toggle(trait)
+            } else {
+                model.acceptProposals()
+            }
+        }
         comparison.set(
             [("≥", 0), ("≤", 1), ("=", 2)], chosen: 0,
         )
@@ -88,7 +100,7 @@ final class FilterAttributeRow: NSView {
             (filterLabel("Edit"), [edited, unedited]),
             (filterLabel("Kind"), FilterAttributes.offeredKinds.compactMap { kinds[$0] }),
             (filterLabel("Status"), [marked, offline, damaged]),
-            (filterLabel("Moment"), [unpicked]),
+            (filterLabel("Moment"), [unpicked, proposals]),
         ]
         for group in groups {
             addSubview(group.label)
@@ -159,6 +171,13 @@ final class FilterAttributeRow: NSView {
         offline.isOn = attributes.offline
         damaged.isOn = attributes.damaged
         unpicked.isOn = attributes.unpickedMoments
+        let softFrames = model.librarySoftFrames
+        let terms = [
+            (attributes.proposed, LibraryQuery.Trait.proposed),
+            (attributes.soft, .soft),
+            (attributes.changedByYou, .changedByYou),
+        ].filter(\.0).map(\.1)
+        proposals.update(shown: softFrames.shows ? softFrames.mode : nil, terms: Set(terms))
     }
 
     override func layout() {
@@ -176,7 +195,7 @@ final class FilterAttributeRow: NSView {
                 x += width + 4
             }
             for control in group.controls {
-                let controlWidth = Self.width(of: control)
+                let controlWidth = width(of: control)
                 control.frame = CGRect(x: x, y: (bounds.height - 20) / 2, width: controlWidth, height: 20)
                 x += controlWidth + 1
             }
@@ -186,11 +205,11 @@ final class FilterAttributeRow: NSView {
 
     /// The gap after each group, and the groups shown with their labels: every label and the widest gap that
     /// fit; else as the row narrows, gaps down to 4 points, then without the labels of the groups whose buttons
-    /// are symbols that say what they are, the flags', the stars' and the colours', so every button stays in reach.
+    /// say what they are (`labelsThatGo`), one at a time from the first, so every button stays in reach.
     private func fitting() -> (gap: CGFloat, labelled: Set<Int>) {
         let labels = groups.map { filterWidth($0.label) + 4 }
         let controls = groups.reduce(CGFloat(12)) { width, group in
-            group.controls.reduce(width) { $0 + Self.width(of: $1) + 1 }
+            group.controls.reduce(width) { $0 + self.width(of: $1) + 1 }
         }
         let count = CGFloat(groups.count)
         var width = controls + labels.reduce(0, +)
@@ -198,14 +217,22 @@ final class FilterAttributeRow: NSView {
         let gap = min(12, max(4, ((bounds.width - width) / count).rounded(.down)))
         width += gap * count
         var labelled = Set(groups.indices)
-        for index in 0 ..< min(3, groups.count) where width > bounds.width {
+        for index in 0 ..< min(Self.labelsThatGo, groups.count) where width > bounds.width {
             labelled.remove(index)
             width -= labels[index]
         }
         return (gap, labelled)
     }
 
-    private static func width(of control: NSView) -> CGFloat {
-        (control as? FilterToggle)?.fittingWidth ?? 40
+    /// The groups, from the first, whose labels go when the row is narrow: those whose buttons say what they are, the
+    /// flags', the stars', the colours', and the edit's, kinds' and status's titles.
+    private static let labelsThatGo = 6
+
+    /// A control's width: the Proposals menu's its title's, the others' their own.
+    private func width(of control: NSView) -> CGFloat {
+        if control === proposals {
+            return ceil(proposals.intrinsicContentSize.width)
+        }
+        return (control as? FilterToggle)?.fittingWidth ?? 40
     }
 }

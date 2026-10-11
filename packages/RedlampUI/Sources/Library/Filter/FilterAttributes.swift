@@ -4,7 +4,8 @@ import RedlampLibrary
 
 /// What the Attribute section shows of a filter's rules, and the filters it writes back (LIB-18):
 /// flags, the rating and its comparison, colour labels, edited or not, kinds of file, marked, offline and
-/// damaged photos (LIB-40), and the moments without a pick (LIB-41). Each is the first filter on its field
+/// damaged photos (LIB-40), the moments without a pick (LIB-41), and the soft-frame check's proposed picks, soft
+/// frames and the frames Changed by You (LIB-42). Each is the first filter on its field
 /// at the top of the rules that keeps photos and that the section can show; anything else stays in the
 /// text as typed, `missing:` among it, which no list but Library Health's Missing check finds (DEC-59).
 struct FilterAttributes: Equatable {
@@ -19,6 +20,10 @@ struct FilterAttributes: Equatable {
     var damaged = false
     /// `is:unpicked-moment` alone in a filter at the top.
     var unpickedMoments = false
+    /// `is:proposed`, `is:soft` and `is:changed-by-you`, each alone in a filter at the top.
+    var proposed = false
+    var soft = false
+    var changedByYou = false
 
     struct Rating: Equatable {
         var comparison: LibraryQuery.Comparison
@@ -108,6 +113,9 @@ struct FilterAttributes: Equatable {
         let traits = rules.filters(on: .trait).map(\.filter)
         damaged = traits.contains(Self.filter(.damaged))
         unpickedMoments = traits.contains(Self.filter(.unpickedMoment))
+        proposed = traits.contains(Self.filter(.proposed))
+        soft = traits.contains(Self.filter(.soft))
+        changedByYou = traits.contains(Self.filter(.changedByYou))
     }
 
     /// The filter keeping the photos `trait` finds.
@@ -204,8 +212,9 @@ public extension LibraryFilters {
         edit { $0.replacingFilters(on: field, with: FilterAttributes.filter(field, yes: !on)) }
     }
 
-    /// The photos `trait` finds only, the damaged files (LIB-40) or the moments without a pick (LIB-41), or
-    /// every photo again: `is:` and the trait added to the rules, narrowing them, or taken out, the other
+    /// The photos `trait` finds only, the damaged files (LIB-40), the moments without a pick (LIB-41) or the
+    /// soft-frame check's (LIB-42), or every photo again: `is:` and the trait added to the rules, narrowing them, or
+    /// taken out, the other
     /// traits staying as they are.
     func toggle(_ trait: LibraryQuery.Trait) {
         let term = FilterAttributes.filter(trait)

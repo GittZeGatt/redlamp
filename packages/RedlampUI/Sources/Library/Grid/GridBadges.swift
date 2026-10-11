@@ -1,6 +1,7 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import RedlampLibrary
 import Synchronization
 
 /// The grid's badges as images, each drawn once for the screen's scale and shared by every cell that
@@ -28,11 +29,17 @@ enum GridBadges {
         /// What a Library Health check proposes for the photo and found in it (LIB-40): a pill with the proposal's
         /// symbol and the finding's word, or in a cell too small for both, the word alone in smaller letters.
         case proposal(HealthMark.Proposal, String, compact: Bool)
+        /// What the soft-frame check proposes for an undecided frame (LIB-42), in the flag's place: a pick or a reject
+        /// drawn dashed, apart from the user's own flags, until the proposals are accepted.
+        case proposedPick, proposedReject
+        /// A soft frame's sharpness against its burst's sharpest ("38% softer"), or "Soft" in a cell too small.
+        case softness(String, compact: Bool)
 
         /// The badge's size in points.
         var size: CGSize {
             switch self {
-            case .pick, .reject, .stack, .edited, .uneditedPreview, .mark, .flagSlot, .markSlot, .focusSuggestion:
+            case .pick, .reject, .stack, .edited, .uneditedPreview, .mark, .flagSlot, .markSlot, .focusSuggestion,
+                 .proposedPick, .proposedReject:
                 CGSize(width: 16, height: 16)
             case .cloud: CGSize(width: 24, height: 24)
             case let .rating(stars): CGSize(width: 8 + CGFloat(stars) * 7, height: 11)
@@ -42,8 +49,26 @@ enum GridBadges {
             case let .proposal(_, word, compact):
                 compact ? CGSize(width: GridBadges.wordWidth(word, compact: true) + 8, height: 13)
                     : CGSize(width: GridBadges.wordWidth(word, compact: false) + 25, height: 16)
+            case let .softness(word, compact):
+                CGSize(width: GridBadges.wordWidth(word, compact: compact) + 10, height: compact ? 13 : 16)
             }
         }
+    }
+
+    /// The soft-frame badge for `entry` in a thumbnail `width` points wide: how much softer the frame is than its
+    /// burst's sharpest where that fits, else the word alone in smaller letters.
+    static func softness(_ entry: SoftFrames.Entry, width: CGFloat) -> Kind? {
+        guard entry.verdict == .soft else { return nil }
+        let softer = entry.relative.map { Int(((1 - Double($0)) * 100).rounded()) }
+        let full = Kind.softness(softer.map { "\($0)% softer" } ?? "Soft", compact: false)
+        return full.size.width <= width - 6 ? full : .softness("Soft", compact: true)
+    }
+
+    /// The dashed frame around a frame the soft-frame check proposes: a pick's green, a soft frame's amber.
+    static func frameColor(of verdict: SoftFrames.Verdict) -> CGColor {
+        let color = verdict == .proposed ? NSColor(srgbRed: 0.36, green: 0.84, blue: 0.47, alpha: 1)
+            : NSColor(srgbRed: 1, green: 0.72, blue: 0.26, alpha: 1)
+        return color.cgColor
     }
 
     /// The proposal badge for `mark` in a thumbnail `width` points wide: with its symbol where that fits, else the
@@ -130,7 +155,7 @@ enum GridBadges {
     /// Draws the badges a culling change can show on every cell at once, so the change itself sets layers'
     /// contents and draws nothing.
     static func prepare(scale: CGFloat) {
-        let kinds: [Kind] = [.pick, .reject, .mark, .flagSlot, .markSlot]
+        let kinds: [Kind] = [.pick, .reject, .mark, .flagSlot, .markSlot, .proposedPick, .proposedReject]
             + (0 ... 5).map(Kind.ratingSlots) + (1 ... 5).map(Kind.rating)
         for kind in kinds {
             _ = image(kind, scale: scale)
@@ -228,8 +253,40 @@ enum GridBadges {
             drawPill(text, open: open, size: size, in: context)
         case let .proposal(proposal, word, compact):
             drawProposal(proposal, word, compact: compact, size: size, scale: scale, in: context)
+        case .proposedPick, .proposedReject:
+            context.setFillColor(NSColor(white: 0, alpha: 0.4).cgColor)
+            context.fillEllipse(in: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1))
+            context.setStrokeColor(NSColor(white: 1, alpha: 0.9).cgColor)
+            context.setLineWidth(1)
+            context.setLineDash(phase: 0, lengths: [2, 1.5])
+            context.strokeEllipse(in: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1))
+            context.setLineDash(phase: 0, lengths: [])
+            Symbol.draw(
+                kind == .proposedPick ? "flag" : "xmark", pointSize: 7, weight: .semibold, color: white.opacity(0.9),
+                centeredAt: middle, scale: scale,
+            )
+        case let .softness(word, compact):
+            drawSoftness(word, compact: compact, size: size, in: context)
         }
         return context.makeImage()
+    }
+
+    private static func drawSoftness(_ word: String, compact: Bool, size: CGSize, in context: CGContext) {
+        let pill = CGPath(
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5),
+            cornerWidth: size.height / 2 - 0.5, cornerHeight: size.height / 2 - 0.5, transform: nil,
+        )
+        context.addPath(pill)
+        context.setFillColor(NSColor(srgbRed: 0.55, green: 0.36, blue: 0.05, alpha: 0.92).cgColor)
+        context.fillPath()
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: wordFont(compact: compact), .foregroundColor: NSColor(white: 1, alpha: 0.96),
+        ]
+        let textSize = (word as NSString).size(withAttributes: attributes)
+        (word as NSString).draw(
+            at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2),
+            withAttributes: attributes,
+        )
     }
 
     private static func drawProposal(

@@ -291,7 +291,7 @@ public extension EditorModel {
 
     /// `change` on a large source's photos `photos`, by their IDs in the list, in order: made at once when their rows
     /// are read, as `cull(_:rows:)` makes it, else once what culling needs of them is read (`cullReading`).
-    private func cull(_ change: CullingChange, photos: [Int64]) {
+    internal func cull(_ change: CullingChange, photos: [Int64]) {
         if change == .toggleMark, let target = markTarget {
             return toggle(inTarget: target, listed: photos)
         }
@@ -400,7 +400,8 @@ public extension EditorModel {
                 current.append(values)
             }
         }
-        let wanted = change.resolved(current, color: change.customLabel.flatMap(givenLabelColor(of:)))
+        let shownIDs = shown.map { ids.indices.contains($0) ? ids[$0] : -1 }
+        let wanted = change.resolved(current, ids: shownIDs, color: change.customLabel.flatMap(givenLabelColor(of:)))
         var changed: [Int] = []
         var photoIDs: [Int64] = []
         var photos: [URL] = []

@@ -21,6 +21,9 @@ public enum CullingChange: Sendable, Hashable {
     /// B: every photo marked, or none when every one is.
     case toggleMark
     case mark(Bool)
+    /// Each photo its own flag, by its index ID, the others left as they are: the soft-frame check's proposals
+    /// accepted (LIB-42).
+    case flags([Int64: PhotoFlag])
 
     /// The change an action's key makes; nil for actions that aren't culling.
     init?(_ action: ShortcutAction) {
@@ -50,7 +53,7 @@ public enum CullingChange: Sendable, Hashable {
     var field: CullingField {
         switch self {
         case .rating, .ratingStep: .rating
-        case .flag, .toggleFlag: .flag
+        case .flag, .toggleFlag, .flags: .flag
         case .label, .toggleLabel, .toggleCustomLabel, .customLabel: .label
         case .toggleMark, .mark: .mark
         }
@@ -77,13 +80,20 @@ public enum CullingChange: Sendable, Hashable {
         case let .toggleCustomLabel(name), let .customLabel(name): "Label “\(name)”"
         case .toggleMark: "Mark / Unmark"
         case let .mark(marked): marked ? "Mark" : "Unmark"
+        case .flags: "Accept Proposals"
         }
     }
 
     /// What each photo's culling fields become, from what they are; a custom label given comes with `color`, the
-    /// label's.
-    func resolved(_ photos: [CullingValues], color: LabelColor? = nil) -> [CullingValues] {
+    /// label's. `ids` are the photos' index IDs, which `flags` gives each its flag by.
+    func resolved(_ photos: [CullingValues], ids: [Int64] = [], color: LabelColor? = nil) -> [CullingValues] {
         switch self {
+        case let .flags(flags):
+            return zip(photos, ids).map { photo, id in
+                var photo = photo
+                photo.flag = flags[id] ?? photo.flag
+                return photo
+            } + photos.dropFirst(ids.count)
         case let .rating(stars):
             return photos.map { var photo = $0; photo.rating = min(max(stars, 0), 5); return photo }
         case let .ratingStep(step):
