@@ -50,6 +50,15 @@ struct DriverTests {
         #expect(Menus.title(of: .export) == ShortcutAction.export.title)
     }
 
+    @Test func `Auto Advance's item is found by its action's title, whichever view it names`() {
+        let menu = NSMenu()
+        for title in ["Open in Loupe", "Auto Advance in the Loupe"] {
+            menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
+        }
+        #expect(Menus.find(Menus.title(of: .autoAdvance), in: menu)?.1 == 1)
+        #expect(Menus.find("Open", in: menu) == nil, "only the items that name their view")
+    }
+
     @Test func `claims are named as the coverage report names them`() {
         #expect(Claim.action(.beforeAfter).description == "action.beforeAfter")
         #expect(Claim.parameter(.exposure).description == "parameter.basic.exposure")

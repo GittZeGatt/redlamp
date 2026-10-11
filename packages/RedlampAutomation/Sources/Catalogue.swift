@@ -25,6 +25,7 @@
             + MissingPhotosScenarios.all
             + CollectionScenarios.all
             + JudgingScenarios.all
+            + GridChromeScenarios.all
             + SoftFrameScenarios.all
             + PanelScenarios.all
             + PanelShotScenarios.all
