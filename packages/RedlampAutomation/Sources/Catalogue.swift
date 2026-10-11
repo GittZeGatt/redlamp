@@ -40,6 +40,8 @@
             + HealthPerformanceScenarios.all
             + MenuPerformanceScenarios.all
             + ArrowPartsScenarios.all
+            // Last before the smoke pair: its main launch's scenario leaves a collection shown at quit.
+            + SourceLaunchScenarios.all
             + SmokeScenarios.last
 
         /// What the app offers, from its own catalogues: every action, parameter, panel, left
