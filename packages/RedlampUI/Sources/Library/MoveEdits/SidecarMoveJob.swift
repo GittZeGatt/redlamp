@@ -6,6 +6,8 @@ import RedlampLibrary
 /// only then removes the original, never replacing a sidecar that's there, a part of a few hundred at a time, the whole
 /// move in its journal until it's over.
 ///
+/// - **Photos with a copy in each place** (DEC-63) are settled first: the copy saved last, the one Redlamp reads, is
+///   kept where the root keeps its sidecars from then on, and the other set aside in the library's Set-Aside Edits.
 /// - **In the library's changes' turn** (`LibraryCore.change`): no batch, Undo or XMP sync writes a sidecar meanwhile,
 ///   which would write it in the place the move is leaving.
 /// - **Cancel** stops the move after the part under way, and the library puts back every sidecar in the place they
@@ -17,11 +19,9 @@ import RedlampLibrary
 enum SidecarMoveJob {
     /// What a move did, and how it ended.
     struct Result: Sendable {
-        /// The sidecars it set out to move.
+        /// The sidecars it set out to move, and the photos with a copy in each place it set out to settle.
         var total = 0
         var outcome = SidecarMoveOutcome()
-        /// Photos with a sidecar in each place, which stop a move before it starts.
-        var conflicts: [SidecarMovePlan.Conflict] = []
         /// Why it stopped, in words.
         var error: String?
 
@@ -30,9 +30,9 @@ enum SidecarMoveJob {
             outcome.putBack
         }
 
-        /// Every sidecar it was to move failed, so the placement stayed as it was.
+        /// Every sidecar it was to move or settle failed, so the placement stayed as it was.
         var movedNothing: Bool {
-            putBack == nil && error == nil && outcome.moved == 0 && !outcome.failed.isEmpty
+            putBack == nil && error == nil && outcome.moved == 0 && outcome.settled.isEmpty && !outcome.failed.isEmpty
         }
     }
 
@@ -48,14 +48,10 @@ enum SidecarMoveJob {
             var result = Result()
             do {
                 var plan = try await sidecars.planMove(ofRoot: root, to: destination)
-                guard plan.conflicts.isEmpty else {
-                    result.conflicts = plan.conflicts
-                    return result
-                }
                 if let first, let index = plan.items.firstIndex(where: { $0.photo == first }) {
                     plan.items.insert(plan.items.remove(at: index), at: 0)
                 }
-                result.total = plan.items.count
+                result.total = plan.items.count + plan.conflicts.count
                 result.outcome = try await sidecars.move(plan, control: control, placed: placed, progress: progress)
             } catch {
                 result.error = describe(error)
@@ -74,7 +70,7 @@ enum SidecarMoveJob {
         return await core.change { () -> Result? in
             do {
                 guard let journal = try await sidecars.unfinishedMove() else { return nil }
-                var result = Result(total: journal.plan.items.count)
+                var result = Result(total: journal.plan.items.count + journal.plan.conflicts.count)
                 guard var outcome = try await sidecars.resumeMove(control: control, placed: placed, progress: progress)
                 else { return nil }
                 if journal.puttingBack, let back = outcome.putBack {
@@ -97,9 +93,6 @@ enum SidecarMoveJob {
 
     /// What went wrong, in words: an error's own description rather than its domain and code.
     static func describe(_ error: any Error) -> String {
-        if case let LibrarySidecarsError.conflicts(conflicts) = error {
-            return "\(conflicts.count) photos have edits and metadata in both places"
-        }
         if case LibrarySidecarsError.noSuchRoot = error {
             return "the folder isn't in the library any more"
         }

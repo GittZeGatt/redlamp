@@ -11,8 +11,9 @@ import Synchronization
 /// - **Saved first:** the open photo's edit, and every save asked for before Move, are on disk before the move plans,
 ///   and the sheet holds the editor's commands while it moves, so nothing writes a sidecar where it's leaving.
 /// - **The open photo's sidecar moves first,** and its later saves go where the root keeps them from then on.
-/// - **Said in words:** a refusal, a move stopped or put back, and the photos it couldn't move, which the activity
-///   log names.
+/// - **Said in words:** a refusal, a move stopped or put back, the photos it couldn't move, and the photos with a copy
+///   in each place it settled (DEC-63), which the activity log names; the sheet stays up after settling some, to
+///   offer the copies it set aside.
 /// - **After a quit,** the next launch finishes the move the library's journal holds with its sheet up, once the
 /// library
 ///   is open.
@@ -166,14 +167,14 @@ extension EditorModel {
             sheet.setPhase(.failed("“\(root.name)” isn't in the library any more, so nothing was moved"))
             return false
         }
-        if !result.conflicts.isEmpty {
-            let photos = result.conflicts.map(\.photo)
+        let settled = result.outcome.settled
+        if !settled.isEmpty, let folder = result.outcome.setAside {
             activity.record(
-                .error,
-                "\(title) didn't start: \(who(photos, in: root)) have edits and metadata in both places",
+                .action,
+                "\(title) settled \(who(settled, in: root)), which had edits and metadata in both places: the copy "
+                    + "saved last kept \(there), the other set aside in \(folder.path)",
             )
-            sheet.refuseConflicts(result.conflicts)
-            return false
+            sheet.didSetAside(in: folder)
         }
         if let error = result.error {
             activity.record(.error, "\(title) stopped: \(error)")
@@ -187,7 +188,12 @@ extension EditorModel {
                 .action,
                 "\(title) cancelled: \(MoveEditsModel.photos(putBack.moved)) put back \(here)",
             )
-            guard !putBack.failed.isEmpty else { return true }
+            let settling = settled.isEmpty ? "" : " " + MoveEditsModel.settled(settled.count, keptIn: sheet.source)
+            guard !putBack.failed.isEmpty else {
+                guard !settled.isEmpty else { return true }
+                sheet.setPhase(.settled("Cancel put back \(MoveEditsModel.photos(putBack.moved)).\(settling)"))
+                return false
+            }
             let failed = putBack.failed.keys.sorted()
             activity.record(
                 .error,
@@ -195,8 +201,8 @@ extension EditorModel {
             )
             sheet.setPhase(.done(
                 "Cancel put back \(MoveEditsModel.photos(putBack.moved)), but \(failed.count) couldn't be put back "
-                    + "and stay \(there), where Redlamp still reads them: \(reasons(putBack.failed)). The activity log "
-                    + "names them.",
+                    + "and stay \(there), where Redlamp still reads them: \(reasons(putBack.failed)).\(settling) The "
+                    + "activity log names them.",
             ))
             return false
         }
@@ -247,10 +253,16 @@ extension EditorModel {
                 "\(title): \(MoveEditsModel.photos(result.outcome.gone))' edits and metadata were gone before they moved",
             )
         }
-        guard !problems.isEmpty else { return true }
+        let movedSentence = "Moved \(MoveEditsModel.photos(moved))' edits and metadata \(sheet.destination == .onThisMac ? "to Redlamp on this Mac" : "beside the photos")."
+        let settledSentence = MoveEditsModel.settled(settled.count, keptIn: sheet.destination)
+        guard !problems.isEmpty else {
+            guard !settled.isEmpty else { return true }
+            sheet.setPhase(.settled((moved > 0 ? movedSentence + " " : "") + settledSentence))
+            return false
+        }
         sheet.setPhase(.done(
-            "Moved \(MoveEditsModel.photos(moved))' edits and metadata \(sheet.destination == .onThisMac ? "to Redlamp on this Mac" : "beside the photos"). "
-                + problems.joined(separator: " ") + " The activity log names them.",
+            ([movedSentence] + (settled.isEmpty ? [] : [settledSentence]) + problems).joined(separator: " ")
+                + " The activity log names them.",
         ))
         return false
     }

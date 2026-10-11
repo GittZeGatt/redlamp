@@ -274,7 +274,8 @@ public struct SidecarCensus: Sendable, Hashable {
     public var beside: Int
     /// Photos with a sidecar on this Mac.
     public var onThisMac: Int
-    /// Photos with one in each place: read from the one saved last, and in the way of a move.
+    /// Photos with one in each place: read from the one saved last, which the next move keeps, setting the other
+    /// aside.
     public var both: Int
     /// Other apps' `.xmp` beside its photos, which stay there.
     public var otherApps: Int
@@ -293,8 +294,32 @@ public struct SidecarCensus: Sendable, Hashable {
 
 public enum LibrarySidecarsError: Error, Sendable, Hashable {
     case noSuchRoot(Int64)
-    /// Photos whose sidecar is already where the move would put it: nothing was moved.
-    case conflicts([SidecarMovePlan.Conflict])
+}
+
+public extension LibraryPaths {
+    /// The copies of photos' edits and metadata that moving them set aside (DEC-63): where a photo had a copy beside it
+    /// and another on this Mac, the one not saved last, in a folder for each move, named by when it ran and the folder
+    /// it moved, at its path below that folder.
+    var setAsideEdits: URL {
+        root.appending(path: "Set-Aside Edits", directoryHint: .isDirectory)
+    }
+
+    /// A folder in `setAsideEdits` for the copies a move of the root at `path` sets aside, named by when the move was
+    /// planned and the root's name, and numbered after a folder of that name: not made until a copy goes in it.
+    func setAsideFolder(forRootAt path: String, at date: Date = Date()) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        let name = URL(fileURLWithPath: path, isDirectory: true).lastPathComponent
+        let base = formatter.string(from: date) + " " + (name == "/" ? "Startup Disk" : name)
+        var folder = setAsideEdits.appending(path: base, directoryHint: .isDirectory)
+        var number = 2
+        while FileManager.default.fileExists(atPath: folder.path) {
+            folder = setAsideEdits.appending(path: "\(base) \(number)", directoryHint: .isDirectory)
+            number += 1
+        }
+        return folder
+    }
 }
 
 public extension LibraryIndex.Writer {

@@ -210,35 +210,6 @@ struct SidecarLocationTests {
         #expect(try await sidecars.planMove(ofRoot: root, to: .besidePhotos).items.isEmpty)
     }
 
-    @Test func `a sidecar in both places stops a move before it starts, and is listed`() async throws {
-        let (sandbox, sidecars, root) = try await Self.indexed(.init(photos: 150, seed: 53, shapes: []))
-        defer { sandbox.remove() }
-        let totals = sandbox.manifest.totals
-        let photo = try #require((0 ..< 150).map(sandbox.fixture.photo(at:)).first { $0.sidecar != nil })
-        let locator = try await SidecarLocator(folder: sidecars.paths.sidecars, roots: [sidecars.knownRoot(root).1])
-        let onThisMac = try #require(locator.onThisMac(sandbox.url(photo)))
-        try FileManager.default.createDirectory(
-            at: onThisMac.deletingLastPathComponent(),
-            withIntermediateDirectories: true,
-        )
-        try FileManager.default.copyItem(at: SidecarLocator.besidePhoto(sandbox.url(photo)), to: onThisMac)
-        let before = try Self.sidecars(below: sandbox.root)
-
-        for destination in RootRecord.Sidecars.allCases {
-            let plan = try await sidecars.planMove(ofRoot: root, to: destination)
-            #expect(plan.conflicts == [SidecarMovePlan.Conflict(
-                photo: photo.path, beside: SidecarLocator.besidePhoto(sandbox.url(photo)), onThisMac: onThisMac,
-            )])
-            await #expect(throws: LibrarySidecarsError.conflicts(plan.conflicts)) { try await sidecars.move(plan) }
-        }
-        #expect(try await sidecars.census(ofRoot: root) == SidecarCensus(
-            root: sandbox.rootPath, placement: .besidePhotos, beside: totals.sidecars, onThisMac: 1, both: 1,
-            otherApps: totals.xmpSidecars,
-        ))
-        #expect(try Self.sidecars(below: sandbox.root) == before)
-        #expect(!FileManager.default.fileExists(atPath: sidecars.moveJournal.path))
-    }
-
     @Test func `the journal finishes a move a forced quit interrupted`() async throws {
         let (sandbox, sidecars, root) = try await Self.indexed(.init(photos: 200, seed: 54, shapes: []))
         defer { sandbox.remove() }

@@ -5,8 +5,9 @@ import Synchronization
 
 /// What Move Edits and Metadata… (LIB-11, DEC-43) says of a root and the move it runs: where the root keeps its
 /// edits and metadata and where they'd go, how many photos have them (from the index, then from the disk), whether
-/// they can go there, and the move's progress and outcome. The sheet opens before the index has answered, with where
-/// the library's locator says the root keeps them, and doesn't wait for it: the index's numbers follow.
+/// they can go there, the photos with a copy in each place that the move settles (DEC-63), and the move's progress and
+/// outcome. The sheet opens before the index has answered, with where the library's locator says the root keeps them,
+/// and doesn't wait for it: the index's numbers follow.
 @MainActor
 final class MoveEditsModel {
     enum Phase: Equatable {
@@ -17,8 +18,10 @@ final class MoveEditsModel {
         /// The open photo's edit, and the saves asked for before Move, are being written.
         case saving
         case moving(FileProgress)
-        /// Over, with something to say, which the sheet keeps on screen.
+        /// Over, with a problem to say, which the sheet keeps on screen.
         case done(String)
+        /// Over and through, having settled photos with a copy in each place, which the sheet says.
+        case settled(String)
         case failed(String)
     }
 
@@ -43,6 +46,9 @@ final class MoveEditsModel {
     private(set) var plan: SidecarMovePlan?
     /// Why they can't go where they'd go, in words.
     private(set) var refusal: String?
+    /// The copies moves set aside, for Show Set-Aside Edits: the folder of the move's own once it has set some aside,
+    /// else the library's folder of them when it holds any.
+    private(set) var setAside: URL?
     private(set) var phase: Phase
     let control = SidecarMoveControl()
     var onChange: (() -> Void)?
@@ -102,7 +108,7 @@ final class MoveEditsModel {
     }
 
     var canMove: Bool {
-        phase == .ready && plan != nil && refusal == nil && conflicts.isEmpty
+        phase == .ready && plan != nil && refusal == nil
     }
 
     var isMoving: Bool {
@@ -114,7 +120,7 @@ final class MoveEditsModel {
 
     var isOver: Bool {
         switch phase {
-        case .done, .failed: true
+        case .done, .settled, .failed: true
         default: false
         }
     }
@@ -169,25 +175,32 @@ final class MoveEditsModel {
         }
     }
 
-    /// Finds the sidecars on the disk, and, for a move into the folder, whether Redlamp can write there.
+    /// Finds the sidecars on the disk, and, for a move into the folder, whether Redlamp can write there, and whether
+    /// earlier moves set copies aside.
     func check(_ sidecars: LibrarySidecars) async {
         guard let rootID, phase == .checking, !isLookingThrough else { return }
         isLookingThrough = true
-        let (destination, folder) = (destination, root.url)
+        let (destination, folder, asides) = (destination, root.url, sidecars.paths.setAsideEdits)
         let found = await Task.detached(priority: .userInitiated) { () -> (
             Result<SidecarMovePlan, any Error>,
-            String?
+            String?,
+            Bool
         ) in
             let refusal = destination == .besidePhotos
                 ? SidecarMoveJob.whyNotWritable(folder, probing: false) : nil
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: asides.path)) ?? []
+            let hasAsides = names.contains { !$0.hasPrefix(".") }
             do {
-                return try await (.success(sidecars.planMove(ofRoot: rootID, to: destination)), refusal)
+                return try await (.success(sidecars.planMove(ofRoot: rootID, to: destination)), refusal, hasAsides)
             } catch {
-                return (.failure(error), refusal)
+                return (.failure(error), refusal, hasAsides)
             }
         }.value
         guard phase == .checking else { return }
         refusal = found.1
+        if found.2, setAside == nil {
+            setAside = asides
+        }
         switch found.0 {
         case let .success(plan):
             self.plan = plan
@@ -211,10 +224,9 @@ final class MoveEditsModel {
         onChange?()
     }
 
-    /// Photos that turned up with a sidecar in each place since the sheet looked: the move didn't start.
-    func refuseConflicts(_ conflicts: [SidecarMovePlan.Conflict]) {
-        plan?.conflicts = conflicts
-        phase = .ready
+    /// The move set copies aside in `folder`, which Show Set-Aside Edits shows from then on.
+    func didSetAside(in folder: URL) {
+        setAside = folder
         onChange?()
     }
 
@@ -286,7 +298,7 @@ final class MoveEditsModel {
             }
             let doing = progress.isRollingBack ? "Putting back" : "Moving"
             return "\(doing): \(Self.count(progress.done)) of \(Self.photos(progress.total))"
-        case let .done(message), let .failed(message):
+        case let .done(message), let .settled(message), let .failed(message):
             return message
         case .ready:
             if let refusal {
@@ -296,8 +308,8 @@ final class MoveEditsModel {
                 let names = conflicts.prefix(3).map { ($0.photo as NSString).lastPathComponent }
                 let more = conflicts.count > 3 ? " and \(conflicts.count - 3) more" : ""
                 return "\(Self.photos(conflicts.count)) \(conflicts.count == 1 ? "has" : "have") edits and metadata "
-                    + "in both places, so nothing can be moved: \(names.joined(separator: ", "))\(more). Redlamp "
-                    + "reads the copy saved last."
+                    + "in both places: \(names.joined(separator: ", "))\(more). Moving keeps the copy saved last, "
+                    + "which Redlamp reads, and sets the other aside."
             }
             if plan?.items.isEmpty == true {
                 return "Moving keeps new edits and metadata \(Self.place(destination))."
@@ -311,9 +323,16 @@ final class MoveEditsModel {
         switch phase {
         case .failed: true
         case .done: true
-        case .ready: refusal != nil || !conflicts.isEmpty
+        case .ready: refusal != nil
         default: false
         }
+    }
+
+    /// What the move did to photos with a copy in each place, as a sentence: the copy saved last kept where the root
+    /// keeps them now, the other set aside.
+    static func settled(_ photos: Int, keptIn destination: RootRecord.Sidecars) -> String {
+        "\(Self.photos(photos)) had edits and metadata in both places: the copy saved last was kept "
+            + "\(place(destination)), and the other set aside."
     }
 
     static func count(_ number: Int) -> String {

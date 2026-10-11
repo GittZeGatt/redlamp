@@ -325,26 +325,6 @@ extension MoveEditsTests {
         )
     }
 
-    @Test func `a photo with edits and metadata in both places stops the move before it starts, and is named`(
-    ) async throws {
-        let folder = Folder()
-        defer { folder.cleanUp() }
-        try folder.write(["A.JPG", "B.JPG"], edited: ["A.JPG", "B.JPG"])
-        try await folder.open()
-        let id = try await folder.record().id
-        let sidecars = try folder.core.sidecars
-        try await sidecars.setPlacement(.onThisMac, forRoot: id)
-        let mac = try #require(try await sidecars.locator().onThisMac(folder.photo("B.JPG")))
-        try await sidecars.setPlacement(.besidePhotos, forRoot: id)
-        try FileManager.default.createDirectory(at: mac.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: SidecarLocator.besidePhoto(folder.photo("B.JPG")), to: mac)
-        let sheet = try await folder.sheet()
-        #expect(sheet.conflicts.map(\.photo) == ["B.JPG"] && !sheet.canMove)
-        #expect(sheet.count == "2 photos have edits or metadata beside the photos.")
-        #expect(sheet.status == "1 photo has edits and metadata in both places, so nothing can be moved: B.JPG. "
-            + "Redlamp reads the copy saved last.")
-    }
-
     // MARK: - The sheet
 
     @Test func `the sheet's numbers come from the index before the disk is looked through`() async throws {

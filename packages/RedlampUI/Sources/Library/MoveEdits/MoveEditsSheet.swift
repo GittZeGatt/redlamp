@@ -4,7 +4,8 @@ import RedlampLibrary
 /// Move Edits and Metadata… (LIB-11, DEC-43), a sheet on the editor window: where a root keeps its edits and metadata
 /// and where they'd go, how many of its photos have them, what moving does, and why it can't when it can't; then the
 /// move's progress, with Cancel putting back what it moved, and its outcome when there's something to say. It closes
-/// once a move goes through or is put back.
+/// once a move goes through or is put back, unless it settled photos with a copy in each place (DEC-63): it says so,
+/// and Show Set-Aside Edits shows the copies it set aside in Finder, as it shows those earlier moves set aside.
 @MainActor
 final class MoveEditsSheetController: NSViewController {
     /// The sheet on screen, for the regression suite.
@@ -19,6 +20,7 @@ final class MoveEditsSheetController: NSViewController {
     private let what = MoveEditsSheetController.note("")
     private let status = NSTextField(wrappingLabelWithString: "")
     private let progress = NSProgressIndicator()
+    private let showSetAside = NSButton(title: "Show Set-Aside Edits", target: nil, action: nil)
     private let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     private let move = NSButton(title: "Move", target: nil, action: nil)
     /// When the sheet went up, after the command that asked for it, and whether the index's numbers were in it then,
@@ -96,7 +98,11 @@ final class MoveEditsSheetController: NSViewController {
         move.action = #selector(moveClicked)
         move.keyEquivalent = "\r"
         move.setAccessibilityIdentifier("moveEdits.move")
-        let buttons = NSStackView(views: [NSView(), cancel, move])
+        showSetAside.target = self
+        showSetAside.action = #selector(showSetAsideClicked)
+        showSetAside.isHidden = true
+        showSetAside.setAccessibilityIdentifier("moveEdits.showSetAside")
+        let buttons = NSStackView(views: [showSetAside, NSView(), cancel, move])
         buttons.orientation = .horizontal
         buttons.spacing = 8
 
@@ -181,6 +187,15 @@ final class MoveEditsSheetController: NSViewController {
         cancel.isEnabled = !(model.isPuttingBack || model.control.isCancelled)
         move.isHidden = model.isOver
         move.isEnabled = model.canMove
+        let hidesSetAside = model.setAside == nil || model.isMoving
+        if showSetAside.isHidden != hidesSetAside {
+            showSetAside.isHidden = hidesSetAside
+        }
+    }
+
+    @objc private func showSetAsideClicked() {
+        guard let folder = model.setAside, !showSetAside.isHidden else { return }
+        SetAsideEdits.reveal([folder])
     }
 
     @objc private func cancelClicked() {
@@ -224,6 +239,14 @@ final class MoveEditsSheetController: NSViewController {
     }
 }
 
+/// Where Move Edits and Metadata's sheet shows the copies moves set aside (DEC-63).
+@_spi(Harness) public enum SetAsideEdits {
+    /// Shows them in Finder; the regression suite notes them instead.
+    @MainActor public static var reveal: @MainActor ([URL]) -> Void = { urls in
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+}
+
 /// What Move Edits and Metadata's sheet shows, for the regression suite.
 @_spi(Harness) public struct MoveEditsSheetState: Sendable, Equatable {
     public var heading: String
@@ -243,6 +266,10 @@ final class MoveEditsSheetController: NSViewController {
     public var readAfter: Duration?
     /// The index's numbers were in the sheet as it appeared.
     public var appearedWithNumbers: Bool
+    /// The photos with a copy in each place that a move would settle, by their paths below the folder.
+    public var inBothPlaces: [String]
+    /// What Show Set-Aside Edits shows; nil while it's hidden.
+    public var setAside: URL?
 }
 
 @_spi(Harness) public extension EditorModel {
@@ -255,6 +282,7 @@ final class MoveEditsSheetController: NSViewController {
             status: model.status, canMove: model.canMove, isMoving: model.isMoving, isOver: model.isOver,
             isChecked: model.plan != nil, shownAfter: controller.shownAfter, surveyedAfter: model.surveyed,
             readAfter: model.read, appearedWithNumbers: controller.appearedWithNumbers,
+            inBothPlaces: model.conflicts.map(\.photo), setAside: model.isMoving ? nil : model.setAside,
         )
     }
 }

@@ -2,7 +2,8 @@ import Foundation
 import RedlampDocument
 import Synchronization
 
-/// Moving a root's sidecars from one place to the other: what would move, and what's in the way.
+/// Moving a root's sidecars from one place to the other: what would move, and the photos with a copy in each place,
+/// which the move settles.
 public struct SidecarMovePlan: Sendable, Hashable, Codable {
     /// A sidecar, where it is and where it goes.
     public struct Item: Sendable, Hashable, Codable {
@@ -12,26 +13,37 @@ public struct SidecarMovePlan: Sendable, Hashable, Codable {
         public var target: URL
     }
 
-    /// A photo whose sidecar is in both places.
+    /// A photo whose sidecar is in both places, the two copies holding different bytes (DEC-63): the move keeps the
+    /// copy Redlamp reads, the one saved last, where the root keeps its sidecars from then on, and sets the other
+    /// aside. Two copies the same are one item: the move removes the copy where it's leaving.
     public struct Conflict: Sendable, Hashable, Codable {
         public var photo: String
         public var beside: URL
         public var onThisMac: URL
+        /// Where the copy saved last is, as `SidecarLocator.readURL(for:)` finds it: the one the move keeps.
+        public var kept: RootRecord.Sidecars
     }
 
     public var root: Int64
     public var rootPath: String
     public var destination: RootRecord.Sidecars
     public var items: [Item]
-    /// The move doesn't start while there are any.
+    /// Settled as the move runs, their copies set aside before any item moves.
     public var conflicts: [Conflict]
+    /// The folder the copies the move sets aside go in, one of its own in `LibraryPaths.setAsideEdits`, made as the
+    /// first goes in; nil for a move with no conflicts.
+    public var setAside: URL?
 
-    public init(root: Int64, rootPath: String, destination: RootRecord.Sidecars, items: [Item], conflicts: [Conflict]) {
+    public init(
+        root: Int64, rootPath: String, destination: RootRecord.Sidecars, items: [Item], conflicts: [Conflict],
+        setAside: URL? = nil,
+    ) {
         self.root = root
         self.rootPath = rootPath
         self.destination = destination
         self.items = items
         self.conflicts = conflicts
+        self.setAside = setAside
     }
 }
 
@@ -40,10 +52,16 @@ public struct SidecarMoveOutcome: Sendable, Hashable {
     public var moved = 0
     /// Sidecars gone from where they were before they could be moved.
     public var gone = 0
-    /// Sidecars that turned up in both places while the move ran, left as they are.
+    /// Sidecars that turned up in both places while the move ran, left as they are for the next move to settle.
     public var conflicts: [String] = []
-    /// Sidecars that couldn't be moved, by photo, and why; they stay where they were.
+    /// Sidecars that couldn't be moved, by photo, and why; they stay where they were. A photo whose copy couldn't be
+    /// set aside keeps both copies where they were.
     public var failed: [String: String] = [:]
+    /// Photos with a copy in each place that the move settled (DEC-63): the copy saved last kept where the root keeps
+    /// its sidecars, the other set aside in `setAside`.
+    public var settled: [String] = []
+    /// The folder holding the copies the move set aside; nil when it set none aside.
+    public var setAside: URL?
     /// Cancel stopped the move: what putting back every sidecar in the place they were going did.
     public var putBack: SidecarPutBack?
 
@@ -103,7 +121,8 @@ public extension LibrarySidecars {
     static let movePart = 256
 
     /// What moving `root`'s sidecars to `destination` would do: every `.redlamp` sidecar in the
-    /// other place, and the photos whose sidecar is in both. Other apps' `.xmp` never move.
+    /// other place, and the photos whose sidecar is in both, with the copy saved last in either. Other apps' `.xmp`
+    /// never move.
     func planMove(ofRoot root: Int64, to destination: RootRecord.Sidecars) async throws -> SidecarMovePlan {
         let (record, locatorRoot) = try await knownRoot(root)
         return try await planMove(of: record, locatorRoot, to: destination)
@@ -111,14 +130,18 @@ public extension LibrarySidecars {
 
     /// Moves the plan's sidecars, `movePart` at a time, after recording the whole move in its journal and setting the
     /// root to keep them at the destination: each is copied beside where it goes, checked byte for byte, put in place
-    /// without replacing anything, and only then removed where it was. Throws, moving nothing, when the plan has
-    /// conflicts.
+    /// without replacing anything, and only then removed where it was.
+    ///
+    /// The plan's conflicts are settled first (DEC-63): of each photo's two copies, the one not saved last is moved
+    /// into the plan's `setAside` folder as a sidecar is moved, and then the one kept moves to the destination if it
+    /// isn't there. A photo whose copy can't be set aside keeps both where they were.
     ///
     /// `control`, or cancelling the calling task, stops the move after the part under way and turns it round: the
     /// journal says so before anything goes back, the root keeps its sidecars where it did, and every sidecar in the
-    /// place they were going goes back (`SidecarMoveOutcome.putBack`), which can't be stopped. A move that moves
-    /// nothing, every sidecar failing, sets the placement back too. `placed` hears each change of the root's placement,
-    /// before the sidecars move. A move a quit interrupted is finished by `resumeMove`.
+    /// place they were going goes back (`SidecarMoveOutcome.putBack`), which can't be stopped; copies set aside stay
+    /// set aside. A move that moves nothing, every sidecar failing, sets the placement back too. `placed` hears each
+    /// change of the root's placement, before the sidecars move. A move a quit interrupted is finished by
+    /// `resumeMove`.
     func move(
         _ plan: SidecarMovePlan, control: SidecarMoveControl? = nil, placed: (@Sendable () async -> Void)? = nil,
         progress: (@Sendable (FileProgress) -> Void)? = nil,
@@ -210,8 +233,11 @@ extension LibrarySidecars {
         _ plan: SidecarMovePlan, part: Int, control: SidecarMoveControl? = nil,
         placed: (@Sendable () async -> Void)? = nil, progress: (@Sendable (FileProgress) -> Void)? = nil,
     ) async throws -> SidecarMoveOutcome {
-        guard plan.conflicts.isEmpty else { throw LibrarySidecarsError.conflicts(plan.conflicts) }
         let root = try await knownRoot(plan.root)
+        var plan = plan
+        if !plan.conflicts.isEmpty, plan.setAside == nil {
+            plan.setAside = paths.setAsideFolder(forRootAt: plan.rootPath)
+        }
         let journal = SidecarMoveJournal(plan: plan)
         try await write(journal)
         return try await run(journal, root: root, part: part, control: control, placed: placed, progress: progress)
@@ -231,8 +257,12 @@ extension LibrarySidecars {
             let image = rootURL.appending(path: photo)
             guard let onThisMac = locator.onThisMac(image) else { continue }
             let besidePhoto = SidecarLocator.besidePhoto(image)
-            if beside.contains(photo), mac.contains(photo) {
-                conflicts.append(SidecarMovePlan.Conflict(photo: photo, beside: besidePhoto, onThisMac: onThisMac))
+            if beside.contains(photo), mac.contains(photo), !SidecarMover.same(besidePhoto, onThisMac) {
+                let kept: RootRecord.Sidecars = locator.readURL(for: image).path == onThisMac.path
+                    ? .onThisMac : .besidePhotos
+                conflicts.append(SidecarMovePlan.Conflict(
+                    photo: photo, beside: besidePhoto, onThisMac: onThisMac, kept: kept,
+                ))
             } else {
                 let (source, target) = destination == .onThisMac ? (besidePhoto, onThisMac) : (onThisMac, besidePhoto)
                 items.append(SidecarMovePlan.Item(photo: photo, source: source, target: target))
@@ -240,6 +270,7 @@ extension LibrarySidecars {
         }
         return SidecarMovePlan(
             root: record.id, rootPath: record.path, destination: destination, items: items, conflicts: conflicts,
+            setAside: conflicts.isEmpty ? nil : paths.setAsideFolder(forRootAt: record.path),
         )
     }
 
@@ -259,7 +290,7 @@ extension LibrarySidecars {
             var outcome = SidecarMoveOutcome()
             if journal.puttingBack {
                 let back = try await moveInParts(
-                    journal.plan.items,
+                    journal.plan.items.map { Step($0) },
                     part: part,
                     control: nil,
                     puttingBack: true,
@@ -267,74 +298,141 @@ extension LibrarySidecars {
                 )
                 outcome.putBack = SidecarPutBack(moved: back.moved, failed: back.failed)
             } else {
-                outcome = try await moveInParts(
-                    journal.plan.items,
-                    part: part,
-                    control: control,
-                    puttingBack: false,
-                    progress: progress,
-                )
+                outcome = try await settleAndMove(journal.plan, part: part, control: control, progress: progress)
                 if control.isCancelled {
                     var back = try await planMove(of: root.record, root.locator, to: source)
                     back.conflicts = []
+                    back.setAside = nil
                     try await write(SidecarMoveJournal(plan: back, puttingBack: true))
                     try await setPlacement(source, of: root.record)
                     await placed?()
                     let returned = try await moveInParts(
-                        back.items,
+                        back.items.map { Step($0) },
                         part: part,
                         control: nil,
                         puttingBack: true,
                         progress: progress,
                     )
                     outcome.putBack = SidecarPutBack(moved: returned.moved, failed: returned.failed)
-                } else if outcome.moved == 0, !outcome.failed.isEmpty {
+                } else if outcome.moved == 0, outcome.settled.isEmpty, !outcome.failed.isEmpty {
                     try await setPlacement(source, of: root.record)
                     await placed?()
                 }
             }
             try await removeJournal()
             outcome.conflicts.sort()
+            outcome.settled.sort()
             return outcome
         } onCancel: {
             control.cancel()
         }
     }
 
-    /// Moves `items`, `part` at a time, until `control` stops it between two parts.
+    /// A file a move moves: a sidecar to its place, or a copy to the folder it's set aside in.
+    struct Step: Sendable {
+        var item: SidecarMovePlan.Item
+        var settingAside = false
+        /// Its photo is done once it is: a photo whose kept copy moves after its other copy is set aside is done
+        /// with the second.
+        var counts = true
+
+        init(_ item: SidecarMovePlan.Item, settingAside: Bool = false, counts: Bool = true) {
+            self.item = item
+            self.settingAside = settingAside
+            self.counts = counts
+        }
+    }
+
+    /// The plan's copies set aside, then its sidecars moved with the copies kept where the move is leaving, all
+    /// `part` at a time until `control` stops it between two parts. The progress counts photos.
+    private func settleAndMove(
+        _ plan: SidecarMovePlan, part: Int, control: SidecarMoveControl?, progress: (@Sendable (FileProgress) -> Void)?,
+    ) async throws -> SidecarMoveOutcome {
+        let destination = plan.destination
+        var settling: [Step] = []
+        var keeping: [Step] = []
+        if let folder = plan.setAside {
+            for conflict in plan.conflicts {
+                let (kept, other) = conflict.kept == .onThisMac
+                    ? (conflict.onThisMac, conflict.beside) : (conflict.beside, conflict.onThisMac)
+                let moves = conflict.kept != destination
+                let aside = folder.appending(path: conflict.photo + ".redlamp", directoryHint: .notDirectory)
+                settling.append(Step(
+                    SidecarMovePlan.Item(photo: conflict.photo, source: other, target: aside),
+                    settingAside: true,
+                    counts: !moves,
+                ))
+                if moves {
+                    let target = destination == .onThisMac ? conflict.onThisMac : conflict.beside
+                    keeping.append(Step(SidecarMovePlan.Item(photo: conflict.photo, source: kept, target: target)))
+                }
+            }
+        }
+        let total = plan.items.count + settling.count { $0.counts } + keeping.count
+        var outcome = try await moveInParts(
+            settling, part: part, control: control, puttingBack: false, progress: progress, total: total,
+        )
+        if !outcome.settled.isEmpty {
+            outcome.setAside = plan.setAside
+        }
+        guard control?.isCancelled != true else { return outcome }
+        let unsettled = Set(outcome.failed.keys)
+        let moving = keeping.filter { !unsettled.contains($0.item.photo) } + plan.items.map { Step($0) }
+        let moved = try await moveInParts(
+            moving, part: part, control: control, puttingBack: false, progress: progress,
+            done: settling.count { $0.counts }, total: total,
+        )
+        outcome.moved += moved.moved
+        outcome.gone += moved.gone
+        outcome.conflicts += moved.conflicts
+        outcome.failed.merge(moved.failed) { first, _ in first }
+        return outcome
+    }
+
+    /// Moves `steps`, `part` at a time, until `control` stops it between two parts; the progress counts from `done`
+    /// up to `total`, all of the steps by default.
     private func moveInParts(
-        _ items: [SidecarMovePlan.Item], part size: Int, control: SidecarMoveControl?, puttingBack: Bool,
-        progress: (@Sendable (FileProgress) -> Void)?,
+        _ steps: [Step], part size: Int, control: SidecarMoveControl?, puttingBack: Bool,
+        progress: (@Sendable (FileProgress) -> Void)?, done counted: Int = 0, total: Int? = nil,
     ) async throws -> SidecarMoveOutcome {
         var outcome = SidecarMoveOutcome()
         var start = 0
-        progress?(FileProgress(done: 0, total: items.count, isRollingBack: puttingBack))
-        while start < items.count, control?.isCancelled != true {
-            let part = Array(items[start ..< min(start + max(size, 1), items.count)])
-            let before = start
+        let total = total ?? steps.count
+        var reached = counted
+        progress?(FileProgress(done: reached, total: total, isRollingBack: puttingBack))
+        while start < steps.count, control?.isCancelled != true {
+            let part = Array(steps[start ..< min(start + max(size, 1), steps.count)])
+            let before = reached
             let moved = try await LibraryIndex.offCaller {
                 let outcome = Mutex(SidecarMoveOutcome())
                 let done = Atomic(0)
                 DispatchQueue.concurrentPerform(iterations: part.count) { index in
-                    let item = part[index]
+                    let step = part[index]
+                    let item = step.item
                     let result = Result { try SidecarMover.coordinatedMove(item.source, to: item.target) }
                     outcome.withLock { outcome in
-                        switch result {
-                        case .success(.moved): outcome.moved += 1
-                        case .success(.gone): outcome.gone += 1
-                        case .success(.conflict): outcome.conflicts.append(item.photo)
-                        case let .failure(error): outcome.failed[item.photo] = String(describing: error)
+                        switch (result, step.settingAside) {
+                        case (.success(.moved), true): outcome.settled.append(item.photo)
+                        case (.success(.moved), false): outcome.moved += 1
+                        case (.success(.gone), _): outcome.gone += 1
+                        case (.success(.conflict), true):
+                            outcome.failed[item.photo] = "a copy is already where it would be set aside"
+                        case (.success(.conflict), false): outcome.conflicts.append(item.photo)
+                        case let (.failure(error), _): outcome.failed[item.photo] = String(describing: error)
                         }
                     }
+                    guard step.counts else { return }
                     let count = done.add(1, ordering: .relaxed).newValue
-                    progress?(FileProgress(done: before + count, total: items.count, isRollingBack: puttingBack))
+                    progress?(FileProgress(done: before + count, total: total, isRollingBack: puttingBack))
                 }
                 return outcome.withLock { $0 }
             }
             outcome.moved += moved.moved
             outcome.gone += moved.gone
             outcome.conflicts += moved.conflicts
+            outcome.settled += moved.settled
             outcome.failed.merge(moved.failed) { first, _ in first }
+            reached += part.count { $0.counts }
             start += part.count
         }
         return outcome
