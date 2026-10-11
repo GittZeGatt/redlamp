@@ -42,8 +42,8 @@ const H = 1920;
 const LEFT = 110;
 const TEXT_WIDTH = 920 - LEFT;
 const LABEL_TOP = 880;
-/** The hook and the mark sit low in the frame, below the opening photo's face and above the apps' controls. */
-const HOOK_BOTTOM = 1450;
+/** The hook and the mark sit low in the frame, under the opening photo's collarbone, as the owner placed them. */
+const HOOK_BOTTOM = 1710;
 /** The mark spans the hook's two lines. */
 const MARK_LINES = 2 * 1.04;
 const ICON = 280;
