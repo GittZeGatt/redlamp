@@ -6,7 +6,7 @@ import Synchronization
 /// report against the library as it is, its root folders located where they moved, and then the import: the root
 /// folders the library doesn't have added to Folders and waited for while they're indexed, then the photos'
 /// fields, keywords and collections as the library's batches, in parts with progress and Stop. Undo Import takes
-/// the import back. One catalog at a time.
+/// the import back, as ⌘Z does (`EditorModel+LightroomUndo`). One catalog at a time.
 @MainActor
 final class LightroomImportModel {
     enum Phase: Equatable {
@@ -34,6 +34,8 @@ final class LightroomImportModel {
     var onChange: (@MainActor () -> Void)?
     private let stopping = LightroomStop()
     private var work: Task<Void, Never>?
+    /// When the import running, or the last, was started.
+    private var started: Date?
 
     init(editor: EditorModel) {
         self.editor = editor
@@ -147,6 +149,7 @@ final class LightroomImportModel {
         stopping.set(false)
         problem = nil
         outcome = nil
+        started = Date()
         let folders = plan.foldersToAdd
         editor.activity.record(.action, "Import from Lightroom Classic: “\(plan.name)”")
         work = Task { [weak self] in
@@ -264,6 +267,7 @@ final class LightroomImportModel {
         switch result {
         case let .success(outcome):
             self.outcome = outcome
+            editor?.pushLightroomImport(outcome.record)
             editor?.activity.record(
                 .action,
                 "Imported \(outcome.record.photos) photos from Lightroom Classic"
@@ -290,8 +294,13 @@ final class LightroomImportModel {
         indexed = nil
         editor?.libraryPanels.refreshKeywords()
         editor?.libraryPanels.refresh()
+        let failed = !stoppedBeforeImport && outcome == nil
         Task {
             await readLastImport()
+            // An import that failed keeps the parts it made, for Undo; its record is dated to the second.
+            if failed, let started, let record = lastImport, record.date > started.addingTimeInterval(-1) {
+                editor?.pushLightroomImport(record)
+            }
             if !stoppedBeforeImport, catalogURL != nil {
                 replan(quietly: true)
             }
@@ -301,9 +310,9 @@ final class LightroomImportModel {
 
     // MARK: - Undo
 
-    /// Takes back the newest import not taken back: every batch it made, each keeping what changed since.
-    func undo() {
-        guard canUndo, let core else { return }
+    /// Takes back import `id`, or the newest not taken back: every batch it made, each keeping what changed since.
+    func undo(_ id: UUID? = nil) {
+        guard canUndo || id != nil && !isBusy, let core else { return }
         phase = .undoing
         problem = nil
         changed()
@@ -314,7 +323,7 @@ final class LightroomImportModel {
                 any Error,
             > in
                 do {
-                    return try await .success(importer.undo())
+                    return try await .success(importer.undo(id))
                 } catch {
                     return .failure(error)
                 }
@@ -324,17 +333,9 @@ final class LightroomImportModel {
     }
 
     private func undone(_ result: Result<LightroomImportRecord, any Error>) {
-        switch result {
-        case let .success(record):
-            editor?.activity.record(.action, "Undo the import from Lightroom Classic of \(record.photos) photos")
-        case let .failure(error):
-            problem = "The import wasn't all taken back: \(error)"
-            editor?.activity.record(.error, problem ?? "")
-        }
+        problem = editor?.lightroomImportUndone(result)
         phase = .undone
         outcome = nil
-        editor?.libraryPanels.refreshKeywords()
-        editor?.libraryPanels.refresh()
         Task {
             await readLastImport()
             if catalogURL != nil {

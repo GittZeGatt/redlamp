@@ -6,8 +6,9 @@ import Foundation
 /// - **Library's changes** are culling's (`EditorModel+Culling`), the panels' (keywords, metadata, collections and
 ///   stacks, keywords dragged or painted onto photos, photos dropped on a collection; `LibraryPanels+Changes`), the
 ///   renames and moves (Move to Folder, photos dropped on a folder; `EditorModel+Files`), the Put Backs
-///   (`EditorModel+PutBackUndo`) and Library Health's (`EditorModel+HealthUndo`). Each kind keeps its own steps and
-///   makes and takes them back its own way, whichever module is shown.
+///   (`EditorModel+PutBackUndo`), Library Health's (`EditorModel+HealthUndo`) and the imports from Lightroom Classic
+///   (`EditorModel+LightroomUndo`), which Redo doesn't make again. Each kind keeps its own steps and makes and takes
+///   them back its own way, whichever module is shown.
 /// - **Develop's changes** are the steps of the open photo's History (`EditorModel+History`). Undo reaches them
 ///   while Develop has the photo open, shown or behind Library, where a step taken back is saved and its thumbnail
 ///   follows. Once Develop lets the photo go (another photo opened there, or made active in Library), its steps
@@ -22,7 +23,7 @@ import Foundation
 extension EditorModel {
     /// The kinds of change Undo takes back, each with an Undo of its own.
     enum UndoKind {
-        case develop, culling, panels, files, putBack, health
+        case develop, culling, panels, files, putBack, health, lightroom
 
         /// The module whose change it is.
         var module: AppModule {
@@ -42,6 +43,7 @@ extension EditorModel {
             (.files, fileSteps.undo.last?.turn),
             (.putBack, putBackSteps.undo.last?.turn),
             (.health, healthSteps.undo.last?.turn),
+            (.lightroom, lightroomSteps.undo.last?.turn),
         ])
     }
 
@@ -111,9 +113,14 @@ extension EditorModel {
         }
     }
 
-    /// Whether Undo and Redo reach a change of `kind` now: in Recently Trashed a Put Back alone.
+    /// Whether Undo and Redo reach a change of `kind` now: in Recently Trashed a Put Back alone, and an import from
+    /// Lightroom Classic once no import or Undo of one is running.
     private func undoReaches(_ kind: UndoKind) -> Bool {
-        kind == .putBack || !library.showsRecentlyTrashed
+        switch kind {
+        case .putBack: true
+        case .lightroom: !library.showsRecentlyTrashed && !isRunningLightroomImport
+        default: !library.showsRecentlyTrashed
+        }
     }
 
     /// ⌘Z: the newest change of either module taken back, an open step of Develop's recorded first.
@@ -141,6 +148,8 @@ extension EditorModel {
             return undoPutBack()
         case .health:
             return undoHealth()
+        case .lightroom:
+            return undoLightroomImport()
         }
     }
 
@@ -169,6 +178,8 @@ extension EditorModel {
             return redoPutBack()
         case .health:
             return redoHealth()
+        case .lightroom:
+            return false
         }
     }
 
@@ -226,13 +237,13 @@ extension EditorModel {
     /// are in the order of their turns.
     private func limitLibraryUndo() {
         let counts = cullingUndo.count + libraryPanels.undoSteps.count + fileSteps.undo.count
-            + putBackSteps.undo.count + healthSteps.undo.count
+            + putBackSteps.undo.count + healthSteps.undo.count + lightroomSteps.undo.count
         var excess = counts - Self.libraryUndoLimit
         guard excess > 0 else { return }
         let turns: [(UndoKind, [Int])] = [
             (.culling, cullingUndo.map(\.turn)), (.panels, libraryPanels.undoSteps.map(\.turn)),
             (.files, fileSteps.undo.map(\.turn)), (.putBack, putBackSteps.undo.map(\.turn)),
-            (.health, healthSteps.undo.map(\.turn)),
+            (.health, healthSteps.undo.map(\.turn)), (.lightroom, lightroomSteps.undo.map(\.turn)),
         ]
         var dropped: [UndoKind: Int] = [:]
         while excess > 0, let oldest = Self.earliest(turns.map { kind, list in
@@ -248,6 +259,7 @@ extension EditorModel {
             case .files: fileSteps.undo.removeFirst(count)
             case .putBack: putBackSteps.undo.removeFirst(count)
             case .health: healthSteps.undo.removeFirst(count)
+            case .lightroom: lightroomSteps.undo.removeFirst(count)
             case .develop: break
             }
         }
