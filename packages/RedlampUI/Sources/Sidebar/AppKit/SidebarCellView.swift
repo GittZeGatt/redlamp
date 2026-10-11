@@ -79,6 +79,8 @@ final class SidebarCellView: NSTableCellView {
     private var values: HistoryValuesView?
     private var amountSlider: NSSlider?
     private var hoverArea: NSTrackingArea?
+    /// A source list's line saying what an empty section holds, which wraps.
+    private var wraps = false
 
     /// A group's or earlier session's chevron points down while its rows show.
     var isExpanded: Bool {
@@ -98,9 +100,6 @@ final class SidebarCellView: NSTableCellView {
         label.lineBreakMode = .byTruncatingTail
         label.font = look == .sourceList ? .systemFont(ofSize: SourceListLayout.textSize(rowSize)) : Layout.rowFont
         addSubview(label)
-        if look == .sourceList {
-            textField = label
-        }
         var symbol: String?
         switch node.kind {
         case let .group(name):
@@ -143,12 +142,11 @@ final class SidebarCellView: NSTableCellView {
         case let .placeholder(text):
             label.stringValue = text
             if look == .sourceList {
-                // Not AppKit's text field, which would give it a row's font.
-                textField = nil
                 label.font = .systemFont(ofSize: SourceListLayout.placeholderSize)
                 label.textColor = .secondaryLabelColor
                 label.lineBreakMode = .byWordWrapping
                 label.maximumNumberOfLines = 0
+                wraps = true
             } else {
                 label.textColor = Palette.tertiaryLabel.nsColor
             }
@@ -230,9 +228,13 @@ final class SidebarCellView: NSTableCellView {
         if shown.accessibilityLabel != before?.accessibilityLabel {
             setAccessibilityLabel(shown.accessibilityLabel)
         }
-        if shown.symbol != before?.symbol || shown.iconTone != before?.iconTone {
+        if shown.symbol != before?.symbol || shown.iconTone != before?.iconTone || shown.nameTone != before?.nameTone {
             icon?.removeFromSuperview()
-            showIcon(shown.symbol, tone: shown.iconTone)
+            // A source list's selected row has its icon in the accent colour with its name.
+            showIcon(
+                shown.symbol,
+                tone: look == .sourceList && shown.nameTone == .emphasized ? .emphasized : shown.iconTone,
+            )
             relayout = true
         }
         if let count = trailing as? FolderCountView, let text = shown.count {
@@ -250,7 +252,8 @@ final class SidebarCellView: NSTableCellView {
         }
     }
 
-    /// A name's colour for `tone`: the panels' palette, or a source list's system colours.
+    /// A name's colour for `tone`: the panels' palette, or a source list's system colours, its selected row's name in
+    /// the accent colour, as AppKit sets a selected row's while its list doesn't have the keyboard.
     private func color(of tone: Tone) -> NSColor {
         switch (look, tone) {
         case (.panel, .primary): Palette.label.nsColor
@@ -258,6 +261,7 @@ final class SidebarCellView: NSTableCellView {
         case (.panel, .dimmed): Palette.tertiaryLabel.nsColor
         case (.panel, .emphasized): Palette.labelHover.nsColor
         case (.sourceList, .dimmed): .tertiaryLabelColor
+        case (.sourceList, .emphasized): .controlAccentColor
         case (.sourceList, _): .labelColor
         }
     }
@@ -287,8 +291,8 @@ final class SidebarCellView: NSTableCellView {
         chevron = view
     }
 
-    /// The row's icon: drawn in the panels' colour, or in a source list AppKit's image view, which sizes and tints
-    /// its symbol as the sidebar's.
+    /// The row's icon: drawn in the panels' colour, or in a source list an image view with AppKit's sidebar symbol. It
+    /// isn't the cell's `imageView`, nor the title its `textField`: AppKit lays those out itself, over these frames.
     private func showIcon(_ symbol: String, tone: Tone = .group) {
         guard look == .sourceList else {
             let color = tone == .dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel
@@ -300,13 +304,14 @@ final class SidebarCellView: NSTableCellView {
         let image = NSImageView()
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         image.symbolConfiguration = SourceListLayout.symbolConfiguration(rowSize)
-        // AppKit may size the symbol again once the row is in its list: drawn at its own size, it's never shrunk to
-        // fit.
         image.imageScaling = .scaleNone
-        image.contentTintColor = tone == .dimmed ? .tertiaryLabelColor : nil
+        image.contentTintColor = switch tone {
+        case .dimmed: .tertiaryLabelColor
+        case .emphasized: .controlAccentColor
+        default: .labelColor
+        }
         image.setAccessibilityElement(false)
         addSubview(image)
-        imageView = image
         icon = image
     }
 
@@ -383,7 +388,7 @@ final class SidebarCellView: NSTableCellView {
         if let values {
             titleMaxX = place(values, from: titleX, to: titleMaxX, title: size.width)
         }
-        if label.maximumNumberOfLines == 0 {
+        if wraps {
             size.height = ceil(Self.placeholderHeight(
                 label.stringValue,
                 width: titleMaxX - titleX - Layout.labelPadding,

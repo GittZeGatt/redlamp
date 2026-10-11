@@ -289,7 +289,7 @@ final class SourceListHeaderView: NSView {
             removeTrackingArea(hoverArea)
         }
         let area = NSTrackingArea(
-            rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self,
+            rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self,
         )
         addTrackingArea(area)
         hoverArea = area

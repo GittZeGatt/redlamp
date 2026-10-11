@@ -138,6 +138,23 @@ struct SourceListTests {
         #expect(!model.librarySources.isExpanded(.collections), "Option-click on the only one open closes it")
     }
 
+    @Test func `a row's title is as tall as its line in both looks, and an empty section's line wraps`() throws {
+        let model = EditorModel(engine: StubEngine())
+        @MainActor func title(_ kind: SidebarNode.Kind, look: SidebarOutlineView.Look) throws -> NSTextField {
+            let cell = SidebarCellView(node: SidebarNode(kind), model: model, look: look, rowSize: .medium)
+            cell.frame = CGRect(x: 0, y: 0, width: 220, height: look == .panel ? 24 : 32)
+            cell.layoutSubtreeIfNeeded()
+            return try #require(cell.subviews.compactMap { $0 as? NSTextField }.first)
+        }
+        let row = SourceRow(source: .marked, count: 12)
+        for look in [SidebarOutlineView.Look.panel, .sourceList] {
+            let label = try title(.source(row), look: look)
+            #expect(label.frame.height >= label.intrinsicContentSize.height, "\(look): nothing of the title is cut")
+        }
+        let line = try title(.placeholder(LibrarySourcesText.noCollections), look: .sourceList)
+        #expect(line.frame.height > line.intrinsicContentSize.height, "the line wraps onto a second")
+    }
+
     @Test func `a source list's row leaves its drop target and its selection to AppKit`() {
         let row = SidebarRowView()
         row.drawsHighlights = false
