@@ -61,13 +61,15 @@ struct AFPoints: Sendable, Equatable {
 ///
 /// - **Canon** (CR2, CR3): AFInfo2 (tag 0x26), the areas centred on the frame's middle, Y up, in the frame it states;
 ///   the areas in focus, or those chosen when none was.
-/// - **Nikon** (NEF, Z bodies): AFInfo2 (tag 0xB7), version 03xx or 04xx, the area's centre and size in pixels.
+/// - **Nikon** (NEF, Z bodies): AFInfo2 (tag 0xB7), version 03xx or 04xx, the area's centre and size in pixels; a
+///   frame taken in auto-area AF can record none.
 /// - **Sony** (ARW): FocusLocation (tag 0x2027), a point in the frame it states.
 /// - **Fujifilm** (RAF): FocusPixel (tag 0x1023), a point in half the photo's size.
 /// - **Panasonic** (RW2): AFPointPosition (tag 0x4D), a point as fractions of the frame.
 /// - **SubjectArea** (EXIF 0x9214), which the iPhone writes: a point, circle or rectangle in the photo's pixels.
 ///
-/// Nikon's DSLRs, Pentax (a point's number), Olympus and OM System, Leica, Sigma, Hasselblad and Phase One aren't read.
+/// Nikon's DSLRs, Pentax (a point's number), Olympus and OM System, Leica, Sigma, Ricoh, Hasselblad, Phase One, DJI
+/// and Samsung aren't read.
 enum AFPointReader {
     /// How far into a file maker notes are looked for: CR3's boxes, RAF's preview and RW2's embedded JPEG start there.
     static let searchLimit = 4 << 20

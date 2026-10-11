@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import RedlampUI
 
@@ -86,13 +87,48 @@ struct AFPointTests {
         expect(upright, near: centred(1 - 1506 / 3024, 2009 / 4032, 1390 / 3024, 2318 / 4032))
     }
 
-    @Test(.enabled(if: haveSamples)) func `cameras without a readable AF point give none`() {
-        for path in [
-            "cameras/OM-System_OM-1-Mark-II.orf", "cameras/Pentax_K-3-Mark-III.PEF", "cameras/Leica_M10-R.DNG",
-            "cameras/Sigma_fp.DNG", "cameras/Hasselblad_X2D-100C.3FR", "cameras/Samsung_NX1.srw",
-            "raw/PXL_20201121_100251397.dng",
-        ] {
-            #expect(read(path, size: CGSize(width: 6000, height: 4000)) == nil, "\(path)")
+    /// Every sample frame and the reading that finds its AF point; nil where it gives none. The Nikon Z 8's and
+    /// Z5 II's frames were taken in auto-area AF and record no area; the Canon R6's was focused by hand.
+    private static let samples: [(String, AFPoints.Source?)] = [
+        ("cameras/Canon_EOS-5D-Mark-IV.CR2", .canon), ("cameras/Canon_EOS-R5-Mark-II.CR3", .canon),
+        ("cameras/Canon_EOS-R6-Mark-III.CR3", .canon), ("raw/Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3", nil),
+        ("cameras/Nikon_Z-6III_HE.NEF", .nikon), ("cameras/Nikon_Z-6III_HE-star.NEF", .nikon),
+        ("cameras/Nikon_Z-9_HE.NEF", .nikon), ("cameras/Nikon_Z-9_HE-star.NEF", .nikon),
+        ("cameras/Nikon_Z-f_HE.NEF", .nikon), ("cameras/Nikon_Z-f_HE-star.NEF", .nikon),
+        ("cameras/Nikon_Z50-II_HE.NEF", .nikon), ("cameras/Nikon_Z50-II_HE-star.NEF", .nikon),
+        ("raw/DSC_0750.NEF", .nikon), ("cameras/Nikon_Z-8.NEF", nil), ("cameras/Nikon_Z-8_HE.NEF", nil),
+        ("cameras/Nikon_Z-8_HE-star.NEF", nil), ("cameras/Nikon_Z5-II_HE.NEF", nil),
+        ("cameras/Nikon_Z5-II_HE-star.NEF", nil),
+        ("cameras/Sony_ILCE-7M4.ARW", .sony), ("raw/_DSC0009.ARW", .sony),
+        ("cameras/Fujifilm_X-T5.RAF", .fujifilm), ("cameras/Fujifilm_GFX100-II.RAF", .fujifilm),
+        ("raw/AFXT2720.RAF", .fujifilm), ("cameras/Panasonic_DC-S5M2.RW2", .panasonic),
+        ("raw/IMG_1361.DNG", .subjectArea),
+        ("cameras/OM-System_OM-1-Mark-II.orf", nil), ("cameras/Pentax_K-3-Mark-III.PEF", nil),
+        ("cameras/Leica_M10-R.DNG", nil), ("cameras/Sigma_fp.DNG", nil), ("cameras/Ricoh_GR-III.DNG", nil),
+        ("cameras/Hasselblad_X2D-100C.3FR", nil), ("cameras/Hasselblad_X2D-100C.fff", nil),
+        ("cameras/Hasselblad_X1D-II-50C.3FR", nil), ("cameras/Hasselblad_L2D-20c.DNG", nil),
+        ("cameras/Phase-One_IQ4-150MP.iiq", nil), ("cameras/DJI_FC4382.DNG", nil),
+        ("cameras/Samsung_NX1.srw", nil), ("cameras/Samsung_Galaxy-S23-Ultra.dng", nil),
+        ("raw/PXL_20201121_100251397.dng", nil),
+    ]
+
+    /// The photo's size upright, as the index has it: ImageIO's, turned by its orientation.
+    private func uprightSize(_ path: String) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(Self.fixtures.appending(path: path) as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        let turned = (5 ... 8).contains(properties[kCGImagePropertyOrientation] as? Int ?? 1)
+        return turned ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+    }
+
+    @Test(.enabled(if: haveSamples)) func `every sample camera gives its AF point, or none, as the table says`() {
+        for (path, source) in Self.samples {
+            let found = read(path, size: uprightSize(path))
+            #expect(found?.source == source, "\(path): \(found.map { "\($0.source)" } ?? "none")")
+            for area in found?.upright ?? [] {
+                #expect((0 ... 1).contains(area.rect.midX) && (0 ... 1).contains(area.rect.midY), "\(path): \(area)")
+            }
         }
     }
 
