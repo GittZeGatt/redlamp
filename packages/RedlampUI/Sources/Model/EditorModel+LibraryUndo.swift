@@ -123,11 +123,35 @@ extension EditorModel {
         }
     }
 
-    /// ⌘Z: the newest change of either module taken back, an open step of Develop's recorded first.
+    /// ⌘Z: the newest change of either module taken back, an open step of Develop's recorded first, and said in
+    /// the notice (`UndoNotice`).
     private func undoNewest() -> Bool {
         commandPalette?.endBurst()
         endNudgeRun()
         guard let kind = libraryUndoKind, undoReaches(kind) else { return false }
+        let title = undoTitle(of: kind)
+        guard takeBackNewest(kind) else { return false }
+        if let title {
+            sayUndone(title, redone: false, of: kind.module)
+        }
+        return true
+    }
+
+    /// ⇧⌘Z: the change taken back last, of either module, made again, and said in the notice.
+    private func redoNewest() -> Bool {
+        commandPalette?.endBurst()
+        endNudgeRun()
+        guard let kind = libraryRedoKind, undoReaches(kind) else { return false }
+        let title = redoTitle(of: kind)
+        guard makeAgainLast(kind) else { return false }
+        if let title {
+            sayUndone(title, redone: true, of: kind.module)
+        }
+        return true
+    }
+
+    /// The newest change of `kind` taken back.
+    private func takeBackNewest(_ kind: UndoKind) -> Bool {
         switch kind {
         case .develop:
             let step = historyIndex
@@ -153,11 +177,8 @@ extension EditorModel {
         }
     }
 
-    /// ⇧⌘Z: the change taken back last, of either module, made again.
-    private func redoNewest() -> Bool {
-        commandPalette?.endBurst()
-        endNudgeRun()
-        guard let kind = libraryRedoKind, undoReaches(kind) else { return false }
+    /// The change of `kind` taken back last made again.
+    private func makeAgainLast(_ kind: UndoKind) -> Bool {
         switch kind {
         case .develop:
             let step = historyIndex
@@ -180,6 +201,32 @@ extension EditorModel {
             return redoHealth()
         case .lightroom:
             return false
+        }
+    }
+
+    /// What Undo would take back of `kind`, as its step is titled.
+    private func undoTitle(of kind: UndoKind) -> String? {
+        switch kind {
+        case .develop: history.indices.contains(historyIndex) ? history[historyIndex].title : nil
+        case .culling: cullingUndo.last?.title
+        case .panels: libraryPanels.undoSteps.last?.title
+        case .files: fileSteps.undo.last?.title
+        case .putBack: putBackSteps.undo.last?.title
+        case .health: healthSteps.undo.last?.title
+        case .lightroom: lightroomSteps.undo.last?.title
+        }
+    }
+
+    /// What Redo would make again of `kind`, as its step is titled.
+    private func redoTitle(of kind: UndoKind) -> String? {
+        switch kind {
+        case .develop: history.indices.contains(historyIndex + 1) ? history[historyIndex + 1].title : nil
+        case .culling: cullingRedo.last?.title
+        case .panels: libraryPanels.redoSteps.last?.title
+        case .files: fileSteps.redo.last?.title
+        case .putBack: putBackSteps.redo.last?.title
+        case .health: healthSteps.redo.last?.title
+        case .lightroom: nil
         }
     }
 

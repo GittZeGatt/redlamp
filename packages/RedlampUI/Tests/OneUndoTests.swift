@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
@@ -38,8 +39,10 @@ struct OneUndoTests {
 
         // In Develop: its edit, newest, then Library's flag.
         #expect(model.perform(.undo) && model.value(.contrast) == 0, "the contrast went first")
+        #expect(model.undoNotice.text == "Undo Contrast")
         #expect(model.photoMetadata.flag == .pick)
         #expect(model.perform(.undo))
+        #expect(model.undoNotice.text == "Undo Flag as Pick in Library", "the notice names the module out of sight")
         #expect(model.photoMetadata.flag == nil && folder.shown(0).flag == nil, "then the flag, made in Library")
         #expect(try await sidecar(of: folder) { $0?.metadata?.flag == nil }?.metadata?.flag == nil)
         #expect(model.value(.exposure) == 0.5 && model.photoMetadata.rating == 3)
@@ -48,6 +51,7 @@ struct OneUndoTests {
         model.showModule(.library)
         #expect(model.canPerform(.undo) && model.perform(.undo))
         #expect(model.value(.exposure) == 0, "Develop's exposure, from Library")
+        #expect(model.undoNotice.text == "Undo Exposure in Develop")
         model.saveNow()
         #expect(try await sidecar(of: folder) { $0?.recipe[.exposure] == 0 }?.recipe[.exposure] == 0, "and saved")
         #expect(model.photoMetadata.rating == 3)
@@ -58,6 +62,7 @@ struct OneUndoTests {
 
         // ⇧⌘Z makes them again in turn, in whichever module.
         #expect(model.perform(.redo) && folder.shown(0).rating == 3, "the rating again")
+        #expect(model.undoNotice.text == "Redo 3 Stars")
         #expect(model.perform(.redo) && model.value(.exposure) == 0.5, "then Develop's exposure")
         model.showModule(.develop)
         #expect(model.perform(.redo) && model.photoMetadata.flag == .pick, "then the flag, from Develop")
@@ -132,6 +137,26 @@ struct OneUndoTests {
         #expect(model.canPerform(.redo) && model.perform(.redo))
         #expect(folder.shown(0).rating == 4, "Redo makes Library's changes again from Develop")
         #expect(try await sidecar(of: folder) { $0?.metadata?.rating == 4 }?.metadata?.rating == 4)
+    }
+
+    @Test func `the notice over both modules says what Undo and Redo reached, then goes`() async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 2)
+        let modules = fixture.showModules()
+        let model = fixture.model
+        let notice = try #require(modules.content.notice)
+        #expect(notice.text.isEmpty && notice.hitTest(CGPoint(x: notice.bounds.midX, y: notice.bounds.midY)) == nil)
+        model.setValue(.exposure, 0.5)
+        model.showModule(.library)
+        #expect(model.perform(.undo))
+        try await fixture.settle()
+        #expect(notice.text == "Undo Exposure in Develop")
+        #expect(model.perform(.redo))
+        try await fixture.settle()
+        #expect(notice.text == "Redo Exposure in Develop")
+        try await fixture.eventually { notice.text.isEmpty }
+        #expect(notice.text.isEmpty, "gone after \(UndoNotice.shown)")
     }
 
     @Test func `a run of nudges still open is recorded and taken back first`() async throws {

@@ -7,11 +7,13 @@ import SwiftUI
 /// canvas, opaque, and a switch changes only its opacity: hiding and showing a view makes AppKit lay it out
 /// and draw it again, more than a switch has. Clicks, scrolls and VoiceOver reach only the module shown,
 /// the Library keeps its own cursor over the canvas, and the keyboard follows: the Library module takes
-/// it, and Develop gives it back to the window.
+/// it, and Develop gives it back to the window. Over both, the notice says what Undo and Redo reached.
 final class ModuleContentController: NSViewController {
     private let model: EditorModel
     private let develop: NSViewController
     let library: LibraryModuleView
+    /// What the last Undo or Redo reached, over both modules.
+    private(set) var notice: UndoNoticeView?
     private var tracker: Tracker?
     private var shown: AppModule?
     private var prefetch: NavigationPrefetch?
@@ -41,6 +43,15 @@ final class ModuleContentController: NSViewController {
             content.autoresizingMask = [.width, .height]
             view.addSubview(content)
         }
+        let notice = UndoNoticeView(model: model)
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(notice)
+        NSLayoutConstraint.activate([
+            notice.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            notice.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            notice.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -40),
+        ])
+        self.notice = notice
         self.view = view
     }
 
