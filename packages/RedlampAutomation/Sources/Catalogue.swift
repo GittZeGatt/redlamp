@@ -43,6 +43,7 @@
             + HealthPerformanceScenarios.all
             + MenuPerformanceScenarios.all
             + ArrowPartsScenarios.all
+            + LeftSideShotsScenarios.all
             // Last before the smoke pair: its main launch's scenario leaves a collection shown at quit.
             + SourceLaunchScenarios.all
             + SmokeScenarios.last
