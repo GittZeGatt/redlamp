@@ -22,15 +22,13 @@
             try takeBackCulling(to: depth)
         }
 
-        /// Library's culling changes taken back until `depth` are left, Auto Advance off, the grid's compact
-        /// cells and Develop again.
+        /// Library's culling changes taken back until `depth` are left, every view's Auto Advance as it starts, the
+        /// grid's compact cells and Develop again.
         func takeBackCulling(to depth: Int) throws {
             try main { model in
                 model.showModule(.library)
                 while model.cullingUndoCount > depth, model.undoCulling() {}
-                if model.autoAdvance {
-                    model.toggleAutoAdvance()
-                }
+                model.resetAutoAdvance()
                 model.setCellStyle(.compact)
             }
             try waitWritten()
@@ -345,37 +343,49 @@
 
         static let autoAdvance = Scenario(
             "library.culling-auto-advance",
-            "Photo ▸ Auto Advance moves on after each rating, flag, label and mark, in Library and in Develop, as ⇧ "
-                + "does",
+            "Auto Advance is kept for each view (DEC-68): off in the grid and in Develop until Photo ▸ Auto Advance "
+                + "in the Grid or in Develop turns it on there, on in the loupe; each rating, flag, label and mark then "
+                + "moves on, as ⇧ does",
             claims: [.action(.autoAdvance), .feature("library.ratings")],
         ) { app in
             try app.withCulling { _ in
                 // Each move goes to the next of the grid's cells, a raw and its JPEG one cell.
                 let names = try app.selectFromKeyboard(1).map { $0[0] }
+                try app.wait("Auto Advance off in the grid, the Photo menu naming it") { model in
+                    !model.autoAdvance && Menus.find("Auto Advance in the Grid") != nil
+                }
                 try app.choose(.autoAdvance)
-                try app.wait("Auto Advance on") { $0.autoAdvance }
+                try app.wait("Auto Advance on in the grid") { $0.autoAdvance }
                 for (step, action) in [ShortcutAction.rating1, .flagReject, .labelGreen].enumerated() {
                     try app.press(action)
                     try app.wait("\(action.title) to move on to \(names[step + 1])") { model in
                         model.selection?.lastPathComponent == names[step + 1]
                     }
                 }
+                try app.press(.loupeView)
+                try app.wait("the loupe's own Auto Advance, on") { model in
+                    model.libraryView == .loupe && model.autoAdvance && Menus.find("Auto Advance in the Loupe") != nil
+                }
+                try app.press(.toggleMark)
+                try app.wait("the loupe's mark to move on") { $0.selection?.lastPathComponent == names[4] }
+                try app.expect(try app.shown(names[3]).mark, "The loupe didn't mark \(names[3])")
+                // Develop's own changes aren't Library's to undo: its mark is put on and taken off again.
                 try app.press(.developModule)
                 try app.settle()
+                try app.wait("Develop's own Auto Advance, off") { $0.module == .develop && !$0.autoAdvance }
                 try app.press(.toggleMark)
-                try app.wait("Develop's mark to move on") { $0.selection?.lastPathComponent == names[4] }
-                try app.settle()
-                try app.expect(try app.shown(names[3]).mark, "Develop didn't mark \(names[3])")
-                try app.choose(.autoAdvance)
-                try app.wait("Auto Advance off") { !$0.autoAdvance }
-                // Develop's own change isn't Library's to undo: its key takes it back.
-                try app.press(.previousPhoto)
-                try app.wait("back on \(names[3])") { $0.selection?.lastPathComponent == names[3] }
-                try app.settle()
-                try app.press(.toggleMark)
-                try app.wait("the mark taken back, staying put") { model in
-                    model.selection?.lastPathComponent == names[3] && !model.photoMetadata.mark
+                try app.wait("Develop's mark, staying put") { model in
+                    model.selection?.lastPathComponent == names[4] && model.photoMetadata.mark
                 }
+                try app.choose(.autoAdvance)
+                try app.wait("Auto Advance on in Develop") { $0.autoAdvance }
+                try app.settle()
+                try app.press(.toggleMark)
+                try app.wait("the mark taken off, moving on") { $0.selection?.lastPathComponent == names[5] }
+                try app.settle()
+                try app.expect(try !app.shown(names[4]).mark, "Develop didn't take the mark off \(names[4])")
+                try app.choose(.autoAdvance)
+                try app.wait("Auto Advance off in Develop") { !$0.autoAdvance }
                 app.covered([.action(.autoAdvance), .feature("library.ratings")], via: .menu)
             }
         }

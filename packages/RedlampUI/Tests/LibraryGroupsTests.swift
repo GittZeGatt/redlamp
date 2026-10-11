@@ -444,6 +444,7 @@ extension LibraryGroupsTests {
         #expect(model.perform(.toggleMark) && model.selection?.lastPathComponent == "SCAN.PNG")
         try model.select(url(model, "D02.JPG"))
         model.showModule(.develop)
+        #expect(model.perform(.autoAdvance) && model.autoAdvance, "Develop's own Auto Advance")
         #expect(model.perform(.rating4) && model.selection?.lastPathComponent == "A01.JPG", "Develop moves on so too")
         #expect(model.perform(.autoAdvance) && !model.autoAdvance)
 

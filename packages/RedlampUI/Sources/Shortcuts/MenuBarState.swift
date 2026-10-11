@@ -30,6 +30,8 @@ import RedlampLibrary
         public internal(set) var filterPresets: [FilterPreset] = []
         public internal(set) var filterPreset: FilterPreset?
         public internal(set) var filmstripHidesAutomatically = false
+        /// The view whose Auto Advance the Photo menu's item sets.
+        public internal(set) var autoAdvancePlace = AutoAdvancePlace.develop
     }
 
     public private(set) var shown = Shown()
@@ -128,6 +130,7 @@ import RedlampLibrary
         shown.filterPresets = filters?.presets ?? []
         shown.filterPreset = filters?.preset
         shown.filmstripHidesAutomatically = model.filmstripHidesAutomatically
+        shown.autoAdvancePlace = model.autoAdvancePlace
         return shown
     }
 

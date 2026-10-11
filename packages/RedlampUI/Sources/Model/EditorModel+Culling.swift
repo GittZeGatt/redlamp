@@ -19,20 +19,63 @@ import Synchronization
 /// - **In Develop** each change reaches the active photo, as it always has, and isn't on Undo.
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
-/// - ⇧ with any of them, or Auto Advance for all of them, then makes the photo after them active.
+/// - ⇧ with any of them, or Auto Advance for all of them, then makes the photo after them active. Each view keeps
+///   its own Auto Advance (DEC-68): on in the loupe, where a key acts on the photo shown, and off in the grid,
+///   where it acts on the selection, until it's chosen there (`AutoAdvancePlace`).
 /// - Lists hear of a batch once the index holds it, or, when changes have been asked for since, once the
 ///   last of them is in the index too; and what culling shows stays shown until they've caught up
 ///   (`CullingOverlay`), so a list's update never shows an older value over a newer one. A batch that fails,
 ///   and photos whose sidecars this build can't write, show what their sidecars hold.
 public extension EditorModel {
+    /// Each view's choice is kept under this key and the view's name (`culling.autoAdvance.loupe`).
     static let autoAdvanceKey = "culling.autoAdvance"
 
     // MARK: - Keys, menus and the palette
 
-    /// Lightroom Classic's Photo ▸ Auto Advance.
+    /// The view the culling keys act in now, whose Auto Advance they follow.
+    var autoAdvancePlace: AutoAdvancePlace {
+        guard module == .library else { return .develop }
+        return switch libraryView {
+        case .grid: .grid
+        case .loupe: .loupe
+        case .compare: .compare
+        case .survey: .survey
+        }
+    }
+
+    /// Whether a rating, flag, label or mark moves on to the next photo in the view shown, as ⇧ does.
+    var autoAdvance: Bool {
+        autoAdvance(in: autoAdvancePlace)
+    }
+
+    func autoAdvance(in place: AutoAdvancePlace) -> Bool {
+        chosenAutoAdvance[place] ?? place.startsOn
+    }
+
+    /// Lightroom Classic's Photo ▸ Auto Advance, for the view shown.
     func toggleAutoAdvance() {
-        autoAdvance.toggle()
-        library.defaults?.set(autoAdvance, forKey: Self.autoAdvanceKey)
+        let place = autoAdvancePlace
+        chosenAutoAdvance[place] = !autoAdvance(in: place)
+        library.defaults?.set(chosenAutoAdvance[place], forKey: "\(Self.autoAdvanceKey).\(place.rawValue)")
+    }
+
+    /// Every view's Auto Advance as it starts, for the regression suite.
+    @_spi(Harness) func resetAutoAdvance() {
+        for place in AutoAdvancePlace.allCases {
+            library.defaults?.removeObject(forKey: "\(Self.autoAdvanceKey).\(place.rawValue)")
+        }
+        chosenAutoAdvance = [:]
+    }
+
+    /// The views whose Auto Advance has been chosen in `defaults`, and how.
+    internal static func chosenAutoAdvance(in defaults: UserDefaults?) -> [AutoAdvancePlace: Bool] {
+        var chosen: [AutoAdvancePlace: Bool] = [:]
+        for place in AutoAdvancePlace.allCases {
+            if let on = defaults?.object(forKey: "\(autoAdvanceKey).\(place.rawValue)") as? Bool {
+                chosen[place] = on
+            }
+        }
+        return chosen
     }
 
     var canUndoCulling: Bool {
@@ -936,6 +979,28 @@ public extension EditorModel {
             cullCustomLabel(.customLabel(name))
         }
         return true
+    }
+}
+
+/// A view that keeps its own Auto Advance (DEC-68).
+public enum AutoAdvancePlace: String, CaseIterable, Sendable {
+    case grid, loupe, compare, survey, develop
+
+    /// Whether Auto Advance is on here until it's chosen: in the loupe, where a key acts on the photo shown; not in
+    /// the grid, where it acts on the selection, nor in Compare, Survey and Develop.
+    public var startsOn: Bool {
+        self == .loupe
+    }
+
+    /// The view as the Photo menu's item names it: "Auto Advance in the Grid".
+    public var title: String {
+        switch self {
+        case .grid: "the Grid"
+        case .loupe: "the Loupe"
+        case .compare: "Compare"
+        case .survey: "Survey"
+        case .develop: "Develop"
+        }
     }
 }
 

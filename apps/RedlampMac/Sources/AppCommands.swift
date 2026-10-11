@@ -207,7 +207,7 @@ struct AppCommands: Commands {
         item(.toggleMark)
         keywordSetMenu
         item(.editCaptureTime)
-        toggle(.autoAdvance)
+        toggle(.autoAdvance, titled: "Auto Advance in \(menu.shown.autoAdvancePlace.title)")
     }
 
     /// Library's keyword set (LIB-21): its nine keywords on the selection, toggled, and the set chosen.
@@ -395,11 +395,14 @@ struct AppCommands: Commands {
     }
 
     /// A menu item with a checkmark while its action is on, and its key as `item`'s.
-    private func toggle(_ action: ShortcutAction) -> some View {
+    private func toggle(_ action: ShortcutAction, titled title: String? = nil) -> some View {
         let isOn = menu.isChecked(action)
-        return Toggle(title(of: action), isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
-            .keyboardShortcut(keyEquivalent(of: action))
-            .disabled(!menu.isEnabled(action))
+        return Toggle(
+            self.title(of: action, titled: title),
+            isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }),
+        )
+        .keyboardShortcut(keyEquivalent(of: action))
+        .disabled(!menu.isEnabled(action))
     }
 
     /// The item's key equivalent: the action's first key, if it has ⌘ and isn't another action's in the module

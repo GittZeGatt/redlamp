@@ -399,10 +399,63 @@ extension CullingTests {
         #expect(model.items[7].metadata == PhotoMetadata())
 
         model.showModule(.develop)
+        #expect(!model.autoAdvance, "Develop keeps its own Auto Advance, off until it's chosen there")
+        #expect(model.perform(.rating4) && model.selection == fixture.photos[7])
+        #expect(model.perform(.autoAdvance) && model.autoAdvance)
         #expect(model.perform(.rating4))
-        #expect(model.selection == fixture.photos[8], "Develop moves on too")
+        #expect(model.selection == fixture.photos[8], "Develop moves on once it's on there")
         #expect(model.perform(.autoAdvance) && !model.autoAdvance)
         #expect(model.perform(.rating4) && model.selection == fixture.photos[8])
+    }
+
+    @Test func `Auto Advance is kept for each view, on in the loupe and off in the grid until chosen, and the menu names the view`(
+    ) async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 10)
+        let model = fixture.model
+        let menu = MenuBarState(model: model)
+        model.showModule(.library)
+        model.click(fixture.photos[1])
+        #expect(
+            model.autoAdvancePlace == .grid && !model.autoAdvance,
+            "off in the grid, where a key acts on a selection",
+        )
+        try await fixture.eventually { menu.shown.autoAdvancePlace == .grid }
+        #expect(model.perform(.rating3) && model.selection == fixture.photos[1])
+        #expect(model.perform(.rating2, shifted: true) && model.selection == fixture.photos[2], "⇧ still moves on")
+
+        model.showLibrary(.loupe)
+        #expect(model.autoAdvancePlace == .loupe && model.autoAdvance, "on in the loupe from the start")
+        try await fixture.eventually { menu.shown.autoAdvancePlace == .loupe && menu.isChecked(.autoAdvance) }
+        #expect(model.perform(.flagPick) && model.selection == fixture.photos[3])
+        #expect(model.items[2].metadata.flag == .pick, "on the photo it left")
+        #expect(model.perform(.autoAdvance) && !model.autoAdvance)
+        #expect(model.perform(.rating1) && model.selection == fixture.photos[3], "turned off in the loupe")
+
+        model.showLibrary(.grid)
+        #expect(!model.autoAdvance && model.perform(.autoAdvance) && model.autoAdvance, "the grid's own choice")
+        model.showLibrary(.loupe)
+        #expect(!model.autoAdvance, "the loupe's choice stays its own")
+        #expect(model.autoAdvance(in: .grid) && !model.autoAdvance(in: .develop) && !model.autoAdvance(in: .compare))
+        #expect(
+            EditorModel.chosenAutoAdvance(in: nil).isEmpty
+                && EditorModel.chosenAutoAdvance(in: suiteDefaults(grid: true, loupe: false)) == [
+                    .grid: true,
+                    .loupe: false,
+                ],
+            "each view's choice is read back as it was kept",
+        )
+        model.resetAutoAdvance()
+        #expect(model.autoAdvance && !model.autoAdvance(in: .grid), "every view as it starts")
+    }
+
+    /// Defaults of a suite of their own holding the grid's and the loupe's Auto Advance as chosen.
+    private func suiteDefaults(grid: Bool, loupe: Bool) -> UserDefaults? {
+        let defaults = UserDefaults(suiteName: "auto-advance-\(UUID().uuidString)")
+        defaults?.set(grid, forKey: "\(EditorModel.autoAdvanceKey).grid")
+        defaults?.set(loupe, forKey: "\(EditorModel.autoAdvanceKey).loupe")
+        return defaults
     }
 
     @Test func `the rows a key reaches are the selection's, and the menus' checks follow the selection`() async throws {

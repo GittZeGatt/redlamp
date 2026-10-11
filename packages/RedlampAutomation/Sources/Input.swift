@@ -873,6 +873,9 @@
             action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title
         }
 
+        /// The titles of the items that go on to name the view they act in (DEC-68).
+        nonisolated static let namesItsView: Set<String> = [ShortcutAction.autoAdvance.title]
+
         /// Chooses `title` with the keyboard in the pop-up menu that has just opened, which ends
         /// its tracking with the item chosen, as a click on it does: a pop-up menu's tracking runs
         /// nothing else on the main thread. Without the item it closes the menu. Whether it chose.
@@ -935,8 +938,10 @@
         static func find(_ title: String, in menu: NSMenu? = NSApp.mainMenu) -> (NSMenu, Int)? {
             guard let menu else { return nil }
             for (index, item) in menu.items.enumerated() {
-                // Single-key items show their key in the title ("Pick    P").
-                if item.submenu == nil, item.title == title || item.title.hasPrefix("\(title)    ") {
+                // Single-key items show their key in the title ("Pick    P"), and an item that acts in the view shown
+                // names it ("Auto Advance in the Grid").
+                if item.submenu == nil, item.title == title || item.title.hasPrefix("\(title)    ")
+                    || namesItsView.contains(title) && item.title.hasPrefix("\(title) in ") {
                     return (menu, index)
                 }
                 if let submenu = item.submenu {

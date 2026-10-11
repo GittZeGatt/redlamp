@@ -640,9 +640,8 @@ public final class EditorModel {
 
     // MARK: Culling (EditorModel+Culling)
 
-    /// Every rating, flag, label and mark moves on to the next photo, as ⇧ does (Lightroom Classic's Auto
-    /// Advance).
-    public internal(set) var autoAdvance = false
+    /// Auto Advance in each view where it's been chosen (`autoAdvance(in:)`); the others are as they start.
+    public internal(set) var chosenAutoAdvance: [AutoAdvancePlace: Bool] = [:]
     /// The Library's culling changes, newest last, for Undo; and those Undo took back, for Redo.
     var cullingUndo: [CullingStep] = []
     var cullingRedo: [CullingStep] = []
@@ -832,7 +831,7 @@ public final class EditorModel {
             self?.saved(url, write, outcome, superseded: superseded)
         }
         followLibrary()
-        autoAdvance = self.library.defaults?.bool(forKey: Self.autoAdvanceKey) ?? false
+        chosenAutoAdvance = Self.chosenAutoAdvance(in: self.library.defaults)
         let frames = engine.frames()
         framesTask = Task { [weak self] in
             for await frame in frames {
