@@ -111,7 +111,11 @@ final class FakeClippingEngine: ClippingEngine, @unchecked Sendable {
 
     /// A histogram with a bump in the middle of each channel, as the engine would give for the ramp.
     var histogram: Histogram {
-        let bins = (0 ..< Histogram.binCount).map { UInt32(max(0, 1000 - abs($0 - 128) * 8)) }
+        var bins = [UInt32](repeating: 0, count: Histogram.binCount)
+        for bin in 0 ..< Histogram.binCount {
+            let distance: Int = abs(bin - 128) * 8
+            bins[bin] = UInt32(max(0, 1000 - distance))
+        }
         return Histogram(red: bins, green: bins, blue: bins, luminance: bins)
     }
 

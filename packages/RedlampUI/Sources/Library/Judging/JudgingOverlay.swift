@@ -143,13 +143,20 @@ final class JudgingOverlay {
     /// Follows the tools being turned on and off while the host is in a window.
     func start() {
         tracker?.cancel()
-        tracker = Tracker { [weak self] in
-            guard let self else { return }
-            let judging = model.libraryJudging
-            _ = (model.showRawClipping, judging.showsHistogram, judging.showsPeaking, judging.showsAFPoints)
-            _ = (judging.magnification, model.module, model.libraryView)
-            refresh()
-        }
+        tracker = Tracker { [weak self] in self?.follow() }
+    }
+
+    /// Reads every setting the tools follow, whatever `refresh` reads of them, so a change to any brings it again.
+    private func follow() {
+        let judging = model.libraryJudging
+        _ = model.showRawClipping
+        _ = judging.showsHistogram
+        _ = judging.showsPeaking
+        _ = judging.showsAFPoints
+        _ = judging.magnification
+        _ = model.module
+        _ = model.libraryView
+        refresh()
     }
 
     func stop() {
