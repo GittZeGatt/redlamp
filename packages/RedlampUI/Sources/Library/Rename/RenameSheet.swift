@@ -18,7 +18,8 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         presets: NamingPreset.builtIn.map { ($0.name, $0.template) }, store: model.presets,
     )
     private let texts = NSStackView()
-    /// The form's row of the texts the template uses, hidden while it uses none.
+    /// The form's rows of the template's error and of the texts it uses, hidden while there's none.
+    private var errorRow: NSGridRow?
     private var textsRow: NSGridRow?
     private var textFields: [String: NSTextField] = [:]
     private let start = NSTextField()
@@ -113,7 +114,9 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         form.column(at: 0).xPlacement = .trailing
         form.cell(for: field)?.xPlacement = .fill
         form.cell(for: error)?.xPlacement = .fill
+        field.trailingAnchor.constraint(equalTo: form.trailingAnchor).isActive = true
         template.error.preferredMaxLayoutWidth = Self.size.width - 200
+        errorRow = form.row(at: 2)
         textsRow = form.row(at: 3)
 
         // Cells drawn in the table's own layer: ten thousand names change at each key.
@@ -195,7 +198,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         stack.setHuggingPriority(.defaultLow, for: .vertical)
         view = stack
         model.onChange = { [weak self] change in self?.modelChanged(change) }
-        template.show(error: model.error)
+        showError()
         updateTexts()
         update()
     }
@@ -227,7 +230,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         case .names:
             table.reloadData()
         case .template:
-            template.show(error: model.error)
+            showError()
             updateTexts()
         case .phase:
             guard case let .renaming(done, total) = model.phase else {
@@ -260,6 +263,11 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         start.isEditable = !isRenaming
         extensions.isEnabled = !isRenaming
         extensions.selectItem(at: NamingOptions.ExtensionCase.allCases.firstIndex(of: model.options.extensionCase) ?? 0)
+    }
+
+    private func showError() {
+        template.show(error: model.error)
+        errorRow?.isHidden = model.error == nil
     }
 
     /// A field for each text the template uses: Custom Text for `{text}`, Shoot Name for `{text:shoot}`.
