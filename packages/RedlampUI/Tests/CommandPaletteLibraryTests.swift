@@ -153,8 +153,9 @@ struct CommandPaletteLibraryTests {
         return palette
     }
 
+    /// The library's names and photos the palette lists, Search All after them aside.
     private func libraryRows(_ palette: CommandPaletteModel) -> [PaletteItem] {
-        palette.sections.first { $0.title == "Library" }?.items ?? []
+        (palette.sections.first { $0.title == "Library" }?.items ?? []).filter { $0.kind != .rowAction(.searchAll) }
     }
 
     // MARK: - Names
@@ -234,6 +235,31 @@ struct CommandPaletteLibraryTests {
         palette.activate(studio)
         try await eventually { model.folder?.lastPathComponent == "Studio" }
         #expect(model.folder?.standardizedFileURL == root.appending(path: "Studio").standardizedFileURL)
+    }
+
+    @Test func `the text typed searches All Photographs from its own row, from Develop too`() async throws {
+        defer { cleanUp() }
+        let model = try await open()
+        let filters = try #require(model.libraryFilters)
+        model.showModule(.develop)
+        model.openCommandPalette()
+        let palette = try await search("birds", in: model)
+        let library = try #require(palette.sections.first { $0.title == "Library" }?.items)
+        let row = try #require(library.last)
+        #expect(row.kind == .rowAction(.searchAll) && row.title == "Search All Photographs for “birds”")
+        #expect(palette.isEnabled(row))
+        palette.select(row)
+        palette.activate(row)
+        #expect(model.commandPalette == nil && model.module == .library)
+        try await eventually { model.library.shownSource == .allPhotographs && !model.library.isListing }
+        #expect(model.library.shownSource == .allPhotographs && filters.filter.text == "birds")
+        try await eventually { model.items.map(\.name) == ["IMG_0002.JPG"] }
+        #expect(model.items.map(\.name) == ["IMG_0002.JPG"], "the photo with Birds, the library's whole")
+
+        model.openCommandPalette()
+        let names = try await search("x-t5", in: model)
+        let camera = try #require(libraryRows(names).first)
+        #expect(names.rowActions(for: camera).contains(.searchAll), "⌘↵ on a name searches All Photographs for it")
     }
 
     @Test func `photos are found by name through the text index, and a row filters by the name`() async throws {

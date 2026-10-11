@@ -22,18 +22,34 @@ extension CommandPaletteModel {
     static let libraryNameLimit = 8
     static let libraryPhotoLimit = 5
 
-    /// The catalogue's sections, then at the top level the library's.
+    /// The catalogue's sections, then at the top level the library's: its names and photos, then Search All.
     func showSections() {
         var shown = catalogSections
-        if case let .list(nil, query, _) = level, scope == .all,
-           !query.trimmingCharacters(in: .whitespaces).isEmpty, !library.items.isEmpty {
-            shown.append(PaletteSection(title: "Library", items: library.items))
+        if case let .list(nil, query, _) = level, scope == .all {
+            let items = library.items + (searchAllItem(query).map { [$0] } ?? [])
+            if !query.trimmingCharacters(in: .whitespaces).isEmpty, !items.isEmpty {
+                shown.append(PaletteSection(title: "Library", items: items))
+            }
         }
         sections = shown
         rows = shown.flatMap(\.items)
         if case let .list(page, query, selection) = level, !rows.isEmpty, selection >= rows.count {
             replaceTop(.list(page: page, query: query, selection: rows.count - 1))
         }
+    }
+
+    /// The row that runs `query`, as the filter bar's text would, over All Photographs from any module (DEC-67): while
+    /// the library is open and the text reads as a query.
+    private func searchAllItem(_ query: String) -> PaletteItem? {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, editor.libraryFilters != nil, editor.library.service?.isReady == true,
+              let parsed = try? LibraryQuery(parsing: text, asYouType: true), parsed != .all
+        else { return nil }
+        let count = editor.librarySources.count(of: .allPhotographs)
+        return PaletteItem(
+            kind: .rowAction(.searchAll), title: "Search All Photographs for “\(text)”",
+            context: count.map { "\($0.formatted()) photos" } ?? "All Photographs", symbol: "magnifyingglass",
+        )
     }
 
     /// Asks the library about the top level's text, once for each text: its names, ranked as

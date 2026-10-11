@@ -4,8 +4,9 @@ import RedlampEngineAPI
 import RedlampLibrary
 
 /// What a row can do besides ↵'s own (LIB-19), listed by ⌘↵: a folder shown in Library or revealed in Finder, a
-/// photo opened in Develop, the selection added to a collection or given a keyword, a name left out of the filter,
-/// a slider reset. The list starts with what ↵ does.
+/// photo opened in Develop, the selection added to a collection or given a keyword, a name left out of the filter or
+/// searched for in All Photographs (DEC-67), a slider reset. The list starts with what ↵ does. Search All is also a
+/// row of its own under the commands, which runs the text typed as a query over All Photographs from anywhere.
 @_spi(Harness) public enum PaletteRowAction: String, Hashable, Sendable {
     /// What ↵ does on the row.
     case primary
@@ -13,6 +14,8 @@ import RedlampLibrary
     case addSelectionToCollection, addKeywordToSelection
     /// Leaves the name or term out of the filter, or for a term already left out, filters by it.
     case filterOut, filterBy
+    /// All Photographs shown, filtered by the name or term, or by the text typed (DEC-67).
+    case searchAll
     case resetSlider
 
     var verb: String {
@@ -21,6 +24,7 @@ import RedlampLibrary
         case .showInLibrary, .openInDevelop, .revealInFinder: "Show"
         case .addSelectionToCollection, .addKeywordToSelection: "Add"
         case .filterOut, .filterBy: "Filter"
+        case .searchAll: "Search"
         case .resetSlider: "Reset"
         }
     }
@@ -35,6 +39,7 @@ import RedlampLibrary
         case .addKeywordToSelection: "tag"
         case .filterOut: "line.3.horizontal.decrease.circle"
         case .filterBy: "line.3.horizontal.decrease.circle.fill"
+        case .searchAll: "magnifyingglass"
         case .resetSlider: "arrow.counterclockwise"
         }
     }
@@ -51,15 +56,15 @@ import RedlampLibrary
         case .photo:
             return [.primary, .openInDevelop] + (inLibrary ? [] : [.showInLibrary]) + [.revealInFinder]
         case .libraryName(.collection, _):
-            return [.primary] + (selected ? [.addSelectionToCollection] : [])
+            return [.primary, .searchAll] + (selected ? [.addSelectionToCollection] : [])
         case .libraryName(.keyword, _):
             // The keywording panels add a keyword to the photos they show the selection of.
             let keywording = selected && !editor.libraryPanels.selection.ids.isEmpty
-            return [.primary, .filterOut] + (keywording ? [.addKeywordToSelection] : [])
+            return [.primary, .filterOut, .searchAll] + (keywording ? [.addKeywordToSelection] : [])
         case .libraryName, .photosNamed:
-            return [.primary, .filterOut]
+            return [.primary, .filterOut, .searchAll]
         case let .queryTerm(term):
-            return [.primary, term.hasPrefix("-") ? .filterBy : .filterOut]
+            return [.primary, term.hasPrefix("-") ? .filterBy : .filterOut, .searchAll]
         case let .slider(parameter):
             return [.primary] + (editor.module == .develop && isLive(parameter) ? [.resetSlider] : [])
         default:
@@ -91,6 +96,7 @@ import RedlampLibrary
         case .addKeywordToSelection: "Add to \(photos)"
         case .filterOut: "Leave Out of the Filter"
         case .filterBy: "Filter by It"
+        case .searchAll: "Search All Photographs"
         case .resetSlider: "Reset to Its Default"
         }
     }
@@ -110,8 +116,15 @@ import RedlampLibrary
         push(.actions)
     }
 
-    /// Does `action` to the `subject` row.
+    /// Does `action` to the `subject` row; Search All with none, as its own row, searches for the text typed.
     internal func perform(_ action: PaletteRowAction) {
+        if action == .searchAll, subject == nil, case let .list(nil, query, _) = level {
+            clearPreview()
+            recordingStep { editor.searchAllPhotographs(query.trimmingCharacters(in: .whitespaces)) }
+            report(.applied(.rowAction(action)))
+            close(.applied)
+            return
+        }
         guard let subject else { return }
         if action == .primary {
             levels.removeLast()
@@ -157,6 +170,14 @@ import RedlampLibrary
             filterLibrary(adding: "-" + term)
         case let (.filterBy, .queryTerm(term)):
             filterLibrary(adding: String(term.dropFirst()))
+        case let (.searchAll, .libraryName(field, value)):
+            editor.searchAllPhotographs(QueryCompletion(field: field, value: value).term)
+        case let (.searchAll, .photosNamed(text)):
+            editor
+                .searchAllPhotographs(LibraryQuery.filter(LibraryQuery.Filter(.name, .equal, [.text(text)]))
+                    .description)
+        case let (.searchAll, .queryTerm(term)):
+            editor.searchAllPhotographs(term)
         case let (.resetSlider, .slider(parameter)):
             editor.resetSlider(parameter)
         default:
