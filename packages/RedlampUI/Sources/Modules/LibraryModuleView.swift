@@ -12,7 +12,7 @@ final class LibraryModuleView: NSView {
     let compare: LibraryCompareView
     let survey: LibrarySurveyView
     let toolbar: LibraryToolbarView
-    /// The filter bar above the grid (LIB-18), shown by `\`.
+    /// The filter bar above the grid (LIB-18), its search field always on screen (DEC-66).
     let filterBar: LibraryFilterBarView
     /// A culling change some photos didn't get, floating over the top of the photos shown (LIB-15).
     private let problem: NSView
@@ -22,7 +22,8 @@ final class LibraryModuleView: NSView {
     private var withFilmstrip: [NSLayoutConstraint] = []
     private var withoutFilmstrip: [NSLayoutConstraint] = []
     private var filterHeight: NSLayoutConstraint?
-    private var showsFilterBar = false
+    /// The bar shows the rows open from its field, which took the keyboard as they were shown.
+    private var showsFilterRows = false
     /// The Library module is the one shown (`ModuleContentController`).
     private(set) var isShownModule = false
     private(set) var showsFilmstrip = true
@@ -116,16 +117,17 @@ final class LibraryModuleView: NSView {
                     && (library.count > 0 || library.isFiltered || library.isOpenFolderUnavailable))
             },
             Tracker { [weak self] in
-                guard let self, let filters = model.libraryFilters else { return }
-                _ = filters.filter.sections
-                showFilterBar(filters.isBarShown && model.libraryView == .grid)
+                guard let self else { return }
+                let filters = model.libraryFilters
+                _ = filters?.filter.sections
+                showFilterBar(filters != nil && model.libraryView == .grid, rows: filters?.isBarShown == true)
             },
         ]
     }
 
-    /// The filter bar shown above the grid, as tall as its sections, its text taking the keyboard as
-    /// it's shown; hidden, the grid takes it back.
-    private func showFilterBar(_ shown: Bool) {
+    /// The filter bar above the grid while the library is on, as tall as its row and the rows open beneath it;
+    /// `\` showing those rows gives its search field the keyboard, and hiding them gives it back to the grid.
+    private func showFilterBar(_ shown: Bool, rows: Bool) {
         let height = shown ? filterBar.intrinsicContentSize.height : 0
         if filterHeight?.constant != height {
             filterHeight?.constant = height
@@ -137,9 +139,10 @@ final class LibraryModuleView: NSView {
         if filterBar.completions.isHidden != completionsHidden {
             filterBar.completions.isHidden = completionsHidden
         }
-        defer { showsFilterBar = shown }
-        guard shown != showsFilterBar, isShownModule else { return }
-        if shown {
+        let focused = shown && rows
+        defer { showsFilterRows = focused }
+        guard focused != showsFilterRows, isShownModule else { return }
+        if focused {
             layoutSubtreeIfNeeded()
             filterBar.focusText()
         } else if let editor = window?.firstResponder as? NSTextView, editor.delegate === filterBar.field {

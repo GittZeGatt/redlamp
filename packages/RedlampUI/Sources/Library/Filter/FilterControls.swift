@@ -123,18 +123,25 @@ func filterLabel(_ text: String, secondary: Bool = true) -> NSTextField {
     return label
 }
 
-/// A pop-up of the bar, its menu's items calling back with their tags.
+/// A pop-up of the bar, its menu's items calling back with their tags: `large`, the system's pop-up button at the
+/// search field's size, for the bar's row (LIB-45); else a small one without a bezel, for a column's header.
 final class FilterPopUp: NSPopUpButton {
     var onChoose: ((Int) -> Void)?
     /// The items' titles and tags as last set.
     private var shown: (titles: [String], tags: [Int]) = ([], [])
 
-    init(identifier: String, tip: String) {
+    init(identifier: String, tip: String, large: Bool = false) {
         super.init(frame: .zero, pullsDown: false)
-        controlSize = .small
-        font = Typography.caption.nsFont
-        bezelStyle = .flexiblePush
-        isBordered = false
+        if large {
+            controlSize = .large
+            font = .systemFont(ofSize: NSFont.systemFontSize)
+            bezelStyle = .push
+        } else {
+            controlSize = .small
+            font = Typography.caption.nsFont
+            bezelStyle = .flexiblePush
+            isBordered = false
+        }
         toolTip = tip
         target = self
         action = #selector(chose)
@@ -179,5 +186,69 @@ final class FilterPopUp: NSPopUpButton {
         if let tag = selectedItem?.tag {
             onChoose?(tag)
         }
+    }
+}
+
+/// A button of the filter bar's row at the search field's size (LIB-45): a title, as an accessory bar's action
+/// button, or a symbol, as a push button, tinted with the accent colour while it's on.
+final class FilterBarButton: NSButton {
+    var onPress: (() -> Void)?
+    var isOn = false {
+        didSet {
+            if isOn != oldValue {
+                contentTintColor = isOn ? .controlAccentColor : nil
+                setAccessibilityValue(isOn ? "on" : "off")
+            }
+        }
+    }
+
+    var symbol: String? {
+        didSet {
+            if symbol != oldValue {
+                image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+            }
+        }
+    }
+
+    /// A title is what VoiceOver says of it, as it's what it shows.
+    override var title: String {
+        didSet {
+            if !title.isEmpty, title != oldValue {
+                setAccessibilityLabel(title)
+            }
+        }
+    }
+
+    init(identifier: String, symbol: String? = nil, tip: String) {
+        super.init(frame: .zero)
+        controlSize = .large
+        font = .systemFont(ofSize: NSFont.systemFontSize)
+        bezelStyle = symbol == nil ? .accessoryBarAction : .push
+        setButtonType(.momentaryPushIn)
+        title = ""
+        if let symbol {
+            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            imagePosition = .imageOnly
+        }
+        self.symbol = symbol
+        target = self
+        action = #selector(pressed)
+        toolTip = tip
+        setAccessibilityIdentifier(identifier)
+        setAccessibilityLabel(tip)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    /// The width its title or symbol needs.
+    var fittingWidth: CGFloat {
+        ceil(fittingSize.width)
+    }
+
+    @objc private func pressed() {
+        onPress?()
     }
 }

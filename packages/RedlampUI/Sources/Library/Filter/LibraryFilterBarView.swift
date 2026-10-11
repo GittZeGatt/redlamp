@@ -3,94 +3,104 @@ import RedlampDesign
 import RedlampDocument
 import RedlampLibrary
 
-/// The Library filter bar above the grid and the loupe (LIB-18), as Lightroom Classic's: Text,
-/// Attribute and Metadata, any of them shown (⇧-click for several) or None; the photos found of the
-/// source's, and when that's none, the filter's offers (`FilterOffersView`): a name in a misspelt
-/// word's place, and the term whose removal brings back the most taken out; the sort; saved filters;
-/// and the lock. The Text section is the filter's query as typed, its terms
-/// completed from the index; the Attribute section and the metadata columns read the same query and
-/// write it, so what's chosen there shows in the text and the other way round.
+/// The Library filter bar above the grid (LIB-18, LIB-45): a search field always on screen (DEC-66), the query's terms
+/// as its tokens, completed from the index as they're typed; beside it the whole library's count, which searches All
+/// Photographs with the same query (DEC-67); the photos found of the source's, and when that's none, the filter's
+/// offers (`FilterOffersView`): a name in a misspelt word's place, and the term whose removal brings back the most
+/// taken out; the sort; saved filters; and the lock. The Attribute row and the Metadata columns open from the
+/// field's buttons beneath it; they read the same query and write it, so what's chosen there shows in the field and
+/// the other way round.
 ///
-/// `\` shows and hides it, its text taking the keyboard; Esc in the text goes back to the grid.
-final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
-    static let headerHeight: CGFloat = 28
-    static let textHeight: CGFloat = 30
-    static let attributeHeight: CGFloat = 30
+/// `\` shows and hides the rows open, the field taking the keyboard as they're shown; Esc in the field goes back
+/// to the grid.
+final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
+    static let rowHeight: CGFloat = 44
+    static let attributeHeight: CGFloat = 36
     static let metadataHeight: CGFloat = 168
+    private static let gap: CGFloat = 8
 
     private let model: EditorModel
     private var trackers: [Tracker] = []
-    private let title = filterLabel("Library Filter:")
-    private let sections: [FilterSection: FilterToggle]
-    private let none = FilterToggle(title: "None", identifier: "library.filter.none", tip: "No Filter")
-    private let count = filterLabel("")
+    private var counts: LibraryObservation?
+    private let status = filterLabel("")
+    /// The whole library's photos, which a click searches with the same query (DEC-67).
+    private let searchAll = FilterBarButton(identifier: "library.filter.search-all", tip: "Search All Photographs")
+    /// While the filter is off (⌘L) with a query: turns it on.
+    private let filterOff = FilterBarButton(identifier: "library.filter.none", tip: "Filter Off")
     /// While the filter finds none of the source's photos: what it offers in place of the term in its way.
     private let offers: FilterOffersView
-    private let sortLabel = filterLabel("Sort:")
-    private let sort = FilterPopUp(identifier: "library.filter.sort", tip: "Sort")
-    private let direction = FilterToggle(
-        symbol: "arrow.up", identifier: "library.filter.direction", tip: ShortcutAction.reverseSort.title,
+    private let sort = FilterPopUp(identifier: "library.filter.sort", tip: "Sort", large: true)
+    private let direction = FilterBarButton(
+        identifier: "library.filter.direction",
+        symbol: "arrow.up",
+        tip: "Ascending",
     )
-    private let presets = FilterPopUp(identifier: "library.filter.presets", tip: "Filter Presets")
-    private let lock = FilterToggle(symbol: "lock.open", identifier: "library.filter.lock", tip: "Lock Filters")
-    let field = FilterTextField()
-    private let error = filterLabel("")
-    private let clear = FilterToggle(symbol: "xmark.circle.fill", identifier: "library.filter.clear", tip: "Clear")
-    private let note = filterLabel("")
+    private let presets = FilterPopUp(identifier: "library.filter.presets", tip: "Filter Presets", large: true)
+    private let lock = FilterBarButton(identifier: "library.filter.lock", symbol: "lock.open", tip: "Lock Filters")
+    let field = FilterSearchField()
     private let attributes: FilterAttributeRow
     let columns: FilterColumnsView
-    /// The completions of the term being typed, shown over the grid below the text.
+    /// The completions of the term being typed, shown over the grid under it.
     let completions = FilterCompletionView()
+    /// The query's text as the field last showed it, or typed it.
     private var shownText: String?
-    /// What the bar's layout depends on, as last laid out: its sections and what the text row shows.
+    /// Search All has something to search, and is shown when the row has room for it beside the offers.
+    private var searchAllWanted = false
+    /// What the bar's layout depends on, as last laid out.
     private var laidOut: [AnyHashable] = []
 
     init(model: EditorModel) {
         self.model = model
-        var sections: [FilterSection: FilterToggle] = [:]
-        for section in FilterSection.allCases {
-            sections[section] = FilterToggle(
-                title: section.title, identifier: "library.filter.\(section.rawValue)",
-                tip: "\(section.title) (⇧-click to show it with the others)",
-            )
-        }
-        self.sections = sections
         offers = FilterOffersView(model: model)
         attributes = FilterAttributeRow(model: model)
         columns = FilterColumnsView(model: model)
-        super.init(frame: CGRect(x: 0, y: 0, width: 1200, height: Self.headerHeight))
+        super.init(frame: CGRect(x: 0, y: 0, width: 1200, height: Self.rowHeight))
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.16, alpha: 1).cgColor
+        layer?.backgroundColor = NSColor(white: 0.14, alpha: 1).cgColor
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Library Filter")
         setAccessibilityIdentifier("library.filter")
-        for (section, toggle) in sections {
-            toggle.onPress = { [weak self] flags in
-                self?.model.libraryFilters?.show(section, adding: flags.contains(.shift))
-                if section == .text {
-                    self?.focusText()
-                }
-            }
-        }
-        none.onPress = { [weak self] _ in self?.model.libraryFilters?.show(nil) }
+        status.font = .systemFont(ofSize: NSFont.systemFontSize)
+        status.alignment = .right
+        searchAll.onPress = { [weak self] in self?.model.searchAllPhotographs() }
+        searchAll.toolTip = "Search All Photographs for this filter"
+        searchAll.isHidden = true
+        filterOff.title = "Filter Off"
+        filterOff.toolTip = "The filter is off: click to turn it on (\(ShortcutAction.toggleFilters.title))"
+        filterOff.onPress = { [weak self] in self?.model.perform(.toggleFilters) }
         sort.onChoose = { [weak self] tag in
             guard LibrarySortField.allCases.indices.contains(tag) else { return }
             self?.model.sort(by: LibrarySortField.allCases[tag])
         }
-        direction.onPress = { [weak self] _ in self?.model.perform(.reverseSort) }
+        direction.onPress = { [weak self] in self?.model.perform(.reverseSort) }
         presets.onChoose = { [weak self] tag in self?.presetChosen(tag) }
-        lock.onPress = { [weak self] _ in self?.model.perform(.lockFilters) }
-        clear.onPress = { [weak self] _ in self?.model.libraryFilters?.clear() }
+        lock.onPress = { [weak self] in self?.model.perform(.lockFilters) }
+        lock.toolTip = "Lock Filters: keep this filter as sources change"
         offers.onResize = { [weak self] in self?.needsLayout = true }
         field.delegate = self
-        field.placeholderString = "Search, or rating>=3 camera:X-T5 kw:birds -flag:reject…"
-        error.textColor = NSColor.systemRed
+        field.clearButton.target = self
+        field.clearButton.action = #selector(clearChosen)
+        field.attributeButton.target = self
+        field.attributeButton.action = #selector(attributeChosen)
+        field.metadataButton.target = self
+        field.metadataButton.action = #selector(metadataChosen)
+        field.toolTip = "Words find names, folders, keywords and captions; terms such as rating>=3 camera:X-T5 "
+            + "kw:birds -flag:reject filter, Tab completing them"
         completions.onChoose = { [weak self] completion in self?.accept(completion) }
-        let views: [NSView] = [
-            title, none, count, offers, sortLabel, sort, direction, presets, lock, field, error, clear, note,
-        ] + FilterSection.allCases.compactMap { sections[$0] } + [attributes, columns]
-        for view in views {
+        for view: NSView in [
+            field,
+            searchAll,
+            filterOff,
+            offers,
+            status,
+            sort,
+            direction,
+            presets,
+            lock,
+            attributes,
+            columns,
+        ] {
             addSubview(view)
         }
     }
@@ -108,18 +118,20 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         NSSize(width: NSView.noIntrinsicMetric, height: height)
     }
 
-    /// The header, and each section shown.
+    /// The row, and each row open beneath it.
     private var height: CGFloat {
-        let shown = model.libraryFilters?.filter.sections ?? []
-        return Self.headerHeight + (shown.contains(.text) ? Self.textHeight : 0)
-            + (shown.contains(.attribute) ? Self.attributeHeight : 0)
-            + (shown.contains(.metadata) ? Self.metadataHeight : 0)
+        Self.rowHeight + (isOpen(.attribute) ? Self.attributeHeight : 0) + (isOpen(.metadata) ? Self.metadataHeight : 0)
+    }
+
+    private func isOpen(_ section: FilterSection) -> Bool {
+        model.libraryFilters?.isOpen(section) ?? false
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         trackers.forEach { $0.cancel() }
         trackers = []
+        counts = nil
         guard window != nil else { return }
         trackers = [
             Tracker { [weak self] in
@@ -131,7 +143,10 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
                 guard let self else { return }
                 model.libraryFilters?.setMoments(MomentSetting(looseness: model.libraryViews.looseness))
             },
-            Tracker { [weak self] in self?.update() },
+            Tracker { [weak self] in
+                _ = (self?.model.librarySources.rows, self?.model.librarySources.isCounted)
+                self?.update()
+            },
             Tracker { [weak self] in
                 guard let self, let filters = model.libraryFilters else { return }
                 let wasHidden = completions.isHidden
@@ -148,42 +163,108 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
                 }
             },
         ]
+        counts = model.librarySources.observeCounts { [weak self] changed in
+            if changed.contains(.allPhotographs) {
+                self?.update()
+            }
+        }
     }
 
     /// The bar as the filter has it.
     private func update() {
         guard let filters = model.libraryFilters else { return }
         let filter = filters.filter
-        for (section, toggle) in sections {
-            toggle.isOn = filter.isEnabled && filter.sections.contains(section)
-        }
-        none.isOn = !filter.isEnabled || filter.sections.isEmpty
-        if field.stringValue != filter.text, shownText != filter.text {
-            field.stringValue = filter.text
+        if field.text != filter.text, shownText != filter.text {
+            field.show(filter.text, typing: false)
         }
         shownText = filter.text
-        set(error, filters.error?.message ?? "")
-        if error.toolTip != filters.error?.message {
-            error.toolTip = filters.error?.message
+        field.setOpen(attribute: isOpen(.attribute), metadata: isOpen(.metadata))
+        let clearHidden = filter.text.isEmpty
+        if field.clearButton.isHidden != clearHidden {
+            field.clearButton.isHidden = clearHidden
         }
-        let total = filters.listed?.total ?? model.library.count
-        let shown = model.library.isFiltered ? model.library.count : total
-        set(
-            count,
-            !model.hasFilterSource ? "" : shown == total
-                ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted()) photos",
-        )
-        set(note, model.libraryFilterNote)
+        let placeholder = placeholder
+        if field.placeholderString != placeholder {
+            field.placeholderString = placeholder
+        }
+        updateStatus(filters)
+        updateSearchAll(filters)
+        let filterOffHidden = filter.isEnabled || filter.text.isEmpty
+        if filterOff.isHidden != filterOffHidden {
+            filterOff.isHidden = filterOffHidden
+        }
         sort.set(
             LibrarySortField.allCases.enumerated().map { ($1.title, $0) },
-            chosen: LibrarySortField.allCases
-                .firstIndex(of: filters.sort.field),
+            chosen: LibrarySortField.allCases.firstIndex(of: filters.sort.field),
         )
         direction.symbol = filters.sort.ascending ? "arrow.up" : "arrow.down"
         let directionTip = "\(filters.sort.ascending ? "Ascending" : "Descending") (\(ShortcutAction.reverseSort.title))"
         if direction.toolTip != directionTip {
             direction.toolTip = directionTip
+            direction.setAccessibilityLabel(directionTip)
         }
+        updatePresets(filters)
+        lock.isOn = filters.isLocked
+        lock.symbol = filters.isLocked ? "lock.fill" : "lock.open"
+        for (view, section) in [(attributes, FilterSection.attribute), (columns, .metadata)] as [(
+            NSView,
+            FilterSection,
+        )]
+            where view.isHidden == isOpen(section) {
+            view.isHidden = !isOpen(section)
+        }
+        let layout: [AnyHashable] = [
+            isOpen(.attribute), isOpen(.metadata), searchAllWanted, searchAll.title, filterOff.isHidden,
+        ]
+        if layout != laidOut {
+            if layout.prefix(2) != laidOut.prefix(2) {
+                invalidateIntrinsicContentSize()
+            }
+            laidOut = layout
+            needsLayout = true
+        }
+    }
+
+    /// "Search" and the source shown, whose photos typing narrows (DEC-67).
+    private var placeholder: String {
+        if let source = model.library.shownSource {
+            return "Search \(source.title)"
+        }
+        return model.folder.map { "Search \($0.lastPathComponent)" } ?? "Search"
+    }
+
+    /// What the field can't read, while it can't; else the photos found, or what the library is waiting for.
+    private func updateStatus(_ filters: LibraryFilters) {
+        let note = model.libraryFilterNote
+        let total = filters.listed?.total ?? model.library.count
+        let shown = model.library.isFiltered ? model.library.count : total
+        let count = !model.hasFilterSource ? "" : shown == total
+            ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted())"
+        let error = filters.error?.message
+        set(status, error ?? (note.isEmpty ? count : note))
+        let color: NSColor = error == nil ? .secondaryLabelColor : .systemRed
+        if status.textColor != color {
+            status.textColor = color
+        }
+        if status.toolTip != error ?? note {
+            status.toolTip = error ?? note
+        }
+    }
+
+    /// The whole library's photos beside the field while it has a query and the source isn't All Photographs, as the
+    /// Library panel counts them beside All Photographs.
+    private func updateSearchAll(_ filters: LibraryFilters) {
+        searchAllWanted = model.library.shownSource != .allPhotographs && model.hasFilterSource
+            && !filters.filter.text.trimmingCharacters(in: .whitespaces).isEmpty
+            && model.library.service?.isReady == true
+        let title = model.librarySources.count(of: .allPhotographs).map { "Search All \($0.formatted())" }
+            ?? "Search All Photographs"
+        if searchAll.title != title {
+            searchAll.title = title
+        }
+    }
+
+    private func updatePresets(_ filters: LibraryFilters) {
         let current = filters.preset
         var items: [(title: String?, tag: Int)] = current == nil ? [("Custom Filter", -1), (nil, 0)] : []
         items += filters.presets.enumerated().map { ($1.name, $0) }
@@ -192,31 +273,6 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
             items.append(("Delete Preset “\(current.name)”…", -3))
         }
         presets.set(items, chosen: current.flatMap { preset in filters.presets.firstIndex(of: preset) } ?? -1)
-        lock.isOn = filters.isLocked
-        lock.symbol = filters.isLocked ? "lock.fill" : "lock.open"
-        for (view, section) in [(attributes, FilterSection.attribute), (columns, .metadata)] as [(
-            NSView,
-            FilterSection,
-        )]
-            where view.isHidden == filter.sections.contains(section) {
-            view.isHidden = !filter.sections.contains(section)
-        }
-        let textShown = filter.sections.contains(.text)
-        for view in [field, error, note] as [NSView] where view.isHidden == textShown {
-            view.isHidden = !textShown
-        }
-        let clearHidden = !textShown || filter.text.isEmpty
-        if clear.isHidden != clearHidden {
-            clear.isHidden = clearHidden
-        }
-        let layout: [AnyHashable] = [filter.sections, error.stringValue.isEmpty, note.stringValue]
-        if layout != laidOut {
-            if layout.first != laidOut.first {
-                invalidateIntrinsicContentSize()
-            }
-            laidOut = layout
-            needsLayout = true
-        }
     }
 
     /// Sets a label's text, leaving it alone when it's the same.
@@ -226,89 +282,122 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         }
     }
 
+    /// The row from its ends: the sort, presets and lock at its end; the field at its start, 300 to 600 points as
+    /// the room leaves it (280 beside offers), and after it Search All, the offers and the count. While the filter
+    /// finds
+    /// nothing, its offers come first: Search All and the count are left out when there isn't room for them too.
     override func layout() {
         super.layout()
-        let header = Self.headerHeight
-        var x: CGFloat = 12
-        func place(_ view: NSView, width: CGFloat, y: CGFloat = 0, height: CGFloat = header) {
-            view.frame = CGRect(x: x, y: y + (height - 20) / 2, width: width, height: 20)
-            x += width + 4
-        }
-        place(title, width: filterWidth(title))
-        x += 4
-        for section in FilterSection.allCases {
-            if let toggle = sections[section] {
-                place(toggle, width: toggle.fittingWidth)
-            }
-        }
-        place(none, width: none.fittingWidth)
-        var right = bounds.width - 10
+        let row = Self.rowHeight
+        let height = FilterSearchField.height
+        let y = (row - height) / 2
+        var right = bounds.width - 12
         func placeRight(_ view: NSView, width: CGFloat) {
             right -= width
-            view.frame = CGRect(x: right, y: (header - 20) / 2, width: width, height: 20)
-            right -= 4
+            view.frame = CGRect(x: right, y: y, width: width, height: height)
+            right -= Self.gap
         }
-        placeRight(lock, width: 22)
-        placeRight(presets, width: 170)
-        placeRight(direction, width: 22)
-        placeRight(sort, width: 128)
-        placeRight(sortLabel, width: filterWidth(sortLabel))
+        placeRight(lock, width: 32)
+        placeRight(presets, width: min(max(presets.intrinsicContentSize.width, 110), 150))
+        placeRight(direction, width: 32)
+        placeRight(sort, width: min(max(sort.intrinsicContentSize.width, 110), 140))
+        let offersWidth = offers.isHidden ? 0 : offers.fittingWidth + Self.gap
+        let searchAllWidth = searchAllWanted ? searchAll.fittingWidth + Self.gap : 0
+        let filterOffWidth = filterOff.isHidden ? 0 : filterOff.fittingWidth + Self.gap
+        var room = right - 12 - Self.gap
+        let least: CGFloat = offers.isHidden ? 300 : 280
+        let fieldWidth = max(min(room - offersWidth - searchAllWidth - filterOffWidth - Self.statusRoom, 600), least)
+        field.frame = CGRect(x: 12, y: y, width: max(min(fieldWidth, room), 120), height: height)
+        room -= field.frame.width + Self.gap
+        var x = field.frame.maxX + Self.gap
+        let fits = searchAllWanted && room - offersWidth - filterOffWidth >= searchAllWidth
+        if searchAll.isHidden == fits {
+            searchAll.isHidden = !fits
+        }
+        for button in [searchAll, filterOff] where !button.isHidden {
+            button.frame = CGRect(x: x, y: y, width: button.fittingWidth, height: height)
+            x += button.fittingWidth + Self.gap
+            room -= button.fittingWidth + Self.gap
+        }
         if !offers.isHidden {
-            placeRight(offers, width: max(min(offers.fittingWidth, 600, right - x - 8 - 120), 0))
+            let width = max(min(offers.fittingWidth, room), 0)
+            offers.frame = CGRect(x: x, y: y, width: width, height: height)
+            x += width + Self.gap
         }
-        placeRight(count, width: max(min(right - x - 8, 200), 0))
-        count.alignment = .right
-        var y = header
-        if let shown = model.libraryFilters?.filter.sections {
-            if shown.contains(.text) {
-                let errorWidth = error.stringValue.isEmpty ? 0 : min(320, bounds.width / 3)
-                let noteWidth = note.stringValue.isEmpty ? 0 : min(320, filterWidth(note))
-                let fieldWidth = max(bounds.width - 24 - errorWidth - noteWidth - 30, 120)
-                field.frame = CGRect(x: 12, y: y + 4, width: fieldWidth, height: Self.textHeight - 8)
-                clear.frame = CGRect(x: field.frame.maxX - 22, y: y + 7, width: 18, height: 16)
-                error.frame = CGRect(x: field.frame.maxX + 8, y: y + 8, width: errorWidth, height: 16)
-                note.frame = CGRect(x: field.frame.maxX + 8 + errorWidth, y: y + 8, width: noteWidth, height: 16)
-                y += Self.textHeight
-            }
-            if shown.contains(.attribute) {
-                attributes.frame = CGRect(x: 0, y: y, width: bounds.width, height: Self.attributeHeight)
-                y += Self.attributeHeight
-            }
-            if shown.contains(.metadata) {
-                columns.frame = CGRect(x: 0, y: y, width: bounds.width, height: Self.metadataHeight)
-            }
+        let statusWidth = right - x
+        status.frame = CGRect(x: x, y: (row - 17) / 2, width: statusWidth < 70 ? 0 : statusWidth, height: 17)
+        var top = row
+        if isOpen(.attribute) {
+            attributes.frame = CGRect(x: 0, y: top, width: bounds.width, height: Self.attributeHeight)
+            top += Self.attributeHeight
+        }
+        if isOpen(.metadata) {
+            columns.frame = CGRect(x: 0, y: top, width: bounds.width, height: Self.metadataHeight)
         }
         placeCompletions()
+    }
+
+    /// The room the field leaves for the count when there's room for it: "1,234 of 12,345".
+    private static let statusRoom: CGFloat = 90
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        NSColor.separatorColor.setFill()
+        CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).intersection(dirtyRect).fill()
     }
 }
 
 extension LibraryFilterBarView {
-    /// The completions under the text, in the view that holds the bar.
+    /// The completions under the text being typed, in the view that holds the bar.
     private func placeCompletions() {
         guard let host = completions.superview else { return }
-        let below = convert(CGRect(x: field.frame.minX, y: field.frame.maxY + 2, width: 420, height: 0), to: host)
+        let origin = field.typingOrigin(in: host)
+        let below = CGRect(x: origin.x, y: origin.y + (host.isFlipped ? 4 : -4), width: 440, height: 0)
         completions.place(under: below, in: host)
+    }
+
+    // MARK: - The field's buttons
+
+    @objc private func clearChosen() {
+        model.libraryFilters?.clear()
+        focusText()
+    }
+
+    @objc private func attributeChosen() {
+        model.libraryFilters?.toggleRow(.attribute)
+    }
+
+    @objc private func metadataChosen() {
+        model.libraryFilters?.toggleRow(.metadata)
     }
 
     // MARK: - Text
 
-    /// The text takes the keyboard.
+    /// The field takes the keyboard, the cursor at its end; one being edited is left as it is, as making it first
+    /// responder again would end its editing and make the text being typed a token.
     func focusText() {
-        guard model.libraryFilters?.filter.sections.contains(.text) == true else { return }
-        window?.makeFirstResponder(field)
-        field.currentEditor()?.selectedRange = NSRange(location: field.stringValue.utf16.count, length: 0)
+        guard let window,
+              field.currentEditor() == nil || window.firstResponder !== field.currentEditor() else { return }
+        window.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { return }
+        editor.selectedRange = NSRange(location: editor.string.utf16.count, length: 0)
+        field.followTyping()
     }
 
     func controlTextDidChange(_: Notification) {
-        guard let filters = model.libraryFilters else { return }
-        let text = field.stringValue
-        shownText = text
-        filters.setText(text)
-        filters.complete(text, cursor: cursor(in: text))
+        guard !field.isShowing, let filters = model.libraryFilters else { return }
+        field.followTyping()
+        let text = field.text
+        if FilterQueryTerms.split(text) != FilterQueryTerms.split(filters.filter.text) {
+            shownText = text
+            filters.setText(text)
+        }
+        complete()
     }
 
     func controlTextDidBeginEditing(_: Notification) {
         model.libraryFilters?.isTyping = true
+        model.libraryFilters?.prepareNames()
     }
 
     func controlTextDidEndEditing(_: Notification) {
@@ -317,17 +406,18 @@ extension LibraryFilterBarView {
         model.keepActivePhotoShown()
     }
 
-    /// The cursor's place in `text`, in characters.
-    private func cursor(in text: String) -> Int {
-        guard let editor = field.currentEditor() else { return text.count }
-        let offset = min(editor.selectedRange.location, text.utf16.count)
-        let index = String.Index(utf16Offset: offset, in: text)
-        return text.distance(from: text.startIndex, to: index)
+    /// Asks for the completions of the term being typed where the cursor is, in the field's text.
+    private func complete() {
+        guard let filters = model.libraryFilters else { return }
+        guard let typing = field.typing else {
+            filters.endCompletion()
+            return
+        }
+        filters.complete(field.text, cursor: typing.start + typing.cursor)
     }
 
-    /// ↑ and ↓ move through the completions, Tab and Return take one, Esc closes them or goes back to
-    /// the grid.
-    private func handle(_ key: FilterTextField.Key) -> Bool {
+    /// ↑ and ↓ move through the completions, Tab and Return take one, Esc closes them or goes back to the grid.
+    private func handle(_ key: FilterTextKey) -> Bool {
         let showing = !completions.isHidden && !completions.items.isEmpty
         switch key {
         case .up where showing: completions.move(by: -1)
@@ -348,14 +438,12 @@ extension LibraryFilterBarView {
 
     private func accept(_ completion: FilterCompletion) {
         guard let filters = model.libraryFilters, let range = filters.completionRange else { return }
-        let (text, cursor) = FilterTerm.inserting(completion, in: field.stringValue, at: range)
-        field.stringValue = text
+        let (text, _) = FilterTerm.inserting(completion, in: field.text, at: range)
         shownText = text
-        let offset = text.index(text.startIndex, offsetBy: min(cursor, text.count)).utf16Offset(in: text)
-        field.currentEditor()?.selectedRange = NSRange(location: offset, length: 0)
         filters.setText(text)
+        field.show(text, typing: true)
         if completion.text.hasSuffix(":") {
-            filters.complete(text, cursor: cursor)
+            complete()
         } else {
             filters.endCompletion()
         }
@@ -386,7 +474,7 @@ extension LibraryFilterBarView {
         guard let filters = model.libraryFilters else { return }
         let alert = NSAlert()
         alert.messageText = "New Filter Preset"
-        alert.informativeText = "The filter, its sections and its columns are saved under this name."
+        alert.informativeText = "The filter, its rows and its columns are saved under this name."
         let name = NSTextField(frame: CGRect(x: 0, y: 0, width: 240, height: 22))
         name.placeholderString = "Preset Name"
         alert.accessoryView = name
@@ -406,34 +494,14 @@ extension LibraryFilterBarView {
     }
 }
 
-/// The filter's text field, whose ↑, ↓, Tab, Return and Esc the bar takes first.
-final class FilterTextField: NSTextField {
-    enum Key {
-        case up, down, tab, enter, escape
-    }
-
-    init() {
-        super.init(frame: .zero)
-        isBezeled = true
-        bezelStyle = .roundedBezel
-        controlSize = .small
-        font = Typography.label.nsFont
-        focusRingType = .none
-        cell?.isScrollable = true
-        cell?.wraps = false
-        setAccessibilityIdentifier("library.filter.text")
-        setAccessibilityLabel("Filter Text")
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
+/// The keys the bar takes from the field before the field does.
+enum FilterTextKey {
+    case up, down, tab, enter, escape
 }
 
 extension LibraryFilterBarView {
     func control(_: NSControl, textView _: NSTextView, doCommandBy selector: Selector) -> Bool {
-        let key: FilterTextField.Key? = switch selector {
+        let key: FilterTextKey? = switch selector {
         case #selector(NSResponder.moveUp(_:)): .up
         case #selector(NSResponder.moveDown(_:)): .down
         case #selector(NSResponder.insertTab(_:)): .tab
@@ -442,6 +510,45 @@ extension LibraryFilterBarView {
         default: nil
         }
         return key.map { handle($0) } ?? false
+    }
+
+    // MARK: - Tokens
+
+    func tokenField(_: NSTokenField, representedObjectForEditing editingString: String) -> Any? {
+        editingString
+    }
+
+    func tokenField(_: NSTokenField, displayStringForRepresentedObject representedObject: Any) -> String? {
+        representedObject as? String
+    }
+
+    func tokenField(_: NSTokenField, editingStringForRepresentedObject representedObject: Any) -> String? {
+        representedObject as? String
+    }
+
+    /// A term the language reads is a token; `OR`, `AND` and what it can't read are plain text among them.
+    func tokenField(_: NSTokenField, styleForRepresentedObject representedObject: Any) -> NSTokenField.TokenStyle {
+        guard let term = representedObject as? String, term != "OR", term != "AND",
+              (try? LibraryQuery(parsing: term)) != nil else { return .plainSquared }
+        return .rounded
+    }
+
+    /// What's tokenized, typed, pasted or dropped, as terms: a term with a space inside quotes or parentheses is one,
+    /// and a quote or parenthesis left open is closed, so it can't reach the terms after it.
+    func tokenField(_: NSTokenField, shouldAdd tokens: [Any], at _: Int) -> [Any] {
+        let text = tokens.compactMap { $0 as? String }.joined(separator: " ")
+        return FilterQueryTerms.split(text).map(FilterQueryTerms.closed)
+    }
+
+    func tokenField(_: NSTokenField, writeRepresentedObjects objects: [Any], to pasteboard: NSPasteboard) -> Bool {
+        let terms = objects.compactMap { $0 as? String }
+        guard !terms.isEmpty else { return false }
+        pasteboard.clearContents()
+        return pasteboard.setString(terms.joined(separator: " "), forType: .string)
+    }
+
+    func tokenField(_: NSTokenField, readFrom pasteboard: NSPasteboard) -> [Any]? {
+        pasteboard.string(forType: .string).map { FilterQueryTerms.split($0) }
     }
 }
 
@@ -454,111 +561,5 @@ extension EditorModel {
         }
         guard folder != nil, !library.isShownFromLibrary, libraryFilters?.filter.isEmpty == false else { return "" }
         return "Filters apply once the library has indexed this folder"
-    }
-}
-
-/// The completions of the term being typed: a few rows over the grid, the one Tab or Return takes
-/// lit, each taken by a click.
-final class FilterCompletionView: NSView {
-    var onChoose: ((FilterCompletion) -> Void)?
-    private(set) var items: [FilterCompletion] = []
-    private var rows: [NSTextField] = []
-    private var kinds: [NSTextField] = []
-    private var chosenIndex = 0
-    static let rowHeight: CGFloat = 22
-
-    init() {
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.2, alpha: 0.98).cgColor
-        layer?.cornerRadius = 6
-        layer?.borderColor = NSColor(white: 1, alpha: 0.15).cgColor
-        layer?.borderWidth = 1
-        isHidden = true
-        setAccessibilityElement(true)
-        setAccessibilityRole(.list)
-        setAccessibilityIdentifier("library.filter.completions")
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    override var isFlipped: Bool {
-        true
-    }
-
-    var chosen: FilterCompletion? {
-        items.indices.contains(chosenIndex) ? items[chosenIndex] : nil
-    }
-
-    func show(_ items: [FilterCompletion]) {
-        guard items != self.items else { return }
-        self.items = items
-        chosenIndex = 0
-        while rows.count < items.count {
-            let row = filterLabel("", secondary: false)
-            let kind = filterLabel("")
-            kind.alignment = .right
-            rows.append(row)
-            kinds.append(kind)
-            addSubview(row)
-            addSubview(kind)
-        }
-        for (index, row) in rows.enumerated() {
-            row.isHidden = index >= items.count
-            kinds[index].isHidden = index >= items.count
-            if index < items.count {
-                row.stringValue = items[index].title
-                kinds[index].stringValue = items[index].detail
-                row.setAccessibilityIdentifier("library.filter.completion.\(index)")
-            }
-        }
-        isHidden = items.isEmpty
-        highlight()
-        needsLayout = true
-    }
-
-    func move(by offset: Int) {
-        guard !items.isEmpty else { return }
-        chosenIndex = (chosenIndex + offset + items.count) % items.count
-        highlight()
-    }
-
-    private func highlight() {
-        for (index, row) in rows.enumerated() {
-            row.wantsLayer = true
-            row.layer?.backgroundColor = index == chosenIndex && index < items.count
-                ? NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor : nil
-        }
-    }
-
-    /// Below `rect`, in `host`'s coordinates, as tall as its rows.
-    func place(under rect: CGRect, in host: NSView) {
-        let height = CGFloat(items.count) * Self.rowHeight + 8
-        let y = host.isFlipped ? rect.minY : rect.minY - height
-        frame = CGRect(x: rect.minX, y: y, width: rect.width, height: height)
-    }
-
-    override func layout() {
-        super.layout()
-        for (index, row) in rows.enumerated() where index < items.count {
-            let y = 4 + CGFloat(index) * Self.rowHeight
-            row.frame = CGRect(x: 8, y: y + 3, width: bounds.width - 110, height: Self.rowHeight - 6)
-            kinds[index].frame = CGRect(x: bounds.width - 100, y: y + 3, width: 92, height: Self.rowHeight - 6)
-        }
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        !isHidden && frame.contains(point) ? self : nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let index = Int((point.y - 4) / Self.rowHeight)
-        if items.indices.contains(index) {
-            onChoose?(items[index])
-        }
     }
 }

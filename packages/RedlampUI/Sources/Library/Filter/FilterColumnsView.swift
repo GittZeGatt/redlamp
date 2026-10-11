@@ -20,7 +20,7 @@ final class FilterColumnsView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Metadata")
-        setAccessibilityIdentifier("library.filter.metadata")
+        setAccessibilityIdentifier("library.filter.columns")
     }
 
     @available(*, unavailable)

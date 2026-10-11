@@ -5,14 +5,14 @@ import RedlampLibrary
 /// The offers for a filter that finds none of the source's photos (LIB-18), as buttons: a name of the library's in
 /// a misspelt word's place ("Did you mean Lisbon? 2 photos"), then the term whose removal brings back the most;
 /// a click on one changes the query. It follows the filter alone and is as wide as its buttons, so it goes
-/// wherever the query's text goes; the filter bar shows it in its header.
+/// wherever the query's text goes; the filter bar shows it beside its search field.
 final class FilterOffersView: NSView {
     /// Told when the buttons' titles change, for the view holding it to lay it out again.
     var onResize: (() -> Void)?
 
     private let model: EditorModel
     private var tracker: Tracker?
-    private let buttons: [(kind: FilterOffer.Kind, button: FilterToggle)]
+    private let buttons: [(kind: FilterOffer.Kind, button: FilterBarButton)]
     private var shown: [FilterOffer] = []
 
     static let gap: CGFloat = 4
@@ -20,13 +20,13 @@ final class FilterOffersView: NSView {
     init(model: EditorModel) {
         self.model = model
         buttons = [
-            (.suggestion, FilterToggle(title: "", identifier: "library.filter.suggestion", tip: "")),
-            (.removal, FilterToggle(title: "", identifier: "library.filter.removal", tip: "")),
+            (.suggestion, FilterBarButton(identifier: "library.filter.suggestion", tip: "Did You Mean")),
+            (.removal, FilterBarButton(identifier: "library.filter.removal", tip: "Remove")),
         ]
         super.init(frame: .zero)
         for (kind, button) in buttons {
             button.isHidden = true
-            button.onPress = { [weak self] _ in self?.model.libraryFilters?.take(kind) }
+            button.onPress = { [weak self] in self?.model.libraryFilters?.take(kind) }
             addSubview(button)
         }
         isHidden = true

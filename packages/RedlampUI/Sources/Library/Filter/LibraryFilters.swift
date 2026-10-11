@@ -3,9 +3,10 @@ import Observation
 import RedlampDocument
 import RedlampLibrary
 
-/// The Library filter bar (LIB-18), as Lightroom Classic's: Text, Attribute and Metadata over one
-/// query in the library's language, the sort, saved filters, and a lock that keeps one filter across
-/// sources. Each source keeps its own filter and sort, for the 25 latest sources and across launches,
+/// The Library filter bar (LIB-18, LIB-45): a search field always on screen above the grid (DEC-66), and the
+/// Attribute row and the Metadata columns, which open from it, over one query in the library's language; the sort,
+/// saved filters, and a lock that keeps one filter across sources. Each source keeps its own filter and sort, for the
+/// 25 latest sources and across launches,
 /// so a folder's filter is there again when it's shown again; the Library panel's entries and the
 /// collections are sources as folders are (LIB-23).
 ///
@@ -19,7 +20,7 @@ import RedlampLibrary
 @MainActor
 @Observable
 public final class LibraryFilters {
-    /// The bar is shown above the grid and the loupe (`\`).
+    /// The rows open from the bar's search field are shown beneath it (`\`): the field itself is always on screen.
     public internal(set) var isBarShown = false
     /// The source the bar shows and edits, by `key(_:includingSubfolders:)` for a folder, or the Library
     /// panel's entry's or the collection's `LibrarySource.key`.
@@ -279,9 +280,51 @@ public extension LibraryFilters {
         isBarShown = shown
         remember()
         if shown {
-            service?.engine?.prepareNames()
+            prepareNames()
             countColumns()
         }
+    }
+
+    /// Whether the bar shows `section`: the text always, in its search field (DEC-66); the Attribute row and the
+    /// Metadata columns while they're open and the bar shows its rows (`\`).
+    func isOpen(_ section: FilterSection) -> Bool {
+        section == .text || isBarShown && filter.sections.contains(section)
+    }
+
+    /// The Attribute row or the Metadata columns opened beneath the search field, the bar showing its rows, or
+    /// closed.
+    func toggleRow(_ section: FilterSection) {
+        let opening = !isOpen(section)
+        var next = filter
+        if opening {
+            next.sections.insert(section)
+        } else {
+            next.sections.remove(section)
+        }
+        setFilter(next)
+        if opening {
+            setBarShown(true)
+        }
+    }
+
+    /// The names completion offers, read ahead of the first key typed.
+    func prepareNames() {
+        service?.engine?.prepareNames()
+    }
+
+    /// Keeps `filter` as the filter of the source kept under `key`, as it's shown next: Search All takes the query
+    /// to All Photographs (DEC-67).
+    func carry(_ filter: LibraryFilter, to key: String) {
+        if key == source {
+            setFilter(filter)
+            return
+        }
+        if let index = sources.lastIndex(where: { $0.source == key }) {
+            sources[index].filter = filter
+        } else {
+            sources.append(SourceFilter(source: key, filter: filter, sort: LibrarySort()))
+        }
+        remember()
     }
 
     /// Clears the query, keeping the sections and columns.

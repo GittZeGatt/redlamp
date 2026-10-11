@@ -20,7 +20,7 @@ extension LibraryFilterTests {
         #expect(ShortcutAction.allCases.filter { $0.sortField != nil }.count == LibrarySortField.allCases.count)
     }
 
-    @Test func `the bar lays its sections out above the grid, its controls apart, its text taking the keyboard`(
+    @Test func `the bar's field is always above the grid, its rows open beneath it, and the field takes the keyboard`(
     ) async throws {
         defer { cleanUp() }
         let (model, _) = try await open()
@@ -34,22 +34,29 @@ extension LibraryFilterTests {
         window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
         window.setContentSize(NSSize(width: 1600, height: 1000))
         defer { window.contentViewController = nil }
-        model.perform(.toggleFilterBar)
-        try await eventually { filters.columns.count == 4 }
         window.contentView?.layoutSubtreeIfNeeded()
         let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
         let grid = try #require(Self.find(LibraryGridView.self, in: window.contentView))
-        #expect(bar.frame.height == LibraryFilterBarView.headerHeight + LibraryFilterBarView.textHeight
-            + LibraryFilterBarView.attributeHeight + LibraryFilterBarView.metadataHeight)
+        try await eventually { !bar.isHidden && bar.frame.height == LibraryFilterBarView.rowHeight }
+        #expect(!bar.isHidden && bar.frame.height == LibraryFilterBarView.rowHeight, "the field alone, rows closed")
+        #expect(bar.field.text == "rating>=3" && bar.field.pieces == [.token("rating>=3")])
+
+        model.perform(.toggleFilterBar)
+        try await eventually { filters.columns.count == 4 }
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(bar.frame.height == LibraryFilterBarView.rowHeight + LibraryFilterBarView.attributeHeight
+            + LibraryFilterBarView.metadataHeight)
         #expect(grid.convert(grid.bounds, to: nil).maxY <= bar.convert(bar.bounds, to: nil).minY + 0.5)
         let controls = bar.subviews.filter { !$0.isHidden && $0.frame.width > 0 && !($0 is FilterAttributeRow) }
-            .filter { !($0 is FilterColumnsView) && $0.accessibilityIdentifier() != "library.filter.clear" }
+            .filter { !($0 is FilterColumnsView) }
         for (index, control) in controls.enumerated() {
             #expect(bar.bounds.contains(control.frame), "\(type(of: control)) inside the bar")
+            #expect(control.frame.height <= LibraryFilterBarView.rowHeight, "\(type(of: control)) in the row")
             for other in controls[(index + 1)...] {
                 #expect(!control.frame.insetBy(dx: 1, dy: 1).intersects(other.frame), "\(control) and \(other)")
             }
         }
+        #expect(bar.field.frame.height == FilterSearchField.height && bar.field.frame.width >= 240)
         #expect((window.firstResponder as? NSTextView)?.delegate === bar.field)
         if let path = ProcessInfo.processInfo.environment["REDLAMP_FILTER_BAR_IMAGE"],
            let view = window.contentView, let image = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
@@ -57,8 +64,13 @@ extension LibraryFilterTests {
             try image.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         }
         model.perform(.toggleFilterBar)
+        try await eventually { bar.frame.height == LibraryFilterBarView.rowHeight }
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!bar.isHidden && !filters.isBarShown && bar.frame.height == LibraryFilterBarView.rowHeight)
+        #expect((window.firstResponder as? NSTextView)?.delegate !== bar.field, "the grid has the keyboard back")
+        model.showLibrary(.loupe)
         try await eventually { bar.isHidden }
-        #expect(bar.isHidden && !filters.isBarShown)
+        #expect(bar.isHidden, "the bar is the grid's")
     }
 
     @Test func `a key typed shows in the bar without laying its columns out again`() async throws {
@@ -82,8 +94,8 @@ extension LibraryFilterTests {
         let frames = columns.subviews.map(\.frame)
         for text in ["r", "ra", "rating>=3"] {
             filters.setText(text)
-            try await eventually { bar.field.stringValue == text }
-            #expect(bar.field.stringValue == text)
+            try await eventually { bar.field.text == text }
+            #expect(bar.field.text == text)
             #expect(!columns.needsLayout, "the columns laid out again after \(text)")
         }
         try await listed(model)
@@ -131,6 +143,11 @@ extension LibraryFilterTests {
             return target != nil
         }
         let (hit, location) = try #require(target, "\(identifier) on screen, where a click reaches it")
+        // A button's press tracks the mouse until it's released, which a release sent after it can't reach.
+        if let button = hit as? NSButton {
+            button.performClick(nil)
+            return
+        }
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try #require(NSEvent.mouseEvent(
                 with: type, location: location, modifierFlags: modifiers,

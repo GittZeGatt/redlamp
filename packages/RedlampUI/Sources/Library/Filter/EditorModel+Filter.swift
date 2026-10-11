@@ -1,15 +1,15 @@
 import Foundation
 import RedlampLibrary
 
-/// The filter bar's actions (LIB-18): showing it (`\`), turning the filter on and off (⌘L), the lock,
-/// and the sorts, by key, from the menus and the palette as from the bar itself.
+/// The filter bar's actions (LIB-18): showing its rows (`\`), turning the filter on and off (⌘L), the lock,
+/// the sorts, and searching All Photographs (DEC-67), by key, from the menus and the palette as from the bar itself.
 public extension EditorModel {
     /// The filter bar, when the library is on.
     var libraryFilters: LibraryFilters? {
         library.filters
     }
 
-    /// `\`: the bar shown or hidden; shown, its text takes the keyboard.
+    /// `\`: the rows open from the bar's search field shown or hidden; shown, the field takes the keyboard.
     func toggleFilterBar() {
         guard let filters = libraryFilters else { return }
         filters.setBarShown(!filters.isBarShown)
@@ -40,6 +40,20 @@ public extension EditorModel {
         } else {
             filters.follow(folder, includingSubfolders: library.includesSubfolders)
         }
+    }
+
+    /// Search All (DEC-67): All Photographs in the grid, filtered by the bar's query, or by `text` in its place, as
+    /// the command palette searches everything from anywhere.
+    func searchAllPhotographs(_ text: String? = nil) {
+        guard let filters = libraryFilters else { return }
+        var carried = filters.filter
+        if let text {
+            carried.text = text
+        }
+        carried.isEnabled = true
+        filters.carry(carried, to: LibrarySource.allPhotographs.key)
+        guard library.shownSource == .allPhotographs || librarySources.show(.allPhotographs) else { return }
+        showLibrary(.grid)
     }
 
     func sort(by field: LibrarySortField) {
