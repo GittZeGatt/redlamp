@@ -124,17 +124,21 @@ enum PanelControls {
     /// controls' leading edges in the next, each row's on its first baseline. A row without a label has its control
     /// in the second column.
     static func form(_ rows: [(label: String?, control: NSView)]) -> NSGridView {
-        let grid = NSGridView(views: rows.map { row in
-            [row.label.map(formLabel) ?? NSGridCell.emptyContentView, row.control]
+        let labels = rows.map { $0.label.map(formLabel) }
+        let grid = NSGridView(views: zip(labels, rows).map { label, row in
+            [label ?? NSGridCell.emptyContentView, row.control]
         })
         grid.rowSpacing = rowSpacing
         grid.columnSpacing = columnSpacing
         grid.rowAlignment = .firstBaseline
+        // As wide as its widest label, the controls taking the rest.
+        grid.column(at: 0).width = ceil(labels.compactMap { $0?.intrinsicContentSize.width }.max() ?? 0)
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .fill
         for row in rows {
             row.control.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            row.control.trailingAnchor.constraint(lessThanOrEqualTo: grid.trailingAnchor).isActive = true
         }
         return grid
     }
