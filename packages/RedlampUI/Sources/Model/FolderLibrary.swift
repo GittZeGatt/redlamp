@@ -289,6 +289,9 @@ public final class FolderLibrary {
     public func open(
         _ folder: URL?, wanted: [URL] = [], opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in },
     ) {
+        // The photos are named below the folder's URL, which must be the path the index keeps (`LibraryIndexer.path`):
+        // given with `//`, `.`, `..` or `/private`, it would name them apart from the same photos anywhere else.
+        let folder = folder?.standardizedFileURL
         if let shownSource {
             leavingSource?(shownSource)
             self.shownSource = nil

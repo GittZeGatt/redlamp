@@ -24,7 +24,7 @@ public extension EditorModel {
 
     /// Opens a folder of the working set in the filmstrip.
     func showFolder(_ folder: URL) {
-        guard folder != self.folder else { return }
+        guard folder.standardizedFileURL != self.folder else { return }
         openFolder(folder, select: nil)
     }
 
@@ -49,6 +49,9 @@ public extension EditorModel {
     }
 
     internal func openFolder(_ url: URL, select target: URL?) {
+        // In the form `FolderLibrary.open` names the photos in, which the folder's view, last photo and target are
+        // found by.
+        let (url, target) = (url.standardizedFileURL, target?.standardizedFileURL)
         stackSuggestions = []
         onFolderChange?(url)
         rememberSourceView()
