@@ -204,6 +204,8 @@ public struct PhotoRecord: Sendable, Hashable {
     public var widestAperture: Double?
     /// Its focal length in 35 mm terms, in whole millimetres (`LensOptics.focal35`).
     public var focal35: Double?
+    /// The colour its sidecar gives `customLabel` (LIB-15).
+    public var customLabelColor: LabelColor?
 
     public init(
         id: Int64 = 0, folder: Int64, name: String, kind: Kind? = nil, size: Int64 = 0,
@@ -217,7 +219,7 @@ public struct PhotoRecord: Sendable, Hashable {
         customLabel: String? = nil, creator: String? = nil, copyright: String? = nil,
         location: PhotoLocation? = nil, stack: PhotoStack? = nil, otherFields: Set<XMPField> = [],
         xmpSignature: Int64? = nil, cameraCaptured: Date? = nil, cameraOffset: Int? = nil, missingSince: Date? = nil,
-        widestAperture: Double? = nil, focal35: Double? = nil,
+        widestAperture: Double? = nil, focal35: Double? = nil, customLabelColor: LabelColor? = nil,
     ) {
         self.id = id
         self.folder = folder
@@ -263,6 +265,7 @@ public struct PhotoRecord: Sendable, Hashable {
         self.missingSince = missingSince
         self.widestAperture = widestAperture
         self.focal35 = focal35
+        self.customLabelColor = customLabelColor
     }
 
     /// `indexed` of a photo read before the index kept its lens's widest aperture and 35 mm focal length (schema

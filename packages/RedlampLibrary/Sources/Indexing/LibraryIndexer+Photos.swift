@@ -452,7 +452,11 @@ extension LibraryIndexer.Run {
         record.rating = fields.rating ?? 0
         record.flag = fields.flag
         record.label = fields.label
-        record.customLabel = fields.label == nil ? XMPFields.text(fields.customLabel) : nil
+        let customLabel = fields.label == nil ? XMPFields.text(fields.customLabel) : nil
+        if customLabel != record.customLabel {
+            record.customLabelColor = nil
+        }
+        record.customLabel = customLabel
         record.title = XMPFields.text(fields.title)
         record.caption = XMPFields.text(fields.caption)
         record.creator = XMPSource.joined(XMPFields.names(fields.creator))
@@ -462,12 +466,15 @@ extension LibraryIndexer.Run {
         record.otherFields = organising.others
     }
 
-    /// What only the `.redlamp` holds, in the photo's row: the mark and its stack.
+    /// What only the `.redlamp` holds, in the photo's row: the mark, its stack, and its custom label's colour where
+    /// the row shows the `.redlamp`'s custom label rather than another app's.
     static func place(_ metadata: PhotoMetadata, in record: inout PhotoRecord) {
         record.marked = metadata.mark
         record.stack = metadata.stack.flatMap { stack in
             stack.id == nil && !stack.top ? nil : PhotoStack(id: stack.id, top: stack.top, position: stack.position)
         }
+        let own = metadata.label == nil ? XMPFields.text(metadata.customLabel) : nil
+        record.customLabelColor = own != nil && own == record.customLabel ? metadata.customLabelColor : nil
     }
 
     /// The fields a photo's row shows, but its keywords.

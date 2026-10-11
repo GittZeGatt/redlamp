@@ -8,11 +8,14 @@ public enum MetadataField: Sendable, Hashable {
     /// 0 to 5 stars.
     case rating(Int)
     case flag(PhotoFlag?)
-    /// A colour label, or none: a custom label goes too.
+    /// A colour label, or none: a custom label goes too, with its colour.
     case label(ColorLabel?)
     /// A label by its name: a colour's in any label set (`Red`, `Approved`) is that colour, any other a
-    /// custom label; none clears the label.
+    /// custom label, without a colour until `customLabelColor` gives it one; none clears the label.
     case namedLabel(String?)
+    /// The colour of the photos' custom label (LIB-15), which the sidecar keeps only beside the label: given after
+    /// `namedLabel`, it's the colour that label is given.
+    case customLabelColor(LabelColor?)
     /// In the quick collection.
     case mark(Bool)
     case title(String?)
@@ -38,13 +41,18 @@ public enum MetadataField: Sendable, Hashable {
         switch self {
         case let .rating(stars): return ["rating": .set(.number(Double(min(max(stars, 0), 5))))]
         case let .flag(flag): return ["flag": .set(flag.map { .string($0.rawValue) })]
-        case let .label(label): return ["label": .set(label.map { .string($0.rawValue) }), "customLabel": .set(nil)]
+        case let .label(label):
+            return [
+                "label": .set(label.map { .string($0.rawValue) }), "customLabel": .set(nil),
+                "customLabelColor": .set(nil),
+            ]
         case let .namedLabel(name):
             guard let name = name.flatMap(XMPSource.trimmed) else { return MetadataField.label(nil).edits }
             if let label = XMPLabelNames.label(named: name) ?? ColorLabel(rawValue: name.lowercased()) {
                 return MetadataField.label(label).edits
             }
-            return ["label": .set(nil), "customLabel": .set(.string(name))]
+            return ["label": .set(nil), "customLabel": .set(.string(name)), "customLabelColor": .set(nil)]
+        case let .customLabelColor(color): return ["customLabelColor": .set(color.map { .string($0.rawValue) })]
         case let .mark(marked): return ["mark": .set(marked ? .bool(true) : nil)]
         case let .title(value): return ["title": text(value)]
         case let .caption(value): return ["caption": text(value)]
@@ -72,6 +80,7 @@ public enum MetadataField: Sendable, Hashable {
         case .rating: "the rating"
         case .flag: "the flag"
         case .label, .namedLabel: "the label"
+        case .customLabelColor: "the label's color"
         case .mark: "the mark"
         case .title: "the title"
         case .caption: "the caption"

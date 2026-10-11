@@ -154,8 +154,12 @@ public struct XMPFields: Sendable, Hashable, Codable {
             applied.flag = flag
         }
         if fields.contains(.label) {
+            let named = label == nil ? customLabel : nil
+            if Self.text(named) != Self.text(applied.label == nil ? applied.customLabel : nil) {
+                applied.customLabelColor = nil
+            }
             applied.label = label
-            applied.customLabel = label == nil ? customLabel : nil
+            applied.customLabel = named
         }
         if fields.contains(.keywords) {
             applied.keywords = keywords ?? []

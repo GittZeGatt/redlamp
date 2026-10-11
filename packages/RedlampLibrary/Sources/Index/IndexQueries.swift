@@ -288,7 +288,7 @@ enum IndexColumns {
         "rating", "flag", "label", "marked", "edited", "sidecar_modified", "xmp_modified", "title", "caption", "state",
         "indexed", "custom_label", "creator", "copyright", "sublocation", "city", "province", "country", "country_code",
         "stack", "stack_top", "other_fields", "xmp_signature", "camera_captured", "camera_offset", "stack_position",
-        "missing_since", "widest_aperture", "focal35",
+        "missing_since", "widest_aperture", "focal35", "custom_label_color",
     ]
 
     static func photo(prefix: String) -> String {
@@ -356,6 +356,7 @@ extension PhotoRecord {
             otherFields: Self.fields(code: row.int(at: 42)), xmpSignature: row.optionalInt64(at: 43),
             cameraCaptured: date(44), cameraOffset: row.optionalInt(at: 45), missingSince: date(47),
             widestAperture: row.optionalDouble(at: 48), focal35: row.optionalDouble(at: 49),
+            customLabelColor: row.string(at: 50).map(LabelColor.init(rawValue:)),
         )
     }
 

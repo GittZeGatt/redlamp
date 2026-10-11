@@ -2,27 +2,59 @@ import Foundation
 import RedlampDocument
 import RedlampEngineAPI
 
-/// A custom label the library's photos have, and how many have it.
+/// A custom label the library's photos have, how many have it, and its colour (LIB-15).
 public struct CustomLabelCount: Sendable, Hashable {
     public let name: String
     public let photos: Int
+    /// The colour most of its photos' sidecars give it; nil when none gives it one.
+    public let color: LabelColor?
 
-    public init(name: String, photos: Int) {
+    public init(name: String, photos: Int, color: LabelColor? = nil) {
         self.name = name
         self.photos = photos
+        self.color = color
     }
 }
 
 extension IndexQueries {
-    /// Each custom label the library's photos have, with how many have it, in Finder's order of their names;
-    /// those of roots marked removed don't count.
+    /// Each custom label the library's photos have, with how many have it and the colour most of those that give it
+    /// one give it (a tie to the palette's first), in Finder's order of their names; those of roots marked removed
+    /// don't count.
     func customLabelCounts() throws -> [CustomLabelCount] {
         let statement = try database.cached("""
-        SELECT custom_label, COUNT(*) FROM photos WHERE custom_label IS NOT NULL AND custom_label != ''
-          AND \(inLibrary()) GROUP BY custom_label
+        SELECT custom_label, custom_label_color, COUNT(*) FROM photos
+          WHERE custom_label IS NOT NULL AND custom_label != '' AND \(inLibrary())
+          GROUP BY custom_label, custom_label_color
         """)
-        return try statement.map { CustomLabelCount(name: $0.string(at: 0) ?? "", photos: $0.int(at: 1)) }
-            .sorted { FinderOrder.compare($0.name, $1.name) < 0 }
+        var labels: [String: (photos: Int, colors: [LabelColor: Int])] = [:]
+        try statement.forEachRow { row in
+            let name = row.string(at: 0) ?? ""
+            let count = row.int(at: 2)
+            labels[name, default: (0, [:])].photos += count
+            if let color = row.string(at: 1).map(LabelColor.init(rawValue:)) {
+                labels[name, default: (0, [:])].colors[color, default: 0] += count
+            }
+        }
+        return labels.map { name, label in
+            CustomLabelCount(name: name, photos: label.photos, color: Self.mostGiven(label.colors))
+        }
+        .sorted { FinderOrder.compare($0.name, $1.name) < 0 }
+    }
+
+    /// The colour given most, a tie going to the palette's first, then to the first by name.
+    private static func mostGiven(_ colors: [LabelColor: Int]) -> LabelColor? {
+        func rank(_ color: LabelColor) -> Int {
+            LabelColor.palette.firstIndex(of: color) ?? LabelColor.palette.count
+        }
+        return colors.max { lhs, rhs in
+            if lhs.value != rhs.value {
+                return lhs.value < rhs.value
+            }
+            if rank(lhs.key) != rank(rhs.key) {
+                return rank(lhs.key) > rank(rhs.key)
+            }
+            return lhs.key.rawValue > rhs.key.rawValue
+        }?.key
     }
 
     /// What the index shows of `keys` for each of `ids`, as the sidecar writes them, and which of the
@@ -49,6 +81,7 @@ extension PhotoMetadata {
             location: row.location, collections: collections, stack: row.stack, captureShift: row.captureShift,
             captureOffset: row.cameraCaptured != nil && row.capturedOffset != row.cameraOffset
                 ? row.capturedOffset : nil,
+            customLabelColor: row.customLabel == nil ? nil : row.customLabelColor,
         )
     }
 
@@ -60,6 +93,7 @@ extension PhotoMetadata {
         case .label:
             label = nil
             customLabel = nil
+            customLabelColor = nil
         case .keywords: keywords = nil
         case .title: title = nil
         case .caption: caption = nil
@@ -120,6 +154,13 @@ extension LibraryIndex.Writer {
         if values.keys.contains("label") || values.keys.contains("customLabel") {
             row.label = values.keys.contains("label") ? metadata.label : row.label
             row.customLabel = row.label == nil ? XMPFields.text(metadata.customLabel) : nil
+            row.customLabelColor = nil
+        }
+        if values.keys.contains("customLabelColor") {
+            row.customLabelColor = metadata.customLabelColor
+        }
+        if row.customLabel == nil {
+            row.customLabelColor = nil
         }
         row.showCapture(values)
         try upsertPhotos([row])

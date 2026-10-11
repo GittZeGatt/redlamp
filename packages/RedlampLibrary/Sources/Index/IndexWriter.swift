@@ -274,11 +274,13 @@ public extension LibraryIndex.Writer {
     }
 
     /// Shows `fields` in `photo`'s row: its rating, flag, label or custom label, and IPTC Core's fields,
-    /// empty texts and locations as none, with its text indexed again. Keywords are set apart.
+    /// empty texts and locations as none, with its text indexed again; a custom label's colour goes when the label
+    /// does. Keywords are set apart.
     func setFields(_ fields: XMPFields, forPhoto photo: Int64) throws {
         let statement = try database.cached("""
-        UPDATE photos SET rating = ?, flag = ?, label = ?, custom_label = ?, title = ?, caption = ?, creator = ?,
-          copyright = ?, sublocation = ?, city = ?, province = ?, country = ?, country_code = ? WHERE id = ?
+        UPDATE photos SET rating = ?, flag = ?, label = ?, custom_label = ?,
+          custom_label_color = CASE WHEN custom_label IS ?4 THEN custom_label_color END, title = ?, caption = ?,
+          creator = ?, copyright = ?, sublocation = ?, city = ?, province = ?, country = ?, country_code = ? WHERE id = ?
         """)
         let location = XMPFields.place(fields.location)
         try statement.bind(fields.rating ?? 0, at: 1)
@@ -471,6 +473,7 @@ extension LibraryIndex.Writer {
         try statement.bind(photo.missingSince?.timeIntervalSince1970, at: 47)
         try statement.bind(photo.widestAperture, at: 48)
         try statement.bind(photo.focal35, at: 49)
+        try statement.bind(photo.customLabelColor?.rawValue, at: 50)
     }
 
     /// The ID an `INSERT ... RETURNING id` returns. SQLite makes the change at the first step.

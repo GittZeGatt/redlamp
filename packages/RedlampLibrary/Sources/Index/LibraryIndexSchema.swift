@@ -9,7 +9,7 @@ extension LibraryIndex {
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
         migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9, migrateToVersion10,
-        migrateToVersion11, migrateToVersion12,
+        migrateToVersion11, migrateToVersion12, migrateToVersion13,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -78,6 +78,16 @@ extension LibraryIndex {
         }
         try LensFunctions.register(on: database)
         try database.execute(schemaVersion12Fill)
+    }
+
+    /// Adds no column to an index that has it already, one set back to an earlier version.
+    static func migrateToVersion13(_ database: SQLiteDatabase) throws {
+        let column = try database.prepare(
+            "SELECT 1 FROM pragma_table_info('photos') WHERE name = 'custom_label_color'",
+        )
+        if try column.first({ _ in true }) == nil {
+            try database.execute(schemaVersion13)
+        }
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -308,6 +318,14 @@ extension LibraryIndex {
       WHERE p.indexed = 1) AS lens
     WHERE photos.id = lens.id;
     CREATE INDEX IF NOT EXISTS photos_lens_unread ON photos (folder) WHERE indexed = 2 AND state = 0;
+    """
+
+    /// The colour a photo's sidecar gives its custom label (LIB-15), so each custom label's colour, the one most of
+    /// its photos have, is known without reading their sidecars. No build before it wrote one, so the column starts
+    /// empty and adding it rewrites no row; a photo read before it whose sidecar another Mac's newer build gave a
+    /// colour shows its label without one until its sidecar changes.
+    static let schemaVersion13 = """
+    ALTER TABLE photos ADD COLUMN custom_label_color TEXT;       -- a LabelColor's name
     """
 }
 
