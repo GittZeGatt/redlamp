@@ -62,14 +62,12 @@ extension LibrarySources {
     /// shown, unless something else was opened meanwhile.
     private func libraryOpened(for reopening: LaunchReopening) {
         guard launch === reopening, let source = reopening.source else { return }
+        guard model?.library.generation == reopening.generation else { return abandon(reopening) }
         guard let core = model?.library.service?.core else { return fallBack(reopening) }
         Task { [weak self] in
             let found = await Task.detached(priority: .userInitiated) { await Self.lookUp(source, core: core) }.value
             guard let self, launch === reopening, let model else { return }
-            guard model.library.generation == reopening.generation else {
-                launch = nil
-                return reopening.abandon()
-            }
+            guard model.library.generation == reopening.generation else { return abandon(reopening) }
             guard let found else { return fallBack(reopening) }
             if case let .previousImport(previous, stamp, photos) = found {
                 knowPreviousImport(previous, stamp: stamp, photos: photos)
@@ -85,6 +83,12 @@ extension LibrarySources {
         launch = nil
         model?.library.defaults?.removeObject(forKey: Self.shownKey)
         reopening.finish(reopened: false)
+    }
+
+    /// Something else was opened meanwhile: neither the source nor what launch opens without it opens.
+    func abandon(_ reopening: LaunchReopening) {
+        launch = nil
+        reopening.abandon()
     }
 
     /// What showing a source at launch needs to know first.

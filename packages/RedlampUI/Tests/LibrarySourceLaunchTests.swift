@@ -252,6 +252,33 @@ struct LibrarySourceLaunchTests {
 
     /// Its multi-selection isn't checked: a folder listed from the disk at launch loses it as the library takes the
     /// folder over, keeping the active photo.
+    @Test func `a folder opened before a library that doesn't open is kept, and nothing is opened over it`(
+    ) async throws {
+        let launches = try LaunchSandbox()
+        defer { launches.remove() }
+        try Self.shoot(launches)
+        try launches.sandbox.photos(["Other/F.jpg"], from: 9)
+        let first = launches.launch()
+        try await launches.indexed()
+        first.showFolder(launches.sandbox.folder("Shoot"))
+        try await launches.sandbox.eventually { first.items.count == 5 }
+        #expect(first.librarySources.show(.collection(Self.lisbon)))
+        try await launches.sandbox.eventually { !first.librarySources.isListing && first.items.count == 4 }
+        await launches.quit()
+        let blocked = launches.sandbox.base.appending(path: "Blocked", directoryHint: .notDirectory)
+        try Data([1]).write(to: blocked)
+        launches.paths = LibraryPaths(root: blocked.appending(path: "Library", directoryHint: .isDirectory))
+
+        let model = launches.launch()
+        model.showFolder(launches.sandbox.folder("Other"))
+        try await launches.sandbox.eventually {
+            model.library.service?.state != .opening && !model.librarySources.isReopening
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.library.service?.isReady == false)
+        #expect(model.folder == launches.sandbox.folder("Other") && model.items.map(\.name) == ["F.jpg"])
+    }
+
     @Test func `a folder shown at quit comes back at launch with its active photo and its place`() async throws {
         let launches = try LaunchSandbox()
         defer { launches.remove() }

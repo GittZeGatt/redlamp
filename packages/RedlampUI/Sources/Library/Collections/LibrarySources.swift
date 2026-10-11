@@ -383,8 +383,7 @@ public final class LibrarySources {
             return true
         }
         if let launch, launch.source != source {
-            launch.abandon()
-            self.launch = nil
+            abandon(launch)
         }
         model.rememberSourceView()
         model.stackSuggestions = []
@@ -490,8 +489,9 @@ public final class LibrarySources {
         guard libraryObservation == nil, let library = model?.library else { return }
         libraryObservation = library.observe { [weak self] diff in
             guard diff.reset, let self, let generation, !library.showsSource(generation) else { return }
-            launch?.abandon()
-            launch = nil
+            if let launch {
+                abandon(launch)
+            }
             close()
         }
     }
