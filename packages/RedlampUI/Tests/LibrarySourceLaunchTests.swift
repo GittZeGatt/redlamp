@@ -276,6 +276,7 @@ struct LibrarySourceLaunchTests {
         }
         try await Task.sleep(for: .milliseconds(300))
         #expect(model.library.service?.isReady == false)
+        try await launches.sandbox.eventually { model.items.map(\.name) == ["F.jpg"] }
         #expect(model.folder == launches.sandbox.folder("Other") && model.items.map(\.name) == ["F.jpg"])
     }
 
