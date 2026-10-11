@@ -350,6 +350,11 @@ public final class LibraryMetadata: Sendable {
         try await index.read { try $0.customLabelCounts() }
     }
 
+    /// The library's photos with the custom label `name`, which a change of its colour reaches (LIB-15).
+    public func photoIDs(withCustomLabel name: String) async throws -> [Int64] {
+        try await index.read { try $0.photoIDs(withCustomLabel: name) }
+    }
+
     // MARK: - Helpers
 
     /// Runs `body` after the batches asked for before it.

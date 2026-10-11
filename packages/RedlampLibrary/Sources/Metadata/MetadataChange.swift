@@ -48,7 +48,7 @@ public enum MetadataField: Sendable, Hashable {
             ]
         case let .namedLabel(name):
             guard let name = name.flatMap(XMPSource.trimmed) else { return MetadataField.label(nil).edits }
-            if let label = XMPLabelNames.label(named: name) ?? ColorLabel(rawValue: name.lowercased()) {
+            if let label = Self.colorLabel(named: name) {
                 return MetadataField.label(label).edits
             }
             return ["label": .set(nil), "customLabel": .set(.string(name)), "customLabelColor": .set(nil)]
@@ -67,6 +67,13 @@ public enum MetadataField: Sendable, Hashable {
         case let .country(value): return ["location.country": place(value)]
         case let .countryCode(value): return ["location.countryCode": place(value)]
         }
+    }
+
+    /// The colour label `name` is in any label set (`Red`, `Approved`), which `namedLabel` gives in place of a custom
+    /// label; nil for any other name.
+    public static func colorLabel(named name: String) -> ColorLabel? {
+        guard let name = XMPSource.trimmed(name) else { return nil }
+        return XMPLabelNames.label(named: name) ?? ColorLabel(rawValue: name.lowercased())
     }
 
     /// What `fields` do to each photo's sidecar fields, a later field's edit replacing an earlier one's.

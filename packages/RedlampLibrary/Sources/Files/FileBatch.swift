@@ -414,6 +414,8 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     /// kept them (schema version 12).
     public var widestAperture: Double?
     public var focal35: Double?
+    /// Its custom label's colour; nil in batches journaled before the index kept it (schema version 13).
+    public var customLabelColor: String?
 
     public init(_ photo: PhotoRecord) {
         id = photo.id
@@ -465,6 +467,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         missingSince = photo.missingSince?.timeIntervalSince1970
         widestAperture = photo.widestAperture
         focal35 = photo.focal35
+        customLabelColor = photo.customLabelColor?.rawValue
     }
 
     /// The row in `folder`.
@@ -487,7 +490,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
             cameraCaptured: cameraCaptured.map(Date.init(timeIntervalSince1970:)), cameraOffset: cameraOffset,
             missingSince: missingSince.map(Date.init(timeIntervalSince1970:)), widestAperture: widestAperture,
-            focal35: focal35,
+            focal35: focal35, customLabelColor: customLabelColor.map(LabelColor.init(rawValue:)),
         )
     }
 }

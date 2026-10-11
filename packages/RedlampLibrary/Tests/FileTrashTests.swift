@@ -211,6 +211,7 @@ struct FileTrashTests {
         row.missingSince = FileSandbox.date(11)
         row.widestAperture = 2.8
         row.focal35 = 105
+        row.customLabelColor = .orange
         return row
     }
 

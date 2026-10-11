@@ -41,6 +41,13 @@ extension IndexQueries {
         .sorted { FinderOrder.compare($0.name, $1.name) < 0 }
     }
 
+    /// The photos with the custom label `name`; those of roots marked removed are left out.
+    func photoIDs(withCustomLabel name: String) throws -> [Int64] {
+        let statement = try database.cached("SELECT id FROM photos WHERE custom_label = ? AND \(inLibrary())")
+        try statement.bind(name, at: 1)
+        return try statement.map { $0.int64(at: 0) }
+    }
+
     /// The colour given most, a tie going to the palette's first, then to the first by name.
     private static func mostGiven(_ colors: [LabelColor: Int]) -> LabelColor? {
         func rank(_ color: LabelColor) -> Int {
