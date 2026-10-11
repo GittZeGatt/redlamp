@@ -14,14 +14,14 @@
 # sudo). Running it again brings everything up to date and leaves what's right as it is.
 #
 # In order: Homebrew, which installs the Command Line Tools; the clone at ~/src/build-mac/redlamp,
-# put on origin/main; the tools in scripts/build-mac/Brewfile; Xcode, from the App Store (mas) when the
-# App Store's version is the main Mac's, or else from Apple's developer downloads (xcodes, which
+# put on origin/main; the tools in scripts/build-mac/Brewfile; Xcode, from the App Store (mas) when
+# the App Store's version is the main Mac's, or else from Apple's developer downloads (xcodes, which
 # asks for an Apple Account), with its licence, first launch, Metal toolchain and iOS SDK; PATH for
 # commands run over SSH; mise's tools (mise.toml); the sample raws (2.1 GB); `mise run generate`;
 # and the settings a Mac left on its own needs (--no-settings leaves them out): no sleep on the
-# charger, no screen lock, automatic login, Remote Login, and no automatic macOS or App Store
-# updates, since macOS and Xcode change on both Macs together. --gate then runs the push gate on
-# origin/main, which builds everything and runs the reference tests (a few minutes).
+# charger or with the lid closed, no screen lock, automatic login, Remote Login, and no automatic
+# macOS or App Store updates, since macOS and Xcode change on both Macs together. --gate then runs
+# the push gate on origin/main, which builds everything and runs the reference tests (a few minutes).
 #
 # MACOS_VERSION, XCODE_VERSION and XCODE_BUILD are the main Mac's (`sw_vers -productVersion`,
 # `xcodebuild -version`); set them when it moves on. A build Mac on other versions can build and
@@ -271,6 +271,15 @@ settings() {
     # The regression suite drives the app on screen, so the display stays on too.
     say "Power: on the charger, no sleep, the display's included, and wake for network access"
     sudo pmset -c sleep 0 displaysleep 0 disksleep 0 womp 1
+    # Closing a laptop's lid puts it to sleep unless it's on power with a display connected. This
+    # undocumented setting, which the tools for keeping a Mac awake closed use, keeps it awake
+    # whatever is connected, on battery too, so it isn't for a Mac carried closed in a bag.
+    say "Lid: no sleep when it's closed (sudo pmset -a disablesleep 0 undoes it)"
+    sudo pmset -a disablesleep 1
+    local disabled
+    disabled="$(pmset -g | awk '/SleepDisabled/ { print $2 }')"
+    [ "$disabled" = 1 ] \
+        || note "pmset didn't take disablesleep, so closing the lid still sleeps this Mac: keep a display or dummy plug connected"
 
     say "Screen lock: off, and no screen saver (sysadminctl asks for this account's password)"
     sysadminctl -screenLock off -password - \
