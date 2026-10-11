@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Lays out an edit showcase: a six-slide Instagram carousel from one raw and its Redlamp recipe.
+"""Lays out an edit showcase: an Instagram carousel from one raw and its Redlamp recipe.
 
 Every picture on the slides is Redlamp's own render of the raw, made here with the `redlamp` CLI, and
-the settings slide is drawn from the recipe's values, so what a slide says is what made the picture.
-The plan is plans/2026-10-11-edit-showcases.md in the private redlamp-social repository.
+the panels are drawn from the recipe's values, so what a slide says is what made the picture. The plan
+is plans/2026-10-11-edit-showcases.md in the private redlamp-social repository. There are two kinds:
+a film look (the default), six slides with the raw in four of Redlamp's film looks, and an edit flow,
+the edit shown panel by panel.
 
     video/scripts/showcase.py ~/src/redlamp-social/work/showcases/s01
 
-The folder holds `showcase.json`:
+The CLI is build/cli/redlamp in this checkout, or REDLAMP_CLI. The folder holds `showcase.json`; a
+film look's:
 
     {"raw": "~/src/redlamp-social/photos/DSC02372.ARW",
      "recipe": "recipe.json",              the edit (a sidecar's edit.json, or a bare recipe)
@@ -21,10 +24,28 @@ The folder holds `showcase.json`:
      "alt": ["Slide 1's alt text.", ...],
      "post": "Where and when it goes out, for post.txt."}
 
+An edit flow's has "kind": "flow" and no looks: the cover, the before and after, one slide per step,
+each the raw rendered with the edit up to and including that step's panels under those panels drawn
+with their values, then the finished photo and the call to action, at most ten slides:
+
+    {"kind": "flow", "raw": ..., "recipe": "recipe.json", "frameTop": 0.3,
+     "steps": [["basic"], ["toneCurve"], ["mixer", "grading"]],   optional: by default one step per
+                                           panel the edit uses, in the app's order (FLOW_PANELS)
+     "remove": {"args": ["--remove-brush", "0.33,0.28,0.33,0.70,0.018", "--generative", "7"],
+                "rows": [["Spots", "1 brush stroke"], ["Fill", "Generative"]],   Remove, with the CLI
+                "caption": "the microphone stand, with generative fill"},
+     "masks": [{"kind": "subject", "name": "Subject", "invert": false, "bitmap": "mask.png",
+                "adjustments": {"local.exposure": 0.4}}],          AI masks, added with --mask, or
+                                           --mask-bitmap from a `redlamp mask` PNG; the Masking
+                                           step shows the recipe's own masks (gradients) first
+     "panelAt": {"toneCurve": "top"},      where a step's panels sit, bottom by default
+     "stepFrameTop": 0.5,                  the step slides' frameTop, when the panels need the photo higher
+     "caption": ..., "hashtags": [...], "alt": [...], "post": ...}
+
 The folder is the showcase's work folder, ~/src/redlamp-social/work/showcases/<id>/: it keeps `renders/`
 (the CLI's renders and the recipes that made them) and `contact.jpg`. The package the owner posts from,
-~/src/redlamp-social/showcases/<id>/, gets `slide-1.jpg` to `slide-6.jpg` at 1080 x 1350, `caption.txt`,
-and `alt.txt` and `post.txt` when the spec has them. `--layout-only` reuses the renders.
+~/src/redlamp-social/showcases/<id>/, gets `slide-1.jpg` onwards at 1080 x 1350, `caption.txt`, and
+`alt.txt` and `post.txt` when the spec has them. `--layout-only` reuses the renders.
 """
 
 import argparse
@@ -38,7 +59,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 REPO = Path(__file__).resolve().parents[2]
-CLI = REPO / "build/cli/redlamp"
+CLI = Path(os.environ.get("REDLAMP_CLI", REPO / "build/cli/redlamp"))
 FONT = REPO / "video/public/fonts/InterVariable.woff2"
 ICON = REPO / "docs/brand/images/app-icon.png"
 
@@ -105,11 +126,11 @@ def before_recipe(edit):
     return recipe
 
 
-def render(raw, recipe, out):
+def render(raw, recipe, out, extra=()):
     recipe_path = out.with_suffix(".json")
     recipe_path.write_text(json.dumps(recipe, indent=1, sort_keys=True) + "\n")
     subprocess.run([str(CLI), "render", str(raw), "-o", str(out), "--size", str(RENDER_EDGE),
-                    "--recipe", str(recipe_path)], check=True, capture_output=True)
+                    "--recipe", str(recipe_path), *extra], check=True, capture_output=True)
     return out
 
 
@@ -178,7 +199,7 @@ def white(alpha):
 def formatted(key, value):
     if key == "wb.temperature":
         return f"{int(round(value / 50) * 50)}"
-    if key == "basic.exposure":
+    if key in ("basic.exposure", "local.exposure"):
         return f"+{value:.2f}" if value >= 0.005 else f"{value:.2f}"
     v = int(round(value))
     return f"+{v}" if v > 0 else f"{v}"
@@ -413,10 +434,506 @@ def call_to_action():
 
 def contact(slides):
     tw, th, gap = 360, 450, 16
-    sheet = Image.new("RGB", (len(slides) * (tw + gap) + gap, th + 2 * gap), (24, 22, 22))
+    cols = len(slides) if len(slides) <= 6 else math.ceil(len(slides) / 2)
+    rows = math.ceil(len(slides) / cols)
+    sheet = Image.new("RGB", (cols * (tw + gap) + gap, rows * (th + gap) + gap), (24, 22, 22))
     for i, s in enumerate(slides):
-        sheet.paste(s.resize((tw, th), Image.LANCZOS), (gap + i * (tw + gap), gap))
+        sheet.paste(s.resize((tw, th), Image.LANCZOS), (gap + i % cols * (tw + gap), gap + i // cols * (th + gap)))
     return sheet
+
+
+# Edit flows
+
+# The panels an edit flow shows, in the order the app shows them, and the recipe values each owns.
+FLOW_PANELS = [
+    ("basic", "Basic", ("wb.", "basic.")),
+    ("toneCurve", "Tone Curve", ("toneCurve.",)),
+    ("mixer", "Color Mixer", ("mixer.",)),
+    ("grading", "Color Grading", ("grading.",)),
+    ("remove", "Remove", ()),
+    ("masking", "Masking", ()),
+    ("detail", "Detail", ("detail.",)),
+    ("effects", "Effects", ("effects.",)),
+]
+PANEL_NAMES = {panel: name for panel, name, _ in FLOW_PANELS}
+PRESENCE = [("basic.texture", "Texture"), ("basic.clarity", "Clarity"), ("basic.dehaze", "Dehaze")]
+BAND_COLORS = {"red": (226, 72, 66), "orange": (236, 142, 52), "yellow": (232, 206, 64), "green": (92, 178, 84),
+               "aqua": (64, 188, 190), "blue": (66, 116, 222), "purple": (146, 96, 214), "magenta": (214, 74, 172)}
+EFFECTS = [("Vignette", [("effects.vignette.amount", "Amount"), ("effects.vignette.midpoint", "Midpoint"),
+                         ("effects.vignette.roundness", "Roundness"), ("effects.vignette.feather", "Feather"),
+                         ("effects.vignette.highlights", "Highlights")]),
+           ("Grain", [("effects.grain.amount", "Amount"), ("effects.grain.size", "Size"),
+                      ("effects.grain.roughness", "Roughness")])]
+DETAIL = [("Sharpening", [("detail.sharpen.amount", "Amount"), ("detail.sharpen.radius", "Radius"),
+                          ("detail.sharpen.detail", "Detail"), ("detail.sharpen.masking", "Masking")]),
+          ("Noise Reduction", [("detail.noise.luminance", "Luminance"), ("detail.noise.luminanceDetail", "Detail"),
+                               ("detail.noise.color", "Color")])]
+LOCAL = [("local.temperature", "Temp"), ("local.tint", "Tint"), ("local.exposure", "Exposure"),
+         ("local.contrast", "Contrast"), ("local.highlights", "Highlights"), ("local.shadows", "Shadows"),
+         ("local.whites", "Whites"), ("local.blacks", "Blacks"), ("local.texture", "Texture"),
+         ("local.clarity", "Clarity"), ("local.dehaze", "Dehaze"), ("local.saturation", "Saturation")]
+FLOW_RANGES = {"effects.vignette.midpoint": (0, 100), "effects.vignette.feather": (0, 100),
+               "effects.vignette.highlights": (0, 100), "effects.grain.amount": (0, 100),
+               "effects.grain.size": (0, 100), "effects.grain.roughness": (0, 100),
+               "detail.sharpen.amount": (0, 150), "detail.sharpen.radius": (0.5, 3), "detail.sharpen.detail": (0, 100),
+               "detail.sharpen.masking": (0, 100), "detail.noise.luminance": (0, 100),
+               "detail.noise.luminanceDetail": (0, 100), "detail.noise.color": (0, 100),
+               "grading.blending": (0, 100), "local.exposure": (-4, 4)}
+STEP_DEFAULTS = {"effects.vignette.midpoint": 50, "effects.vignette.feather": 50, "effects.grain.size": 25,
+                 "effects.grain.roughness": 50, "detail.sharpen.radius": 1, "detail.sharpen.detail": 25,
+                 "grading.blending": 50}
+
+
+def grey(alpha):
+    """White at `alpha` over the panel, as an opaque colour, so text and lines blend the same."""
+    return tuple(round(c + (255 - c) * alpha) for c in PANEL)
+
+
+def panel_of(key):
+    for panel, _, prefixes in FLOW_PANELS:
+        if key.startswith(prefixes):
+            return panel
+    raise SystemExit(f"{key} isn't in any panel an edit flow shows")
+
+
+def flow_steps(edit, spec):
+    """The steps, each a list of panels: the spec's, or one per panel the edit uses."""
+    if spec.get("steps"):
+        return spec["steps"]
+    used = {panel_of(key) for key in edit["values"]}
+    if edit.get("pointCurve"):
+        used.add("toneCurve")
+    if flow_masks(edit, spec):
+        used.add("masking")
+    if spec.get("remove"):
+        used.add("remove")
+    used.add("basic")
+    return [[panel] for panel, _, _ in FLOW_PANELS if panel in used]
+
+
+def step_recipe(edit, panels):
+    """The edit with only the given panels' settings, on Redlamp's defaults (the crop stays)."""
+    recipe = before_recipe(edit)
+    if "basic" in panels:
+        recipe.update({key: edit[key] for key in ("treatment", "whiteBalance", "baseLook") if key in edit})
+    recipe["values"] = {key: value for key, value in edit["values"].items() if panel_of(key) in panels}
+    if "toneCurve" in panels and edit.get("pointCurve"):
+        recipe["pointCurve"] = edit["pointCurve"]
+    if "masking" in panels and edit.get("masks"):
+        recipe["masks"] = edit["masks"]
+    return recipe
+
+
+def flow_masks(edit, spec):
+    """Every mask the edit shows: the recipe's own (gradients, brushes), then the spec's AI masks."""
+    masks = [{"name": m.get("name", "Mask"), "adjustments": m.get("adjustments", {}), "invert": m.get("inverted"),
+              "recipe": m} for m in edit.get("masks", [])]
+    return masks + [{**m, "name": m.get("name", m["kind"].title())} for m in spec.get("masks", [])]
+
+
+def coverage_job(edit, spec, panels, mask):
+    """The recipe and CLI arguments that render one mask's coverage."""
+    recipe = step_recipe(edit, panels)
+    if "recipe" in mask:
+        recipe["masks"] = [mask["recipe"]]
+        return recipe, ["--coverage"]
+    recipe.pop("masks", None)
+    return recipe, mask_args([mask], 0)
+
+
+def mask_args(masks, coverage_of=None):
+    """The CLI arguments that add the spec's AI masks; with `coverage_of`, only that mask, as its coverage."""
+    args = []
+    for i, mask in enumerate(masks):
+        if coverage_of is not None and i != coverage_of:
+            continue
+        if mask.get("bitmap"):
+            args += ["--mask-bitmap", f"{mask['kind']}={Path(mask['bitmap']).expanduser()}"]
+        else:
+            args += ["--mask", mask["kind"]]
+        for key, value in mask.get("adjustments", {}).items():
+            args += ["--mask-set", f"{key}={value}"]
+        if mask.get("invert"):
+            args.append("--mask-invert")
+    return args + (["--coverage"] if coverage_of is not None else [])
+
+
+def step_args(spec, panels):
+    """The CLI arguments for the steps' Remove spots and masks, which the recipe JSON doesn't carry."""
+    args = list(spec["remove"]["args"]) if "remove" in panels else []
+    return args + (mask_args(spec.get("masks", [])) if "masking" in panels else [])
+
+
+def value_text(key, value):
+    """A slider's value as the inspector shows it: signed when the slider has a centre, plain when it starts at 0."""
+    if key != "wb.temperature" and FLOW_RANGES.get(key, RANGES.get(key, (-100, 100)))[0] >= 0:
+        return f"{round(value, 1):g}"
+    return formatted(key, value)
+
+
+def slider(d, box, label, key, value, f_label, f_value, lo=None, hi=None, text=None):
+    """One slider as the inspector draws it, compactly: its label and value above its track."""
+    x0, y0, x1 = box
+    if lo is None:
+        lo, hi = FLOW_RANGES.get(key, RANGES.get(key, (-100, 100)))
+    if text is None:
+        text = value_text(key, value)
+    draw_text(d, (x0, y0 + 28), label, f_label, grey(LABEL))
+    draw_text(d, (x1, y0 + 28), text, f_value, grey(VALUE), anchor="rs")
+    cy = y0 + 50
+    d.rounded_rectangle((x0, cy - 2, x1, cy + 2), radius=2, fill=grey(TRACK))
+    t = position(key, value) if key == "wb.temperature" else (value - lo) / (hi - lo)
+    px = x0 + (x1 - x0) * min(max(t, 0), 1)
+    if key != "wb.temperature":
+        origin = STEP_DEFAULTS.get(key, min(max(0, lo), hi))
+        zero = x0 + (x1 - x0) * (origin - lo) / (hi - lo)
+        d.line((zero, cy - 7, zero, cy + 7), fill=grey(SECONDARY), width=2)
+        if abs(px - zero) > 1:
+            d.rounded_rectangle((min(px, zero), cy - 2, max(px, zero), cy + 2), radius=2, fill=grey(TRACK_FILL))
+    d.ellipse((px - 9, cy - 9, px + 9, cy + 9), fill=THUMB, outline=(0, 0, 0, 90), width=1)
+
+
+SLIDER_ROW = 70
+
+
+def slider_grid(d, x0, x1, y, items, values, columns=2, gutter=56):
+    """Sliders in columns, filled down each column; returns the height used."""
+    f_label, f_value = font(26, 450), font(26, 560)
+    per = math.ceil(len(items) / columns)
+    width = (x1 - x0 - gutter * (columns - 1)) / columns
+    for i, (key, label) in enumerate(items):
+        cx = x0 + (width + gutter) * (i // per)
+        value = values.get(key, STEP_DEFAULTS.get(key, 0))
+        slider(d, (cx, y + SLIDER_ROW * (i % per), cx + width), label, key, value, f_label, f_value)
+    return SLIDER_ROW * per
+
+
+def card(pw, height):
+    panel = Image.new("RGB", (pw, height), PANEL)
+    return panel, ImageDraw.Draw(panel, "RGBA")
+
+
+PAD, HEAD = 40, 62
+
+
+def basic_card(recipe, pw):
+    values = recipe["values"]
+    items = BASIC[:8] + [item for item in PRESENCE if round(values.get(item[0], 0))] + BASIC[8:]
+    defaults = {"wb.temperature": values.get("wb.temperature", 5500)}
+    rows = math.ceil(len(items) / 2)
+    panel, d = card(pw, HEAD + 50 + SLIDER_ROW * rows + PAD - 14)
+    draw_text(d, (PAD, 46), "Basic", font(29, 600), grey(VALUE))
+    draw_text(d, (PAD, HEAD + 30), "Base Look", font(26, 450), grey(LABEL))
+    draw_text(d, (pw - PAD, HEAD + 30), recipe["baseLook"]["name"], font(26, 560), grey(VALUE), anchor="rs")
+    slider_grid(d, PAD, pw - PAD, HEAD + 46, items, {**defaults, **values})
+    return panel
+
+
+def tone_curve_card(recipe, pw):
+    values = recipe["values"]
+    size = 270
+    panel, d = card(pw, HEAD + size + PAD)
+    draw_text(d, (PAD, 46), "Tone Curve", font(29, 600), grey(VALUE))
+    gx0, gy0 = PAD, HEAD + 4
+    gx1, gy1 = gx0 + size, gy0 + size
+    d.rectangle((gx0, gy0, gx1, gy1), fill=(0, 0, 0, 70))
+    for i in (1, 2, 3):
+        d.line((gx0 + size * i / 4, gy0, gx0 + size * i / 4, gy1), fill=grey(DIVIDER), width=1)
+        d.line((gx0, gy0 + size * i / 4, gx1, gy0 + size * i / 4), fill=grey(DIVIDER), width=1)
+    d.line((gx0, gy1, gx1, gy0), fill=grey(TRACK), width=1)
+    xs = np.linspace(0, 1, 241)
+    ys = parametric(xs, values)
+    points = sorted(recipe.get("pointCurve") or [], key=lambda p: p["x"])
+    if points:
+        ys = np.interp(ys, [p["x"] for p in points], [p["y"] for p in points])
+    d.line([(gx0 + size * x, gy1 - size * v) for x, v in zip(xs, ys)], fill=grey(VALUE), width=4, joint="curve")
+    for p in points:
+        px, py = gx0 + size * p["x"], gy1 - size * p["y"]
+        d.ellipse((px - 7, py - 7, px + 7, py + 7), fill=THUMB, outline=(0, 0, 0, 120), width=1)
+    x0 = gx1 + 56
+    slider_grid(d, x0, pw - PAD, gy0 - 6 + (size - SLIDER_ROW * 4) / 2, CURVE, values, columns=1)
+    return panel
+
+
+def mixer_card(recipe, pw):
+    values = recipe["values"]
+    channels = [(c, n) for c, n in (("hue", "Hue"), ("saturation", "Saturation"), ("luminance", "Luminance"))]
+    line = 46
+    panel, d = card(pw, HEAD + 40 + line * len(channels) + PAD - 10)
+    draw_text(d, (PAD, 46), "Color Mixer", font(29, 600), grey(VALUE))
+    f_label, f_value = font(26, 450), font(26, 560)
+    x0 = PAD + 190
+    col = (pw - PAD - x0) / len(BANDS)
+    for i, band in enumerate(BANDS):
+        cx, cy = x0 + col * (i + 0.5), HEAD + 18
+        d.ellipse((cx - 11, cy - 11, cx + 11, cy + 11), fill=BAND_COLORS[band])
+    for j, (channel, name) in enumerate(channels):
+        y = HEAD + 40 + line * j + 32
+        draw_text(d, (PAD, y), name, f_label, grey(LABEL))
+        for i, band in enumerate(BANDS):
+            value = round(values.get(f"mixer.{channel}.{band}", 0))
+            text = formatted("", value)
+            draw_text(d, (x0 + col * (i + 0.5), y), text, f_value, grey(VALUE if value else SECONDARY * 0.8), anchor="ms")
+    return panel
+
+
+def wheel(diameter, hue, saturation):
+    """A grading wheel as the inspector draws it: hue round the rim, grey at the centre, and its puck."""
+    r = diameter / 2
+    y, x = np.mgrid[0:diameter, 0:diameter].astype(np.float32) + 0.5
+    dx, dy = x - r, r - y
+    angle = np.degrees(np.arctan2(dy, dx)) % 360
+    dist = np.hypot(dx, dy) / r
+    # HSV at saturation 0.75 and brightness 0.85, as RGBA.wheelHue draws the rim, dimmed for the slide.
+    k = (np.array([5, 3, 1], np.float32) + (angle / 60)[..., None]) % 6
+    rgb = 0.85 - 0.85 * 0.75 * np.clip(np.minimum(k, 4 - k), 0, 1)
+    rgb = rgb * 0.62
+    grey = 0.5 * 0.62
+    mix = np.clip(dist, 0, 1)[..., None]
+    rgb = grey * (1 - mix) + rgb * mix
+    alpha = np.clip((1 - dist) * r + 0.5, 0, 1)
+    img = Image.fromarray(np.dstack([rgb * 255, alpha * 255]).clip(0, 255).astype(np.uint8), "RGBA")
+    d = ImageDraw.Draw(img, "RGBA")
+    d.line((r - 6, r, r + 6, r), fill=(0, 0, 0, 110), width=2)
+    d.line((r, r - 6, r, r + 6), fill=(0, 0, 0, 110), width=2)
+    a = math.radians(hue)
+    px, py = r + math.cos(a) * saturation / 100 * r, r - math.sin(a) * saturation / 100 * r
+    k = (np.array([5, 3, 1]) + hue / 60) % 6
+    puck = 0.95 - 0.95 * saturation / 100 * np.clip(np.minimum(k, 4 - k), 0, 1)
+    d.ellipse((px - 12, py - 12, px + 12, py + 12), fill=(0, 0, 0, 90))
+    d.ellipse((px - 10, py - 10, px + 10, py + 10), fill=tuple(int(c * 255) for c in puck), outline=(255, 255, 255), width=3)
+    return img
+
+
+def grading_card(recipe, pw):
+    values = recipe["values"]
+    regions = ["shadows", "midtones", "highlights"]
+    if round(values.get("grading.global.saturation", 0)):
+        regions.append("global")
+    col = (pw - 2 * PAD) / len(regions)
+    diameter = min(160, int(col - 40))
+    lines = 2 + any(round(values.get(f"grading.{r}.luminance", 0)) for r in regions)
+    panel, d = card(pw, HEAD + diameter + 22 + 36 * lines + 10 + SLIDER_ROW + PAD - 14)
+    draw_text(d, (PAD, 46), "Color Grading", font(29, 600), grey(VALUE))
+    f_name, f_small = font(26, 560), font(24, 450)
+    for i, region in enumerate(regions):
+        cx = PAD + col * (i + 0.5)
+        hue, sat = values.get(f"grading.{region}.hue", 0), values.get(f"grading.{region}.saturation", 0)
+        img = wheel(diameter, hue, sat)
+        panel.paste(img, (round(cx - diameter / 2), HEAD + 6), img)
+        y = HEAD + 6 + diameter + 40
+        draw_text(d, (cx, y), region.title(), f_name, grey(VALUE), anchor="ms")
+        draw_text(d, (cx, y + 36), f"Hue {round(hue) % 360}°  Sat {round(sat)}", f_small, grey(LABEL), anchor="ms")
+        if lines == 3:
+            lum = values.get(f"grading.{region}.luminance", 0)
+            draw_text(d, (cx, y + 72), f"Luminance {formatted('', lum)}", f_small, grey(LABEL), anchor="ms")
+    y = HEAD + 6 + diameter + 22 + 36 * lines + 10
+    slider_grid(d, PAD, pw - PAD, y, [("grading.blending", "Blending"), ("grading.balance", "Balance")], values)
+    return panel
+
+
+def groups_card(title, groups, values, pw):
+    used = [(name, items) for name, items in groups if any(round(values.get(k, STEP_DEFAULTS.get(k, 0)), 2)
+                                                           != STEP_DEFAULTS.get(k, 0) for k, _ in items)]
+    height = HEAD + sum(44 + SLIDER_ROW * math.ceil(len(items) / 2) for _, items in used) + PAD - 14
+    panel, d = card(pw, height)
+    draw_text(d, (PAD, 46), title, font(29, 600), grey(VALUE))
+    y = HEAD
+    for name, items in used:
+        draw_text(d, (PAD, y + 30), name, font(26, 560), grey(SECONDARY + 0.2))
+        y += 44 + slider_grid(d, PAD, pw - PAD, y + 40, items, values)
+    return panel
+
+
+def masking_card(mask, pw):
+    adjustments = mask.get("adjustments", {})
+    items = [(k, l) for k, l in LOCAL if k in adjustments]
+    columns = 3 if len(items) > 4 else 2
+    rows = math.ceil(len(items) / columns)
+    panel, d = card(pw, HEAD + SLIDER_ROW * rows + PAD - 20)
+    draw_text(d, (PAD, 46), "Masking", font(29, 600), grey(VALUE))
+    name = mask["name"] + (" (inverted)" if mask.get("invert") else "")
+    draw_text(d, (pw - PAD, 46), name, font(27, 560), grey(VALUE), anchor="rs")
+    slider_grid(d, PAD, pw - PAD, HEAD - 4, items, adjustments, columns=columns, gutter=44)
+    return panel
+
+
+def remove_card(remove, pw):
+    rows = remove["rows"]
+    panel, d = card(pw, HEAD + 50 * len(rows) + PAD - 18)
+    draw_text(d, (PAD, 46), "Remove", font(29, 600), grey(VALUE))
+    for i, (label, text) in enumerate(rows):
+        draw_text(d, (PAD, HEAD + 32 + 50 * i), label, font(26, 450), grey(LABEL))
+        draw_text(d, (pw - PAD, HEAD + 32 + 50 * i), text, font(26, 560), grey(VALUE), anchor="rs")
+    return panel
+
+
+def panel_cards(panel, recipe, spec, pw):
+    if panel == "basic":
+        return [basic_card(recipe, pw)]
+    if panel == "toneCurve":
+        return [tone_curve_card(recipe, pw)]
+    if panel == "mixer":
+        return [mixer_card(recipe, pw)]
+    if panel == "grading":
+        return [grading_card(recipe, pw)]
+    if panel == "remove":
+        return [remove_card(spec["remove"], pw)]
+    if panel == "masking":
+        return [masking_card(mask, pw) for mask in flow_masks(recipe, spec)]
+    if panel == "detail":
+        return [groups_card("Detail", DETAIL, recipe["values"], pw)]
+    return [groups_card("Effects", EFFECTS, recipe["values"], pw)]
+
+
+def overlay(photo, coverage):
+    """The mask's red overlay, as the app shows it, over the photo."""
+    a = np.asarray(photo, np.float32)
+    m = np.asarray(coverage.convert("L").resize(photo.size, Image.LANCZOS), np.float32)[..., None] / 255 * 0.5
+    return Image.fromarray((a * (1 - m) + np.array([230, 30, 30], np.float32) * m).clip(0, 255).astype(np.uint8))
+
+
+def paste_card(img, c, x, y):
+    """A panel's card, its rounded corners clipped, composited onto an RGBA slide."""
+    mask = Image.new("L", c.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, c.width - 1, c.height - 1), radius=22, fill=255)
+    img.paste(c.convert("RGBA"), (x, y), mask)
+
+
+def step_slide(photo, cards, number, count, spec, at="bottom"):
+    img = frame(photo, spec.get("stepFrameTop", spec["frameTop"]))
+    gap, edge = 16, 40
+    total = sum(c.height for c in cards) + gap * (len(cards) - 1)
+    if at == "bottom":
+        img = shade(img, top=300, bottom=total + 240, strength=0.45).convert("RGBA")
+        y = H - edge - total
+    else:
+        img = shade(img, top=total + 240, bottom=300, strength=0.45).convert("RGBA")
+        y = edge
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    positions = []
+    for c in cards:
+        x = (W - c.width) // 2
+        sd.rounded_rectangle((x, y + 8, x + c.width, y + c.height + 8), 24, fill=(0, 0, 0, 120))
+        positions.append((x, y))
+        y += c.height + gap
+    img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(20)))
+    for c, (x, yy) in zip(cards, positions):
+        paste_card(img, c, x, yy)
+    img = img.convert("RGB")
+    label_y = MARGIN - 16 if at == "bottom" else H - MARGIN - 40
+    label_pill(img, (MARGIN - 16, label_y), f"STEP {number} OF {count}", font(26, 650))
+    return img
+
+
+def masks_slide(overlays, names, cards, number, count, spec):
+    """Several masks: each one's overlay side by side, over their cards."""
+    img = Image.new("RGB", (W, H), WALL)
+    gap, edge = 16, 40
+    total = sum(c.height for c in cards) + gap * (len(cards) - 1)
+    top = MARGIN + 60
+    cw = (W - 2 * edge - gap * (len(overlays) - 1)) // len(overlays)
+    ch = min(round(cw * 5 / 4), H - edge - total - 28 - top)
+    cw_frame = round(ch * 4 / 5) if ch < round(cw * 5 / 4) else cw
+    top += (H - edge - total - 28 - top - ch) // 2
+    size = 26
+    while size > 16 and max(text_width(n.upper(), font(size, 650), 0.12) for n in names) + 40 > cw_frame - 32:
+        size -= 1
+    f = font(size, 650)
+    cx, frame_top, width = spec.get("maskFrame", [0.5, 0.0, 1.0])
+    for k, (photo, name) in enumerate(zip(overlays, names)):
+        cell = window(photo, cx, frame_top, width, (cw_frame, ch))
+        x = edge + k * (cw + gap) + (cw - cw_frame) // 2
+        mask = Image.new("L", cell.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, cell.width - 1, cell.height - 1), radius=18, fill=255)
+        img.paste(cell, (x, top), mask)
+        label_pill(img, (x + 16, top + 16), name.upper(), f)
+    y = H - edge - total
+    img = img.convert("RGBA")
+    for c in cards:
+        paste_card(img, c, (W - c.width) // 2, y)
+        y += c.height + gap
+    img = img.convert("RGB")
+    label_pill(img, (MARGIN - 16, MARGIN - 16), f"STEP {number} OF {count}", font(26, 650))
+    return img
+
+
+def flow_caption(edit, spec, steps):
+    values = edit["values"]
+    lines = [spec["caption"], "", "The settings, panel by panel:"]
+    for panel in [p for step in steps for p in step]:
+        name = PANEL_NAMES[panel]
+        if panel == "basic":
+            items = [f"Base Look {edit['baseLook']['name']}"]
+            items += [f"{label} {formatted(key, values[key])}" for key, label in BASIC[:8] + PRESENCE + BASIC[8:]
+                      if key in values and formatted(key, values[key]) not in ("0", "0.00")]
+        elif panel == "toneCurve":
+            items = [f"{label} {formatted(key, values[key])}" for key, label in CURVE if round(values.get(key, 0))]
+            if edit.get("pointCurve"):
+                items.append("Point Curve " + " ".join(f"({round(p['x'] * 255)}, {round(p['y'] * 255)})"
+                                                     for p in edit["pointCurve"]))
+        elif panel in ("mixer", "grading"):
+            items = [f"{label} {text}" for title, rows in other_sections(values) if title == name for label, text in rows]
+        elif panel == "remove":
+            items = [spec["remove"]["caption"]]
+        elif panel == "masking":
+            for mask in flow_masks(edit, spec):
+                adjust = mask.get("adjustments", {})
+                items = [f"{label} {formatted(key, adjust[key])}" for key, label in LOCAL
+                         if key in adjust]
+                lines.append(f"Masking, {mask['name']}: " + ", ".join(items))
+            continue
+        else:
+            groups = DETAIL if panel == "detail" else EFFECTS
+            items = [f"{group} {label} {value_text(key, values[key])}" for group, keys in groups for key, label in keys
+                     if key in values and round(values[key], 2) != STEP_DEFAULTS.get(key, 0)]
+        lines.append(f"{name}: " + ", ".join(items))
+    lines += ["", "Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts.",
+              "Download it at redlamp.app (link in bio).",
+              "Needs an Apple Silicon Mac with macOS 26. It's in early development."]
+    if spec.get("trademarks"):
+        lines += ["", spec["trademarks"]]
+    lines += ["", " ".join(spec["hashtags"])]
+    return "\n".join(lines) + "\n"
+
+
+def flow_slides(raw, edit, spec, renders, layout_only):
+    steps = flow_steps(edit, spec)
+    masks = flow_masks(edit, spec)
+    if len(steps) + 4 > 10:
+        raise SystemExit(f"{len(steps)} steps make more than ten slides; group the smaller panels in `steps`")
+    jobs = {"before": (before_recipe(edit), [])}
+    done = []
+    for i, step in enumerate(steps, 1):
+        done += step
+        jobs[f"step-{i}"] = (step_recipe(edit, done), step_args(spec, done))
+    jobs.update({f"mask-{j}": coverage_job(edit, spec, done, mask) for j, mask in enumerate(masks)})
+    photos = {}
+    for name, (recipe, extra) in jobs.items():
+        out = renders / f"{name}.png"
+        if not (layout_only and out.exists()):
+            render(raw, recipe, out, extra)
+            print(f"rendered {out.name}")
+        photos[name] = Image.open(out).convert("RGB")
+    after = photos[f"step-{len(steps)}"]
+    slides = [cover(after, spec), before_after(photos["before"], after, spec)]
+    pw = W - 2 * 40
+    for i, step in enumerate(steps, 1):
+        photo, cards = photos[f"step-{i}"], []
+        for panel in step:
+            cards += panel_cards(panel, edit, spec, pw)
+        at = spec.get("panelAt", {}).get(step[0], "bottom")
+        if "masking" in step and len(masks) > 1:
+            overlays = [overlay(photo, photos[f"mask-{j}"]) for j in range(len(masks))]
+            slides.append(masks_slide(overlays, [m["name"] for m in masks], cards, i,
+                                      len(steps), spec))
+            continue
+        if "masking" in step:
+            photo = overlay(photo, photos["mask-0"])
+        slides.append(step_slide(photo, cards, i, len(steps), spec, at))
+    slides += [frame(after, spec["frameTop"]), call_to_action()]
+    return slides, flow_caption(edit, spec, steps)
 
 
 # Caption
@@ -447,25 +964,14 @@ SOCIAL = Path(os.environ.get("REDLAMP_SOCIAL", Path.home() / "src" / "redlamp-so
 PACKAGES = SOCIAL / "showcases"
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("folder", type=Path)
-    parser.add_argument("--layout-only", action="store_true", help="reuse the renders in renders/")
-    args = parser.parse_args()
-    folder = args.folder.expanduser()
-    spec = json.loads((folder / "showcase.json").read_text())
-    raw = Path(os.path.expanduser(spec["raw"]))
-    edit = read_recipe(folder / spec["recipe"])
-    renders = folder / "renders"
-    renders.mkdir(exist_ok=True)
-
+def look_slides(raw, edit, spec, renders, layout_only):
     films = {slug: stock(slug) for slug in dict.fromkeys(spec["looks"] + [spec["best"]])}
     jobs = {"before": before_recipe(edit), "after": edit}
     jobs.update({f"look-{slug}": look_recipe(edit, film) for slug, film in films.items()})
     photos = {}
     for name, recipe in jobs.items():
         out = renders / f"{name}.png"
-        if not (args.layout_only and out.exists()):
+        if not (layout_only and out.exists()):
             render(raw, recipe, out)
             print(f"rendered {out.name}")
         photos[name] = Image.open(out).convert("RGB")
@@ -480,12 +986,33 @@ def main():
         one_look(best, photos[f"look-{spec['best']}"], spec),
         call_to_action(),
     ]
+    return slides, caption(edit, spec, best)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("folder", type=Path)
+    parser.add_argument("--layout-only", action="store_true", help="reuse the renders in renders/")
+    args = parser.parse_args()
+    folder = args.folder.expanduser().resolve()
+    spec = json.loads((folder / "showcase.json").read_text())
+    raw = Path(os.path.expanduser(spec["raw"]))
+    edit = read_recipe(folder / spec["recipe"])
+    renders = folder / "renders"
+    renders.mkdir(exist_ok=True)
+
+    make = flow_slides if spec.get("kind", "look") == "flow" else look_slides
+    slides, text = make(raw, edit, spec, renders, args.layout_only)
+    if spec.get("alt") and len(spec["alt"]) != len(slides):
+        raise SystemExit(f"{len(slides)} slides but {len(spec['alt'])} alt texts")
     package = PACKAGES / folder.name
     package.mkdir(parents=True, exist_ok=True)
+    for old in package.glob("slide-*.jpg"):
+        old.unlink()
     for i, slide in enumerate(slides, 1):
         slide.save(package / f"slide-{i}.jpg", quality=95, subsampling=0)
     contact(slides).save(folder / "contact.jpg", quality=90)
-    (package / "caption.txt").write_text(caption(edit, spec, best))
+    (package / "caption.txt").write_text(text)
     if spec.get("alt"):
         (package / "alt.txt").write_text("\n".join(f"Slide {i}: {text}" for i, text in enumerate(spec["alt"], 1)) + "\n")
     if spec.get("post"):
