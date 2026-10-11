@@ -27,6 +27,7 @@
             + JudgingScenarios.all
             + SoftFrameScenarios.all
             + PanelScenarios.all
+            + PanelShotScenarios.all
             + RenameScenarios.all
             + MoveEditsScenarios.all
             + FilesScenarios.all

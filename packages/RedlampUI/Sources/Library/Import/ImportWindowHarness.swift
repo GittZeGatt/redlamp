@@ -17,6 +17,15 @@ import AppKit
         try await model.addFolder(folder)
     }
 
+    /// The card at `root`, its photos in `DCIM`, as the Mac would describe a card in a reader, shown.
+    func add(card root: URL) async throws {
+        let source = try await Task.detached(priority: .userInitiated) {
+            try ImportSource.at(root, medium: .card(at: root))
+        }.value
+        model.add(source)
+        model.show(source.id)
+    }
+
     /// The photos the grid shows.
     var photoCount: Int {
         model.photos.count

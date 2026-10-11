@@ -211,6 +211,68 @@
         }
     }
 
+    /// A card of the run's own to import from, its photos in `DCIM/100CANON`: three copies of each of four raws, each
+    /// copy ending in a box of its own length so each has a content key of its own, and their files' dates the time
+    /// they were copied; and a destination and a backup beside it.
+    struct ImportCardScratch: Sendable {
+        let root: URL
+        let destination: URL
+        let backup: URL
+        /// Each copy's name, and the raw it's a copy of.
+        let originals: [String: String]
+
+        var count: Int {
+            originals.count
+        }
+
+        init(_ app: RunningApp) throws {
+            let base = app.runDirectory.appending(path: "card-\(UUID().uuidString)", directoryHint: .isDirectory)
+            root = base.appending(path: "EOS_DIGITAL", directoryHint: .isDirectory)
+            destination = base.appending(path: "Pictures", directoryHint: .isDirectory)
+            backup = base.appending(path: "Backup", directoryHint: .isDirectory)
+            let photos = root.appending(path: "DCIM/100CANON", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: photos, withIntermediateDirectories: true)
+            let raws = ["arw", "raf", "cr3", "nef"]
+            let found = try FileManager.default.contentsOfDirectory(atPath: app.photos.path)
+                .filter { raws.contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
+            var originals: [String: String] = [:]
+            for original in found {
+                for _ in 0 ..< 3 {
+                    let number = originals.count
+                    let name = String(format: "IMG_%04d.", number + 1) + (original as NSString).pathExtension
+                    let copy = photos.appending(path: name)
+                    try FileManager.default.copyItem(at: app.photos.appending(path: original), to: copy)
+                    let handle = try FileHandle(forWritingTo: copy)
+                    try handle.seekToEnd()
+                    let length = 16 + number
+                    var box = Data([
+                        UInt8(length >> 24 & 0xFF), UInt8(length >> 16 & 0xFF), UInt8(length >> 8 & 0xFF),
+                        UInt8(length & 0xFF),
+                    ])
+                    box.append(contentsOf: Array("free".utf8))
+                    box.append(Data(count: length - 8))
+                    try handle.write(contentsOf: box)
+                    try handle.close()
+                    originals[name] = original
+                }
+            }
+            self.originals = originals
+        }
+
+        /// Stops and closes the window, takes the destination out of Folders and the card away.
+        func remove(_ app: RunningApp) {
+            let destination = destination
+            try? app.main { model in
+                ImportWindowController.current?.stop()
+                ImportWindowController.current?.close()
+                ImportWindowController.forget(destination, in: model)
+                ImportWindowController.ignoresVolumes = false
+            }
+            try? FileManager.default.removeItem(at: root.deletingLastPathComponent())
+            try? app.openWorking()
+        }
+    }
+
     extension RunningApp {
         func waitForImportWindow() throws {
             try wait("the import window", timeout: 30) { _ in
