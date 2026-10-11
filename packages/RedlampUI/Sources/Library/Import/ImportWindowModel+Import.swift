@@ -5,11 +5,16 @@ import Synchronization
 extension ImportWindowModel {
     /// Why Import can't start now, as a sentence; nil when it can.
     var importBlocker: String? {
-        if !interrupted.isEmpty {
-            return "An import that was interrupted has to be resumed first."
+        if let entry = interrupted.first {
+            return entry.state == .rollingBack
+                ? "A rollback that was interrupted has to be finished first: Resume finishes it."
+                : "An import that was interrupted has to be resumed or rolled back first."
         }
         if phase == .planning || phase == .copying {
             return "An import is running."
+        }
+        if phase == .rollingBack {
+            return "An import is being rolled back."
         }
         if let folderError {
             return "The folder template has an error: \(folderError)"
@@ -44,6 +49,7 @@ extension ImportWindowModel {
         let destinationFileSystem = destinationFileSystem
         failure = nil
         outcome = nil
+        rollback = nil
         progress = nil
         for index in sources.indices {
             sources[index].progress = nil
@@ -99,7 +105,8 @@ extension ImportWindowModel {
         }
     }
 
-    /// Cancel: stops the import once the photos being copied are in place; nothing is left half copied.
+    /// Cancel: stops the import once the photos being copied are in place, so nothing is left half copied; or
+    /// stops a rollback between batches of photos, for Resume to finish.
     func cancel() {
         importing?.cancel()
     }
@@ -139,7 +146,8 @@ extension ImportWindowModel {
         }.value
         copied.formUnion(placed.map(\.0))
         failure = outcome.state == .stopped
-            ? "The import was cancelled: the photos copied so far are in place, the others are still where they were."
+            ? "The import was cancelled: the photos copied so far are in place, the others are still where they were; "
+            + "Roll Back moves those copied to the Trash."
             : nil
         notify(.status)
         notify(.sources)
@@ -155,11 +163,17 @@ extension ImportWindowModel {
     }
 
     /// Resume: finishes the imports a forced quit cut short, copying the rest from their sources, which
-    /// have to be there.
+    /// have to be there, then shows their photos in Library as an import that ran straight through does;
+    /// or finishes a rollback that was stopped or cut short.
     func resume() {
-        guard !interrupted.isEmpty, importing == nil else { return }
+        guard let entry = interrupted.first, importing == nil else { return }
+        if entry.state == .rollingBack {
+            rollBack(entry.id)
+            return
+        }
         phase = .copying
         failure = nil
+        rollback = nil
         notify(.status)
         let importer = importer
         importing = Task { [weak self] in
@@ -176,20 +190,103 @@ extension ImportWindowModel {
                         }
                     }
                 }
-                outcome = outcomes.last
+                if let last = latest.take() {
+                    progressed(last)
+                }
                 interrupted = await (try? importer.unfinishedEntries()) ?? []
+                for outcome in outcomes {
+                    if let plan = try? await importer.plan(of: outcome.id) {
+                        self.plan = plan
+                        await finished(outcome, plan: plan)
+                    } else {
+                        self.outcome = outcome
+                    }
+                }
                 phase = .finished
                 let verified = outcomes.reduce(0) { $0 + $1.verified }
                 let photos = outcomes.reduce(0) { $0 + $1.photos }
-                failure = verified == photos ? nil
-                    : "\(photos - verified) of the interrupted import's photos weren't copied: their card or folder "
-                    + "wasn't there, or changed."
+                if !outcomes.contains(where: { $0.state == .stopped }) {
+                    failure = verified == photos ? nil
+                        : "\(photos - verified) of the interrupted import's photos weren't copied: their card or "
+                        + "folder wasn't there, or changed."
+                }
             } catch {
                 phase = .finished
                 failure = "The interrupted import couldn't be resumed: \(String(describing: error))"
             }
             notify(.status)
             importing = nil
+        }
+    }
+
+    /// The import Roll Back takes back: one a forced quit cut short while it copied, else the import this
+    /// window ran when it was cancelled with photos copied, until it's rolled back. A rollback waiting to be
+    /// finished is Resume's.
+    var rollBackTarget: UUID? {
+        if let entry = interrupted.first {
+            return entry.state == .rollingBack ? nil : entry.id
+        }
+        guard let outcome, outcome.state == .stopped, outcome.verified > 0, rollback?.id != outcome.id else {
+            return nil
+        }
+        return outcome.id
+    }
+
+    /// Roll Back: takes back the import `rollBackTarget` names, as `Importer.rollBack` does.
+    func rollBack() {
+        guard let id = rollBackTarget, importing == nil, !isBusy else { return }
+        rollBack(id)
+    }
+
+    private func rollBack(_ id: UUID) {
+        phase = .rollingBack
+        failure = nil
+        rollbackProgress = nil
+        notify(.status)
+        let importer = importer
+        importing = Task { [weak self] in
+            guard let self else { return }
+            let latest = ImportLatest<ImportRollback.Progress>()
+            let interval = Self.progressInterval
+            do {
+                let rollback = try await importer.rollBack(id) { [weak self] progress in
+                    guard latest.set(progress) else { return }
+                    Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: interval)
+                        if let progress = latest.take() {
+                            self?.rollingBack(progress)
+                        }
+                    }
+                }
+                rolledBack(rollback)
+            } catch {
+                phase = .finished
+                failure = "The import couldn't be rolled back: \(String(describing: error))"
+            }
+            interrupted = await (try? importer.unfinishedEntries()) ?? []
+            notify(.status)
+            notify(.sources)
+            notify(.photos(ids: nil))
+            importing = nil
+        }
+    }
+
+    func rollingBack(_ progress: ImportRollback.Progress) {
+        guard phase == .rollingBack else { return }
+        rollbackProgress = progress
+        notify(.status)
+    }
+
+    /// The photos taken back can be chosen again; the sources no longer say what the import made of them.
+    private func rolledBack(_ rollback: ImportRollback) {
+        self.rollback = rollback
+        rollbackProgress = nil
+        phase = .finished
+        copied.subtract(rollback.rolledBack)
+        if rollback.state == .rolledBack, outcome?.id == rollback.id {
+            for index in sources.indices {
+                sources[index].outcome = nil
+            }
         }
     }
 
@@ -218,7 +315,7 @@ extension ImportWindowModel {
         let roots = [settings.destination] + (settings.backup.map { [$0] } ?? [])
         let verified = progress?.done ?? outcome?.verified
         let total = progress?.photos ?? outcome?.photos
-        guard let verified, let total, phase == .copying || phase == .finished else { return [] }
+        guard let verified, let total, phase == .copying || phase == .finished, rollback == nil else { return [] }
         return roots.map { "\($0.lastPathComponent): \(verified) of \(Self.count(total, "photo")) verified" }
     }
 }

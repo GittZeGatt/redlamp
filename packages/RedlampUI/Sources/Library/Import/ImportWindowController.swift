@@ -2,9 +2,9 @@ import AppKit
 import RedlampLibrary
 
 /// File › Import Photos… (LIB-27): a window of its own in three columns, From, the photos and To (see
-/// `ImportWindowModel`), and below them what's chosen and how the import is going, with Import, Cancel
-/// and Resume. There's one at a time: asking again brings it forward. Closing it while it copies lets
-/// the import carry on, and asking again shows it; closed otherwise, it lets its sources go.
+/// `ImportWindowModel`), and below them what's chosen and how the import is going, with Import, Cancel,
+/// Resume and Roll Back. There's one at a time: asking again brings it forward. Closing it while it copies
+/// or rolls back lets that carry on, and asking again shows it; closed otherwise, it lets its sources go.
 @MainActor
 public final class ImportWindowController: NSWindowController, NSWindowDelegate {
     public nonisolated static let title = "Import Photos"
@@ -25,6 +25,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     private let importButton = NSButton(title: "Import", target: nil, action: nil)
     private let cancelButton = NSButton(title: "Cancel Import", target: nil, action: nil)
     private let resumeButton = NSButton(title: "Resume", target: nil, action: nil)
+    private let rollBackButton = NSButton(title: "Roll Back", target: nil, action: nil)
     private let progress = NSProgressIndicator()
 
     init(model: ImportWindowModel) {
@@ -89,7 +90,12 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         resumeButton.target = self
         resumeButton.action = #selector(resume)
         resumeButton.setAccessibilityIdentifier("import.resume")
-        let bar = NSStackView(views: [status, progress, resumeButton, cancelButton, importButton])
+        rollBackButton.target = self
+        rollBackButton.action = #selector(rollBack)
+        rollBackButton.setAccessibilityIdentifier("import.roll-back")
+        rollBackButton.toolTip = "Moves the copies the import made to the Trash, takes its photos out of the library "
+            + "and removes the folders it made"
+        let bar = NSStackView(views: [status, progress, rollBackButton, resumeButton, cancelButton, importButton])
         bar.orientation = .horizontal
         bar.spacing = 10
         bar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 10, right: 12)
@@ -151,7 +157,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     }
 
     public func windowWillClose(_: Notification) {
-        guard model.phase != .copying, model.phase != .planning else { return }
+        guard !model.isBusy else { return }
         model.close()
         if Self.current === self {
             Self.current = nil
@@ -170,11 +176,16 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         importButton.isEnabled = blocker == nil
         importButton.toolTip = blocker
         importButton.title = model.phase == .finished ? "Import Again" : "Import"
-        cancelButton.isHidden = model.phase != .copying && model.phase != .planning
-        resumeButton.isHidden = model.interrupted.isEmpty || model.phase == .copying
+        cancelButton.isHidden = !model.isBusy
+        cancelButton.title = model.phase == .rollingBack ? "Stop Rolling Back" : "Cancel Import"
+        resumeButton.isHidden = model.interrupted.isEmpty || model.isBusy
+        rollBackButton.isHidden = model.rollBackTarget == nil || model.isBusy
         if model.phase == .copying, let progress = model.progress, progress.photos > 0 {
             self.progress.isHidden = false
             self.progress.doubleValue = Double(progress.done + progress.failed) / Double(progress.photos)
+        } else if model.phase == .rollingBack, let progress = model.rollbackProgress, progress.photos > 0 {
+            self.progress.isHidden = false
+            self.progress.doubleValue = Double(progress.done) / Double(progress.photos)
         } else {
             progress.isHidden = true
         }
@@ -195,6 +206,10 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
 
     @objc private func resume() {
         model.resume()
+    }
+
+    @objc private func rollBack() {
+        model.rollBack()
     }
 
     // MARK: - Folders

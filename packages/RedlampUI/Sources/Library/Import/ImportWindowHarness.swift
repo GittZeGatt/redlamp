@@ -1,5 +1,5 @@
 import AppKit
-import RedlampLibrary
+@_spi(Harness) import RedlampLibrary
 
 /// What the regression suite reads and sets in the import window: what a person sets through its
 /// panels, which can't be driven, and what it shows.
@@ -54,6 +54,27 @@ import RedlampLibrary
     /// Cancel Import.
     func stop() {
         model.cancel()
+    }
+
+    /// Stops the next import once `photos` photos are done, as a forced quit would, leaving it to be resumed or
+    /// rolled back by the next window.
+    func simulateForcedQuit(afterPhotos photos: Int) {
+        model.importer.simulateForcedQuit(afterPhotos: photos)
+    }
+
+    /// An import a forced quit cut short, or a rollback, waits for Resume.
+    var isInterrupted: Bool {
+        !model.interrupted.isEmpty
+    }
+
+    /// Roll Back is offered.
+    var canRollBack: Bool {
+        model.rollBackTarget != nil && !model.isBusy
+    }
+
+    /// What the last rollback did: photos taken back, whether it's over, and where each file went in the Trash.
+    var rollbackResult: (rolledBack: Int, isOver: Bool, trashed: [String])? {
+        model.rollback.map { ($0.rolledBack.count, $0.state == .rolledBack, $0.trashed.map(\.to)) }
     }
 
     /// Selects the photos at these places in the grid, and gives the grid the keys.

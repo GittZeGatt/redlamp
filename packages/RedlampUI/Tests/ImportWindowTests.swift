@@ -255,7 +255,7 @@ extension ImportWindowTests {
         let next = fixture.model()
         next.start()
         try await waitUntil("the interrupted import") { !next.interrupted.isEmpty }
-        #expect(next.importBlocker == "An import that was interrupted has to be resumed first.")
+        #expect(next.importBlocker == "An import that was interrupted has to be resumed or rolled back first.")
         #expect(next.summary.contains("was interrupted with"))
         next.resume()
         await next.imported()

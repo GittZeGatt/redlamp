@@ -18,7 +18,10 @@ import Synchronization
 ///   capture order across them, and copied by one journaled `Importer` run off the main thread, with
 ///   each source's part as it goes; Cancel stops it once the photos being copied are done. A run a
 ///   forced quit cut short waits to be resumed. At the end each card says whether it's safe to erase,
-///   and the photos copied are shown in Library, selected.
+///   and the photos copied are shown in Library, selected, after a Resume as after a run straight through.
+/// - **Roll Back:** an import cancelled here, or one a forced quit cut short, is taken back whole
+///   (`Importer.rollBack`): its copies to the Trash, its photos out of the library, the folders it made
+///   removed. A rollback stopped or cut short waits, and Resume finishes it.
 ///
 /// Events from the sessions and the importer's progress reach the main thread in batches.
 @MainActor
@@ -59,7 +62,8 @@ final class ImportWindowModel {
         case choosing
         case planning
         case copying
-        /// The import is over, or stopped; `outcome` says what it did.
+        case rollingBack
+        /// The import or the rollback is over, or stopped; `outcome` and `rollback` say what they did.
         case finished
     }
 
@@ -111,9 +115,12 @@ final class ImportWindowModel {
     var progress: ImportProgress?
     var plan: ImportPlan?
     var outcome: ImportOutcome?
+    /// What the last rollback did, since the last import began.
+    var rollback: ImportRollback?
+    var rollbackProgress: ImportRollback.Progress?
     /// What went wrong, as a sentence.
     var failure: String?
-    /// Imports a forced quit cut short, waiting to be resumed.
+    /// Imports a forced quit cut short, waiting to be resumed or rolled back, and rollbacks waiting to be finished.
     var interrupted: [ImportJournal.Entry] = []
     /// The library's keywords, for completing those typed.
     private(set) var keywordCompletion: KeywordCompletion?
@@ -190,12 +197,17 @@ final class ImportWindowModel {
         }
     }
 
-    /// Stops browsing and lets the sessions go, unless an import is copying, which carries on.
+    /// An import is being planned or copied, or rolled back.
+    var isBusy: Bool {
+        phase == .planning || phase == .copying || phase == .rollingBack
+    }
+
+    /// Stops browsing and lets the sessions go, unless an import is copying or rolling back, which carries on.
     func close() {
         cardsObservation?.invalidate()
         cardsObservation = nil
         exampleTask?.cancel()
-        guard phase != .copying, phase != .planning else { return }
+        guard !isBusy else { return }
         for task in browsing.values {
             task.cancel()
         }
@@ -498,11 +510,16 @@ extension ImportWindowModel {
 
     // MARK: - What the window says
 
-    /// The line under the photos: what's chosen, what's left out, and how the import is going.
+    /// The line under the photos: what's chosen, what's left out, and how the import or its rollback is going.
     var summary: String {
-        if let entry = interrupted.first {
+        if let entry = interrupted.first, !isBusy {
+            if entry.state == .rollingBack {
+                return "\(entry.title) was being rolled back when it was interrupted, with "
+                    + "\(Self.count(entry.rolledBack, "photo")) taken back. Resume finishes rolling it back."
+            }
             return "\(entry.title) was interrupted with \(entry.done) of \(entry.photos) photos copied. "
-                + "Resume copies the rest from their cards or folders, which have to be there."
+                + "Resume copies the rest from their cards or folders, which have to be there; Roll Back moves "
+                + "those copied to the Trash."
         }
         switch phase {
         case .choosing:
@@ -520,7 +537,14 @@ extension ImportWindowModel {
             return "Copied and verified \(progress.done) of \(Self.count(progress.photos, "photo")), "
                 + "\(ImportFormat.size(progress.copied)) of \(ImportFormat.size(progress.bytes))"
                 + (progress.failed > 0 ? "; \(progress.failed) couldn't be copied" : "") + "."
+        case .rollingBack:
+            guard let rollbackProgress else { return "Rolling back…" }
+            return "Moving the copies to the Trash: \(rollbackProgress.done) of "
+                + "\(Self.count(rollbackProgress.photos, "photo")) taken back."
         case .finished:
+            if let rollback {
+                return Self.describe(rollback) + (failure.map { " " + $0 } ?? "")
+            }
             guard let outcome else { return failure ?? "" }
             var text = "Copied and verified \(outcome.verified) of \(Self.count(outcome.photos, "photo"))"
             if settings.backup != nil {
@@ -565,6 +589,28 @@ extension ImportWindowModel {
 
     static func count(_ value: Int, _ noun: String) -> String {
         "\(value.formatted()) \(noun)\(value == 1 ? "" : "s")"
+    }
+
+    /// What a rollback did, as the line under the photos says it.
+    static func describe(_ rollback: ImportRollback) -> String {
+        let taken = rollback.rolledBack.count
+        guard rollback.state == .rolledBack else {
+            return "Rolling back stopped with \(taken) of \(count(rollback.photos, "photo")) taken back. "
+                + "Resume finishes rolling it back."
+        }
+        var text = taken == 0 && rollback.left.isEmpty
+            ? "Rolled back: the import had no copies to take back."
+            : "Rolled back: the copies of \(count(taken, "photo")) are in the Trash and out of the library."
+        let folders = rollback.removedFolders.count
+        if folders > 0 {
+            text += " \(count(folders, "empty folder")) the import made \(folders == 1 ? "is" : "are") removed."
+        }
+        if let first = rollback.left.first {
+            let photos = Set(rollback.left.map(\.photo)).count
+            text += " " + (photos == 1 ? "1 photo is left where it was copied to" : "\(count(photos, "photo")) are "
+                + "left where they were copied to") + ": \((first.path as NSString).lastPathComponent): \(first.message)."
+        }
+        return text
     }
 
     // MARK: - Settings
