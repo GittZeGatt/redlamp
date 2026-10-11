@@ -27,7 +27,9 @@
             try app.wait("the card browsed", timeout: 60) { _ in
                 ImportWindowController.current.map { $0.isBrowsed && $0.photoCount == card.count } == true
             }
-            // Each raw's copies were taken together, and the raws apart: a moment for each, as the heads say.
+            // Each raw's copies were taken together, and the raws apart: a moment for each, as the heads say,
+            // once the photos are grouped by every capture time browsing read.
+            try app.run("the photos grouped again") { _ in await ImportWindowController.current?.regrouped() }
             let raws = Set(card.originals.values).count
             try app.wait("a moment for each raw's copies", timeout: 30) { _ in
                 guard let window = ImportWindowController.current, window.grouping == "Moment" else { return false }

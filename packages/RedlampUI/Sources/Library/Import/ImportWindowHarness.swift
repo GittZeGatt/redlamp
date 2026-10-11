@@ -113,6 +113,11 @@ import AppKit
         model.grouping.title
     }
 
+    /// Returns once the photos shown are grouped by the capture times browsing has read so far.
+    func regrouped() async {
+        await model.regrouped()
+    }
+
     /// The rating, flag and label given the photo at `item`, as the grid's badges write them.
     func badges(at item: Int) -> String? {
         model.photo(at: item).map { ImportGridCell.badges($0, leftOut: false, copied: false) }
