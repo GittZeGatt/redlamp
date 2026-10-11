@@ -63,16 +63,23 @@ struct ImportThumbnailsTests {
         try await waitUntil("the provisional preview") { model.photo(at: 0)?.state == .provisional }
         let photo = try #require(model.photo(at: 0))
         var shown: [Int] = []
-        thumbnails.load(photo, session: model.shownSession) { _, image in shown.append(image.width) }
+        var provisional: [Bool] = []
+        thumbnails.load(photo, session: model.shownSession) { _, image, isProvisional in
+            shown.append(image.width)
+            provisional.append(isProvisional)
+        }
         try await waitUntil("the EXIF thumbnail on screen") { !shown.isEmpty }
         #expect(shown == [160] && thumbnails.image(for: photo)?.width == 160)
 
         try await waitUntil("the preview made", seconds: 30) { model.photo(at: 0)?.state == .previewed }
         let previewed = try #require(model.photo(at: 0))
         #expect(thumbnails.image(for: previewed)?.width == 160, "the EXIF thumbnail until the preview is decoded")
-        thumbnails.load(previewed, session: model.shownSession) { _, image in shown.append(image.width) }
+        thumbnails.load(previewed, session: model.shownSession) { _, image, isProvisional in
+            shown.append(image.width)
+            provisional.append(isProvisional)
+        }
         try await waitUntil("the preview on screen") { shown.count == 2 }
-        #expect(shown == [160, 320] && thumbnails.image(for: previewed)?.width == 320)
+        #expect(shown == [160, 320] && provisional == [true, false] && thumbnails.image(for: previewed)?.width == 320)
         #expect(model.shownSession?.provisionalPreview(previewed.id, edge: 320) == nil)
         await model.browsed()
         model.close()

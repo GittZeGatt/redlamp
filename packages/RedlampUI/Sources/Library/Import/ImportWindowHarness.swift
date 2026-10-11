@@ -32,6 +32,16 @@ import AppKit
         grid.imagesShown
     }
 
+    /// Provisional previews put on screen in the grid so far: large JPEGs' EXIF thumbnails.
+    var provisionalShown: Int {
+        grid.provisionalShown
+    }
+
+    /// The photos shown whose grid thumbnails are made, and those still shown from a provisional preview.
+    var previewed: (made: Int, provisional: Int) {
+        (model.photos.count { $0.state == .previewed }, model.photos.count { $0.state == .provisional })
+    }
+
     /// The grid's cells on screen.
     var visibleCount: Int {
         grid.collectionView.indexPathsForVisibleItems().count

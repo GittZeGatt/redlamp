@@ -37,8 +37,12 @@ final class ImportThumbnails {
     }
 
     /// Decodes `photo`'s preview once browsing has made it, or meanwhile the provisional preview `session`
-    /// holds, unless it's in memory already, and calls `loaded` with it on the main thread.
-    func load(_ photo: ImportPhoto, session: ImportSession?, loaded: @escaping @MainActor (String, CGImage) -> Void) {
+    /// holds, unless it's in memory already, and calls `loaded` with it on the main thread, and whether it's the
+    /// provisional one.
+    func load(
+        _ photo: ImportPhoto, session: ImportSession?,
+        loaded: @escaping @MainActor (_ id: String, _ image: CGImage, _ isProvisional: Bool) -> Void,
+    ) {
         let id = photo.id
         switch photo.state {
         case .previewed:
@@ -64,7 +68,7 @@ final class ImportThumbnails {
 
     private func decode(
         _ id: String, loading mark: String, into cache: NSCache<NSString, CGImage>,
-        loaded: @escaping @MainActor (String, CGImage) -> Void,
+        loaded: @escaping @MainActor (String, CGImage, Bool) -> Void,
         _ image: @escaping @Sendable () -> CGImage?,
     ) {
         Task { [weak self] in
@@ -76,7 +80,7 @@ final class ImportThumbnails {
             if cache === self.cache {
                 provisional.removeObject(forKey: id as NSString)
             }
-            loaded(id, image)
+            loaded(id, image, cache !== self.cache)
         }
     }
 }

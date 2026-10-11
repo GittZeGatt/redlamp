@@ -16,8 +16,9 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     let collectionView = ImportCollectionView()
     private let scrollView = NSScrollView()
     private var prioritising: Task<Void, Never>?
-    /// Previews put on screen so far, for the harness.
+    /// Previews put on screen so far, and those of them that were provisional, for the harness.
     @_spi(Harness) public private(set) var imagesShown = 0
+    @_spi(Harness) public private(set) var provisionalShown = 0
 
     init(model: ImportWindowModel, thumbnails: ImportThumbnails?) {
         self.model = model
@@ -109,15 +110,20 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         item.show(photo, leftOut: model.isLeftOut(photo), copied: model.copied.contains(photo.id), image: image)
         let id = photo.id
         item.onToggle = { [weak self] in self?.toggle(id) }
-        thumbnails?.load(photo, session: model.shownSession) { [weak self] id, image in self?.loaded(id, image) }
+        thumbnails?.load(photo, session: model.shownSession) { [weak self] id, image, isProvisional in
+            self?.loaded(id, image, isProvisional: isProvisional)
+        }
     }
 
-    private func loaded(_ id: String, _ image: CGImage) {
+    private func loaded(_ id: String, _ image: CGImage, isProvisional: Bool) {
         guard let index = model.index(of: id),
               let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? ImportGridItem
         else { return }
         item.setImage(image)
         imagesShown += 1
+        if isProvisional {
+            provisionalShown += 1
+        }
     }
 
     /// A cell's box: the selection when the cell is in it, else the cell's photo alone.
