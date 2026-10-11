@@ -783,7 +783,7 @@ extension LibraryGridView {
         } ?? (nil, nil)
         cell.isFocusSuggested = suggestedFrames.contains(item.url)
         cell.healthMark = proposals.mark(for: item.url)
-        cell.softFrame = softFrames.mark(of: photoID(ofItem: index))
+        cell.softFrame = softFrames.mark(of: photoID(ofItem: index), url: item.url)
         cell.isMenuTarget = index == menuItem
         cell.root.isHidden = false
         if cell.image == nil || cell.edge < edge || cell.shownEdit != edit {

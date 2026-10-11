@@ -21,8 +21,8 @@ public enum CullingChange: Sendable, Hashable {
     /// B: every photo marked, or none when every one is.
     case toggleMark
     case mark(Bool)
-    /// Each photo its own flag, by its index ID, the others left as they are: the soft-frame check's proposals
-    /// accepted (LIB-42).
+    /// Each photo its own flag, by its ID in the list, the others left as they are: the soft-frame check's
+    /// proposals accepted (LIB-42).
     case flags([Int64: PhotoFlag])
 
     /// The change an action's key makes; nil for actions that aren't culling.
@@ -85,7 +85,7 @@ public enum CullingChange: Sendable, Hashable {
     }
 
     /// What each photo's culling fields become, from what they are; a custom label given comes with `color`, the
-    /// label's. `ids` are the photos' index IDs, which `flags` gives each its flag by.
+    /// label's. `ids` are the photos' IDs in the list, which `flags` gives each its flag by.
     func resolved(_ photos: [CullingValues], ids: [Int64] = [], color: LabelColor? = nil) -> [CullingValues] {
         switch self {
         case let .flags(flags):

@@ -50,7 +50,11 @@
             }
 
             try choose(app, "Bursts Only")
-            try app.wait("each burst's sharpest proposed, and its soft frames marked, once measured", timeout: 90) {
+            try app.wait("the menu to show proposals") { $0.librarySoftFrames.shows }
+            try app.wait("the bursts' seven frames measured in the background", timeout: 90) { model in
+                model.librarySoftFrames.measuredCount >= 7
+            }
+            try app.wait("each burst's sharpest proposed, and its soft frames marked", timeout: 30) {
                 model in
                 let verdicts = model.librarySoftFrames.verdicts
                 return names(model, verdicts.photos(.soft)) == ["A_0003.JPG", "B_0003.JPG"]

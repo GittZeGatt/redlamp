@@ -100,7 +100,7 @@ struct LibrarySoftFramesTests {
             try #require(model.library.photoID(of: url))
         }
         #expect(try Set(softFrames.verdicts.photos(.soft)) == [id(frames[2]), id(frames[6])])
-        #expect(try softFrames.mark(of: id(frames[2]))?.verdict == .soft)
+        #expect(try softFrames.mark(of: id(frames[2]), url: frames[2])?.verdict == .soft)
         #expect(softFrames.measuredCount == 7)
 
         model.libraryFilters?.toggle(.soft)
@@ -123,6 +123,32 @@ struct LibrarySoftFramesTests {
         #expect(model.items.allSatisfy { $0.metadata.flag == nil }, "one Undo takes every flag back")
     }
 
+    @Test func `a folder listed from the disk before the library took it over is judged by its photos' index IDs`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Other/A.JPG"])
+        let model = try await sandbox.open()
+        let frames = try Self.shoot(sandbox)
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { model.items.count == 7 }
+        let service = try #require(sandbox.service)
+        try await SourcesSandbox
+            .eventually { await service.canShow(sandbox.folder("Shoot"), includingSubfolders: false) }
+        let softFrames = model.librarySoftFrames
+        model.showProposals(.runsOnly)
+        try await sandbox.eventually(seconds: 60) {
+            softFrames.mark(of: model.library.photoID(of: frames[2]), url: frames[2])?.verdict == .soft
+        }
+        print("SOFT-FRAMES the folder's IDs are the index's: \(model.library.showsIndexIDs)")
+        #expect(softFrames.mark(of: model.library.photoID(of: frames[6]), url: frames[6])?.verdict == .soft)
+        #expect(model.acceptProposals())
+        try await sandbox.eventually { !model.isWritingCulling }
+        await service.settled()
+        let rejected = model.items.filter { $0.metadata.flag == .reject }.map(\.name).sorted()
+        #expect(rejected == ["A_0003.JPG", "B_0003.JPG"])
+    }
+
     @Test func `a frame the user decided is never proposed against, and overruling one is Changed by You`(
     ) async throws {
         let sandbox = SourcesSandbox()
@@ -138,13 +164,13 @@ struct LibrarySoftFramesTests {
         try await sandbox.cull(.flagPick, [frames[2]])
         try await sandbox.eventually { softFrames.verdicts.photos(.changed).count == 1 }
         let soft = try #require(model.library.photoID(of: frames[2]))
-        #expect(softFrames.verdicts.verdict(of: soft) == .changed && softFrames.mark(of: soft) == nil)
+        #expect(softFrames.verdicts.verdict(of: soft) == .changed && softFrames.mark(of: soft, url: frames[2]) == nil)
         model.libraryFilters?.toggle(.changedByYou)
         try await sandbox.eventually { model.items.map(\.name) == ["A_0003.JPG"] }
         #expect(model.items.map(\.name) == ["A_0003.JPG"], "the soft frame picked")
         model.libraryFilters?.toggle(.changedByYou)
 
         model.showProposals(nil)
-        #expect(!softFrames.shows && softFrames.mark(of: soft) == nil)
+        #expect(!softFrames.shows && softFrames.mark(of: soft, url: frames[2]) == nil)
     }
 }

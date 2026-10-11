@@ -18,6 +18,9 @@ public final class LibrarySoftFrames {
     public internal(set) var mode: SoftFrames.Mode
     /// The verdicts of the photos shown, by index ID.
     @ObservationIgnored public private(set) var verdicts = SoftFrames.empty
+    /// The index's IDs of the photos shown, by their URLs, while their IDs in the list aren't the index's: a folder
+    /// listed from the disk before the library took it over.
+    @ObservationIgnored private var shownIDs: [URL: Int64] = [:]
 
     @ObservationIgnored private weak var model: EditorModel?
     /// Where the mode and whether proposals are shown are kept across launches; nil keeps them in memory.
@@ -43,11 +46,17 @@ public final class LibrarySoftFrames {
         listObservation = model.library.observe { [weak self] _ in self?.refresh() }
     }
 
-    /// The grid's mark for the photo with index ID `id`, while proposals are shown.
-    func mark(of id: Int64?) -> SoftFrames.Entry? {
-        guard shows, let id, let entry = verdicts.entry(of: id), entry.verdict == .proposed || entry.verdict == .soft
+    /// The grid's mark for the photo listed as `id` at `url`, while proposals are shown.
+    func mark(of id: Int64?, url: URL) -> SoftFrames.Entry? {
+        guard shows, let entry = entry(listed: id, url: url), entry.verdict == .proposed || entry.verdict == .soft
         else { return nil }
         return entry
+    }
+
+    /// The verdict of the photo listed as `id` at `url`, through its index ID.
+    func entry(listed id: Int64?, url: URL) -> SoftFrames.Entry? {
+        let indexID = model?.library.showsIndexIDs == true ? id : shownIDs[url]
+        return indexID.flatMap(verdicts.entry(of:))
     }
 
     /// Calls `handler` whenever the verdicts shown change.
@@ -77,12 +86,12 @@ public final class LibrarySoftFrames {
     /// read those it hasn't.
     func refresh() {
         guard let model, let service = model.library.service, let engine = service.engine,
-              let index = service.core?.index, model.library.showsIndexIDs,
-              shows || model.libraryFilters?.filter.query?.findsSoftFrames == true
+              let index = service.core?.index, shows || model.libraryFilters?.filter.query?.findsSoftFrames == true
         else {
             refreshing?.cancel()
             if !verdicts.isEmpty {
                 verdicts = .empty
+                shownIDs = [:]
                 notify()
             }
             return
@@ -92,15 +101,18 @@ public final class LibrarySoftFrames {
         let setting = model.libraryFilters?.moments ?? MomentSetting()
         let measurer = measurer(engine: engine, index: index, service: service)
         let asked = measuring.map { $0.source == source && $0.setting == setting } ?? false
+        let unindexed = model.library.showsIndexIDs ? [] : model.items.map(\.url)
         measuring = (source, setting)
         refreshing?.cancel()
         refreshing = Task { [weak self] in
             try? await Task.sleep(for: Self.settle)
             guard !Task.isCancelled,
                   let found = try? await engine.softFrames(of: source, setting: setting) else { return }
+            let ids = unindexed.isEmpty ? [:] : await LibraryService.indexIDs(of: unindexed, in: index)
             guard let self, !Task.isCancelled, self.model?.library.photoList.source == source else { return }
-            if found != verdicts {
+            if found != verdicts || ids != shownIDs {
                 verdicts = found
+                shownIDs = ids
                 notify()
             }
             if !asked, let candidates = try? await engine.softFrameCandidates(of: source, setting: setting) {

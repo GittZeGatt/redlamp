@@ -400,7 +400,13 @@ public extension EditorModel {
                 current.append(values)
             }
         }
-        let shownIDs = shown.map { ids.indices.contains($0) ? ids[$0] : -1 }
+        var shownIDs: [Int64] = []
+        if case .flags = change {
+            shownIDs.reserveCapacity(shown.count)
+            for row in shown {
+                shownIDs.append(ids.indices.contains(row) ? ids[row] : -1)
+            }
+        }
         let wanted = change.resolved(current, ids: shownIDs, color: change.customLabel.flatMap(givenLabelColor(of:)))
         var changed: [Int] = []
         var photoIDs: [Int64] = []
