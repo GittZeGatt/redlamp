@@ -27,6 +27,18 @@ public enum LibrarySource: Sendable, Hashable {
     static let healthChecks: [LibrarySource] = HealthCheck.Kind.allCases.map(LibrarySource.health)
         + [.unreadable, .keptAnyway]
 
+    /// The source whose filter and view are kept under `key`, as its `key` property gives it; nil for a key that names
+    /// no source of these, such as a folder's.
+    init?(key: String) {
+        if let entry = (Self.library + Self.healthChecks).first(where: { $0.key == key }) {
+            self = entry
+            return
+        }
+        let prefix = "collection:"
+        guard key.hasPrefix(prefix), let path = CollectionPath(String(key.dropFirst(prefix.count))) else { return nil }
+        self = .collection(path)
+    }
+
     public var title: String {
         switch self {
         case .allPhotographs: "All Photographs"

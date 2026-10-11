@@ -83,6 +83,9 @@ public final class LibrarySources {
     @ObservationIgnored private var importSelection: [URL]?
     /// How long each count took to reach the panel, for the budgets.
     @ObservationIgnored @_spi(Harness) public private(set) var countsTook: [Duration] = []
+    /// The source shown at quit, while a launch reopens it (`LibrarySources+Launch`).
+    @ObservationIgnored var launch: LaunchReopening?
+    @ObservationIgnored private var closingObservation: LibraryObservation?
 
     /// What follows the library for the counts, once it's open.
     private struct Following {
@@ -100,6 +103,7 @@ public final class LibrarySources {
             ?? Set(Panel.allCases)
         collapsedSets = Set(defaults?.stringArray(forKey: Self.collapsedSetsKey) ?? [])
         model.library.leavingSource = { [weak model] source in model?.rememberView(of: source) }
+        closingObservation = model.library.service?.whenClosing { [weak self] in self?.libraryClosing() }
     }
 
     /// Whether the set at `path` shows what's inside it in the collection list.
@@ -253,7 +257,7 @@ public final class LibrarySources {
     }
 
     /// The journal's files with their sizes and dates: the previous import is read again only when they change.
-    private nonisolated static func stamp(of folder: URL) -> [String] {
+    nonisolated static func stamp(of folder: URL) -> [String] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
         return files.map { file in
@@ -378,6 +382,10 @@ public final class LibrarySources {
             }
             return true
         }
+        if let launch, launch.source != source {
+            launch.abandon()
+            self.launch = nil
+        }
         model.rememberSourceView()
         model.stackSuggestions = []
         followShown()
@@ -394,6 +402,7 @@ public final class LibrarySources {
         if source == .previousImport, let found = previous?.found {
             shownImport = (found.id, Set(counts.previousImport))
         }
+        keepShown()
         return true
     }
 
@@ -417,6 +426,14 @@ public final class LibrarySources {
         model.libraryViews.remember(LibrarySource.previousImport.key, selection: selection, active: active)
     }
 
+    /// The previous import, with the journal's files as `stamp` found it, and `photos`, its photos the library has and
+    /// can read: as a launch reopens Previous Import, before the library is counted.
+    func knowPreviousImport(_ found: PreviousImport, stamp: [String], photos: [Int64]) {
+        previous = (stamp, found)
+        counts.previousImport = photos
+        counts.entries[.previousImport] = photos.isEmpty ? nil : photos.count
+    }
+
     /// `source`'s photos as the library lists them: for Previous Import, its own, which its folders may hold others
     /// beside; nil for Previous Import while it isn't known.
     func photos(of source: LibrarySource) -> PhotoSource? {
@@ -437,17 +454,26 @@ public final class LibrarySources {
     }
 
     private func received(_ change: LibrarySourceList.Change, generation: Int) {
-        guard let model, generation == self.generation, model.library.showSource(change, generation: generation)
-        else { return }
+        guard let model, generation == self.generation else { return }
+        let launch = awaitingFirst && launch?.source == shown ? launch : nil
+        if let launch, !launch.keeps(change) {
+            close()
+            return fallBack(launch)
+        }
+        guard model.library.showSource(change, generation: generation) else { return }
         model.healthProposals.follow(shown)
         if awaitingFirst, let shown {
             awaitingFirst = false
             // Only after the photos are in: a filmstrip out of sight doesn't take them, and one placing itself
             // as it goes out of sight would look for a photo it doesn't have.
-            model.showModule(.library)
+            model.showModule(launch?.module ?? .library)
             // A large source's first change brings these rows (`LibrarySourceList.firstRead`).
             let items = model.library.items
             model.didList(shown, items.indices.prefix(Self.warmedAsShown).compactMap(items.row))
+            if let launch {
+                self.launch = nil
+                launch.finish(reopened: true)
+            }
         }
     }
 
@@ -461,6 +487,8 @@ public final class LibrarySources {
         guard libraryObservation == nil, let library = model?.library else { return }
         libraryObservation = library.observe { [weak self] diff in
             guard diff.reset, let self, let generation, !library.showsSource(generation) else { return }
+            launch?.abandon()
+            launch = nil
             close()
         }
     }
@@ -473,6 +501,7 @@ public final class LibrarySources {
         shownImport = nil
         awaitingFirst = false
         model?.healthProposals.follow(nil)
+        keepShown()
     }
 
     /// Whether the photos of the source shown have all arrived.

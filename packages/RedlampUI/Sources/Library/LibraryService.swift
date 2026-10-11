@@ -93,6 +93,10 @@ public final class LibraryService {
     /// Folders indexed in this session, as they were listed then.
     @ObservationIgnored private var indexedFolders: Set<String> = []
     @ObservationIgnored private var observers: [UUID: @MainActor () -> Void] = [:]
+    /// Waiting for the library to open, or fail to (`whenOpened`).
+    @ObservationIgnored private var waitingForOpen: [@MainActor () -> Void] = []
+    /// Told as the library closes (`whenClosing`).
+    @ObservationIgnored private var closing: [UUID: @MainActor () -> Void] = [:]
     @ObservationIgnored private var notifying = false
     @ObservationIgnored private var activity: [any NSObjectProtocol] = []
 
@@ -184,9 +188,30 @@ extension LibraryService {
         Self.log.notice("The library's index is being updated for this version of Redlamp")
     }
 
+    /// Calls `handler` once the library is open, or couldn't open: at once when it's past opening already.
+    func whenOpened(_ handler: @escaping @MainActor () -> Void) {
+        guard state == .opening else { return handler() }
+        waitingForOpen.append(handler)
+    }
+
+    /// Calls `handler` as the library closes, when the app quits, before anything in it stops; until the returned
+    /// token is released.
+    func whenClosing(_ handler: @escaping @MainActor () -> Void) -> LibraryObservation {
+        let id = UUID()
+        closing[id] = handler
+        return LibraryObservation { [weak self] in self?.closing.removeValue(forKey: id) }
+    }
+
     private func opened(_ result: Result<LibraryCore, any Error>) {
         opening = nil
         isUpdatingIndex = false
+        defer {
+            let waiting = waitingForOpen
+            waitingForOpen = []
+            for handler in waiting {
+                handler()
+            }
+        }
         switch result {
         case let .failure(error):
             state = .unavailable(String(describing: error))
@@ -230,9 +255,12 @@ extension LibraryService {
     }
 
     /// Stops indexing, saves the query engine's snapshot so the next launch maps it, and writes the
-    /// store's index files: when the app quits. The photos whose XMP wasn't synced yet are kept for
-    /// the next launch.
+    /// store's index files: when the app quits, once what keeps the window's state for the next launch has
+    /// (`whenClosing`). The photos whose XMP wasn't synced yet are kept for the next launch.
     public func close() {
+        for handler in closing.values {
+            handler()
+        }
         opening?.cancel()
         following?.cancel()
         writingAllXMP?.cancel()

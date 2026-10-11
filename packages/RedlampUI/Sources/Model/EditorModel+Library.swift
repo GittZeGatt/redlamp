@@ -28,11 +28,13 @@ public extension EditorModel {
         openFolder(folder, select: nil)
     }
 
-    /// Finds the working set again and reopens the folder and photo of the last session.
+    /// Finds the working set again and reopens the source of the last session: the Library panel's entry, check or
+    /// collection shown at quit, once the library is open (`LibrarySources+Launch`), or else the folder and photo.
     func restoreLibrary() {
+        let reopening = librarySources.reopenAtLaunch()
         library.restore { [weak self] folder, photo in
-            guard let self, let folder else { return }
-            openFolder(folder, select: photo)
+            guard self != nil, let folder else { return }
+            reopening.otherwise { [weak self] in self?.openFolder(folder, select: photo) }
         }
     }
 

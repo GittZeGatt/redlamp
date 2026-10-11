@@ -68,13 +68,9 @@ struct LibraryCounts: Sendable, Equatable {
         }
         counts.unconfirmedDuplicates = try await engine.healthFindings(.duplicates).unconfirmed
         if let previous {
-            let urls = previous.photos.map { URL(fileURLWithPath: $0, isDirectory: false) }
-            let found = await Set(LibraryService.indexIDs(of: urls, in: core.index).values)
-            // As its list has them: of the photos the index still has, those the store holds and can read.
-            let ids = try await engine.list(.photos(found)).ids
-            counts.previousImport = ids.sorted()
-            if !ids.isEmpty {
-                counts.entries[.previousImport] = ids.count
+            counts.previousImport = try await photos(of: previous, core: core)
+            if !counts.previousImport.isEmpty {
+                counts.entries[.previousImport] = counts.previousImport.count
             }
         }
         let list = try await LibraryMetadata(index: core.index, paths: core.paths).collections.list()
@@ -93,6 +89,14 @@ struct LibraryCounts: Sendable, Equatable {
             counts.collectionPhotos[collection.path] = try await engine.list(.collection(collection.path)).count
         }
         return counts
+    }
+
+    /// The index's IDs of `previous`'s photos, in order, as its list has them: of the photos the index still has,
+    /// those the store holds and can read.
+    static func photos(of previous: PreviousImport, core: LibraryCore) async throws -> [Int64] {
+        let urls = previous.photos.map { URL(fileURLWithPath: $0, isDirectory: false) }
+        let found = await Set(LibraryService.indexIDs(of: urls, in: core.index).values)
+        return try await core.engine.list(.photos(found)).ids.sorted()
     }
 
     private static let unreadable = LibraryQuery.filter(LibraryQuery.Filter(.unreadable, .equal, [.bool(true)]))
