@@ -175,7 +175,11 @@ final class LibraryGridContentView: NSView {
     /// and down the cell.
     public static func point(ofStackCount count: Int, size: Double) -> CGPoint {
         let width = GridBadges.Kind.stackCount(count, open: false).size.width
-        return CGPoint(x: (size - 18 - width / 2) / size, y: 9 / size)
+        let frame = GridCellGeometry(size: CGFloat(size), style: .compact).stackCount(
+            width: width,
+            besideDocument: false,
+        )
+        return CGPoint(x: frame.midX / size, y: frame.midY / size)
     }
 
     /// Where `part` of an expanded cell `size` points wide is, 0 ... 1 across and down the cell.
@@ -185,7 +189,7 @@ final class LibraryGridContentView: NSView {
         let point = switch part {
         case let .star(stars):
             CGPoint(
-                x: geometry.rating.x + 4 + 7 * CGFloat(stars - 1) + 3.5,
+                x: geometry.rating.x + GridBadges.starInset + GridBadges.starPitch * CGFloat(stars - 1),
                 y: cell.height - GridCellGeometry.footerHeight / 2,
             )
         case .flag: geometry.flag

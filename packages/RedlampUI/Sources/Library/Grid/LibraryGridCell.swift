@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import RedlampDesign
 import RedlampDocument
 import RedlampEngineAPI
 import RedlampLibrary
@@ -111,7 +112,7 @@ final class LibraryGridCell {
     }
 
     init() {
-        background.cornerRadius = 4
+        background.cornerRadius = 6
         thumbnail.contentsGravity = .resizeAspect
         for layer in [root, background, thumbnail] {
             layer.actions = Self.noActions
@@ -252,15 +253,20 @@ final class LibraryGridCell {
         return nil
     }
 
+    /// The tile a step lighter in the selection, and the selection's ring in the system's accent, as the Mac's photo
+    /// grids draw it: thicker round the active photo. A photo whose context menu is open, or that a drop would tag, is
+    /// ringed as well.
     private func updateBackground() {
-        background.backgroundColor = NSColor(white: isActive ? 0.3 : isInSelection ? 0.24 : 0.17, alpha: 1).cgColor
-        if isMenuTarget || isDropTarget {
-            background.borderWidth = 2
-            background.borderColor = NSColor.controlAccentColor.cgColor
-        } else {
-            background.borderWidth = isActive ? 1.5 : isInSelection ? 1 : 0
-            background.borderColor = NSColor(white: 1, alpha: isActive ? 0.85 : 0.4).cgColor
-        }
+        background.backgroundColor = isActive ? GridCellLook.active : isInSelection ? GridCellLook.selected
+            : GridCellLook.rest
+        let ring: CGFloat = isActive ? 3 : isInSelection || isMenuTarget || isDropTarget ? 2 : 0
+        background.borderWidth = ring
+        background.borderColor = ring > 0 ? GridCellLook.ring : nil
+    }
+
+    /// Draws the selection again in the accent as it is now.
+    func refreshLook() {
+        updateBackground()
     }
 
     // MARK: - Badges
@@ -303,7 +309,7 @@ final class LibraryGridCell {
         if shows, let colour {
             let layer = label ?? makeLayer { label = $0 }
             layer.frame = geometry.label
-            layer.cornerRadius = 1.5
+            layer.cornerRadius = geometry.label.height / 2
             layer.backgroundColor = colour.cgColor
             layer.isHidden = false
         } else {
@@ -337,12 +343,12 @@ final class LibraryGridCell {
         if geometry.style == .expanded {
             let image = geometry.image
             let countWidth = count.map { $0.size.width + 3 } ?? 0
-            set(.stackCount, count, left: CGPoint(x: image.minX + 3, y: image.minY + 10))
-            set(.pairText, pair, left: CGPoint(x: image.minX + 3 + countWidth, y: image.minY + 10))
+            set(.stackCount, count, left: CGPoint(x: image.minX + 3, y: image.minY + 11))
+            set(.pairText, pair, left: CGPoint(x: image.minX + 3 + countWidth, y: image.minY + 11))
         } else {
-            let right = geometry.size - (besideDocument ? 34 : 18)
-            set(.stackCount, count, left: CGPoint(x: right - (count?.size.width ?? 0), y: 9))
-            set(.pairText, pair, left: CGPoint(x: 18, y: 9))
+            let frame = geometry.stackCount(width: count?.size.width ?? 0, besideDocument: besideDocument)
+            set(.stackCount, count, left: CGPoint(x: frame.minX, y: frame.midY))
+            set(.pairText, pair, left: geometry.pairText)
         }
     }
 
@@ -413,5 +419,31 @@ final class LibraryGridCell {
         root.addSublayer(layer)
         keep(layer)
         return layer
+    }
+}
+
+/// A grid cell's tile and the selection's ring, shared by every cell. The ring is the theme's accent, or the system's,
+/// read again when either changes (`forgetAccent`).
+@MainActor
+enum GridCellLook {
+    static let rest = CGColor(gray: 0.165, alpha: 1)
+    static let selected = CGColor(gray: 0.205, alpha: 1)
+    static let active = CGColor(gray: 0.27, alpha: 1)
+
+    private static var accent: (themed: RGBA?, color: CGColor)?
+
+    static var ring: CGColor {
+        let themed = Palette.current.accent
+        if let accent, accent.themed == themed {
+            return accent.color
+        }
+        let color = Palette.accent.cgColor
+        accent = (themed, color)
+        return color
+    }
+
+    /// The system's accent changed.
+    static func forgetAccent() {
+        accent = nil
     }
 }

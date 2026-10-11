@@ -104,7 +104,9 @@ struct GridCellGeometry: Equatable {
     var style: GridCellStyle
 
     static let headerHeight: CGFloat = 44
-    static let footerHeight: CGFloat = 20
+    static let footerHeight: CGFloat = 22
+    /// How far a compact cell's corner badges' middles are from its edges, clear of the selection's ring.
+    static let corner: CGFloat = 11
 
     var inset: CGFloat {
         max(6, (size * 0.07).rounded())
@@ -128,33 +130,47 @@ struct GridCellGeometry: Equatable {
         CGRect(x: inset, y: 4, width: size - 2 * inset, height: Self.headerHeight - 6)
     }
 
-    /// The colour label's bar, along the cell's top.
+    /// The colour label's bar, along the cell's top inside the selection's ring, as wide as the thumbnail's area.
     var label: CGRect {
-        CGRect(x: 6, y: 2, width: size - 12, height: 3)
+        CGRect(x: inset, y: 4, width: size - 2 * inset, height: 2.5)
     }
 
     /// Each badge's centre or corner: the flag top left, the mark top right with a stack beside it, the
     /// rating bottom left and edits bottom right, over the thumbnail's corners in a compact cell; in an
     /// expanded one, the mark over the thumbnail's top right corner and the rest in the footer.
     var flag: CGPoint {
-        style == .expanded ? CGPoint(x: size - inset - 7, y: footerMidY) : CGPoint(x: 9, y: 9)
+        style == .expanded ? CGPoint(x: size - inset - 7, y: footerMidY) : CGPoint(x: Self.corner, y: Self.corner)
     }
 
     var stack: CGPoint {
-        style == .expanded ? CGPoint(x: size - inset - 23, y: footerMidY) : CGPoint(x: size - 25, y: 9)
+        style == .expanded ? CGPoint(x: size - inset - 23, y: footerMidY)
+            : CGPoint(x: size - Self.corner - 18, y: Self.corner)
     }
 
     var mark: CGPoint {
-        style == .expanded ? CGPoint(x: image.maxX - 9, y: image.minY + 9) : CGPoint(x: size - 9, y: 9)
+        style == .expanded ? CGPoint(x: image.maxX - 10, y: image.minY + 10)
+            : CGPoint(x: size - Self.corner, y: Self.corner)
     }
 
     /// The rating's left edge and middle.
     var rating: CGPoint {
-        style == .expanded ? CGPoint(x: inset - 4, y: footerMidY) : CGPoint(x: 4, y: size - 9.5)
+        style == .expanded ? CGPoint(x: inset - 5, y: footerMidY) : CGPoint(x: 5, y: size - 12)
     }
 
     var edited: CGPoint {
-        style == .expanded ? CGPoint(x: size - inset - 41, y: footerMidY) : CGPoint(x: size - 14, y: size - 14)
+        style == .expanded ? CGPoint(x: size - inset - 41, y: footerMidY) : CGPoint(x: size - 12, y: size - 12)
+    }
+
+    /// Where a compact cell shows a stack's count `width` points wide: along its top, left of the mark, and of a
+    /// focus stack's badge `besideDocument`.
+    func stackCount(width: CGFloat, besideDocument: Bool) -> CGRect {
+        let right = size - Self.corner - (besideDocument ? 28 : 10)
+        return CGRect(x: right - width, y: Self.corner - 8, width: width, height: 16)
+    }
+
+    /// Where a compact cell shows a raw and its JPEG's other extensions: right of the flag.
+    var pairText: CGPoint {
+        CGPoint(x: Self.corner + 10, y: Self.corner)
     }
 
     /// An expanded cell's colour label chip, after the stars, where the cell is wide enough to keep it clear
@@ -190,7 +206,8 @@ struct GridCellGeometry: Equatable {
         guard point.y >= cellSize.height - Self.footerHeight else { return nil }
         let stars = GridBadges.Kind.ratingSlots(0).size.width
         if point.x >= rating.x, point.x < rating.x + stars {
-            return .star(min(max(Int((point.x - rating.x - 4) / 7) + 1, 1), 5))
+            let first = rating.x + GridBadges.starInset - GridBadges.starPitch / 2
+            return .star(min(max(Int((point.x - first) / GridBadges.starPitch) + 1, 1), 5))
         }
         if let chip = labelChip, chip.insetBy(dx: -3, dy: -5).contains(point) {
             return .label

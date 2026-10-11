@@ -42,10 +42,10 @@ enum GridBadges {
                  .proposedPick, .proposedReject:
                 CGSize(width: 16, height: 16)
             case .cloud: CGSize(width: 24, height: 24)
-            case let .rating(stars): CGSize(width: 8 + CGFloat(stars) * 7, height: 11)
-            case .ratingSlots: CGSize(width: 8 + 5 * 7, height: 11)
-            case let .stackCount(count, _): CGSize(width: GridBadges.textWidth("\(count)") + 9, height: 14)
-            case let .pairText(text, _): CGSize(width: GridBadges.textWidth(text) + 9, height: 14)
+            case let .rating(stars): CGSize(width: GridBadges.ratingWidth(stars), height: 14)
+            case .ratingSlots: CGSize(width: GridBadges.ratingWidth(5), height: 14)
+            case let .stackCount(count, _): CGSize(width: GridBadges.textWidth("\(count)") + 11, height: 16)
+            case let .pairText(text, _): CGSize(width: GridBadges.textWidth(text) + 11, height: 16)
             case let .proposal(_, word, compact):
                 compact ? CGSize(width: GridBadges.wordWidth(word, compact: true) + 8, height: 13)
                     : CGSize(width: GridBadges.wordWidth(word, compact: false) + 25, height: 16)
@@ -128,7 +128,26 @@ enum GridBadges {
     }
 
     private nonisolated static var textFont: NSFont {
-        NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
+        NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold)
+    }
+
+    /// A rating's stars: the first one's middle from the rating's left edge, and the distance from one to the next.
+    nonisolated static let starInset: CGFloat = 6.5
+    nonisolated static let starPitch: CGFloat = 8
+
+    /// A rating of `stars` stars, or the five places of an expanded cell's, wide enough for a star at each end.
+    nonisolated static func ratingWidth(_ stars: Int) -> CGFloat {
+        2 * starInset + CGFloat(max(stars, 1) - 1) * starPitch
+    }
+
+    /// The disc under a badge's symbol, dark enough to read on a bright photo and edged to read on a dark one.
+    private static func drawDisc(_ size: CGSize, in context: CGContext) {
+        let disc = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
+        context.setFillColor(NSColor(white: 0, alpha: 0.62).cgColor)
+        context.fillEllipse(in: disc)
+        context.setStrokeColor(NSColor(white: 1, alpha: 0.18).cgColor)
+        context.setLineWidth(0.5)
+        context.strokeEllipse(in: disc)
     }
 
     nonisolated static func textWidth(_ text: String) -> CGFloat {
@@ -175,40 +194,39 @@ enum GridBadges {
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
         defer { NSGraphicsContext.current = previous }
         let white = RGBA(white: 1)
-        let shade = NSColor(white: 0, alpha: 0.55).cgColor
         let middle = CGPoint(x: size.width / 2, y: size.height / 2)
         switch kind {
         case .pick:
-            Symbol.draw("flag.fill", pointSize: 8, color: white, centeredAt: middle, scale: scale)
+            drawDisc(size, in: context)
+            Symbol.draw("flag.fill", pointSize: 8.5, color: white, centeredAt: middle, scale: scale)
         case .reject:
-            Symbol.draw("xmark", pointSize: 8, weight: .bold, color: white, centeredAt: middle, scale: scale)
+            drawDisc(size, in: context)
+            Symbol.draw("xmark", pointSize: 8.5, weight: .bold, color: white, centeredAt: middle, scale: scale)
         case .stack:
+            drawDisc(size, in: context)
             Symbol.draw(
-                "square.stack.3d.down.right.fill", pointSize: 8, color: white.opacity(0.85), centeredAt: middle,
+                "square.stack.3d.down.right.fill", pointSize: 8, color: white.opacity(0.95), centeredAt: middle,
                 scale: scale,
             )
         case .focusSuggestion:
-            context.setFillColor(shade)
-            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            drawDisc(size, in: context)
             Symbol.draw(
-                "square.stack.3d.down.right", pointSize: 8, color: white.opacity(0.85), centeredAt: middle,
+                "square.stack.3d.down.right", pointSize: 8, color: white.opacity(0.95), centeredAt: middle,
                 scale: scale,
             )
         case .edited:
-            context.setFillColor(shade)
-            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            drawDisc(size, in: context)
             Symbol.draw(
-                "slider.horizontal.3", pointSize: 8, weight: .semibold, color: white.opacity(0.85),
+                "slider.horizontal.3", pointSize: 8.5, weight: .semibold, color: white.opacity(0.95),
                 centeredAt: middle, scale: scale,
             )
         case .uneditedPreview:
-            context.setFillColor(shade)
-            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            drawDisc(size, in: context)
             Symbol.draw(
                 "ellipsis",
-                pointSize: 8,
+                pointSize: 8.5,
                 weight: .bold,
-                color: white.opacity(0.85),
+                color: white.opacity(0.95),
                 centeredAt: middle,
                 scale: scale,
             )
@@ -221,32 +239,33 @@ enum GridBadges {
                 scale: scale,
             )
         case let .rating(stars):
-            context.setFillColor(shade)
+            context.setFillColor(NSColor(white: 0, alpha: 0.62).cgColor)
             context.addPath(CGPath(
-                roundedRect: CGRect(origin: .zero, size: size), cornerWidth: 5.5, cornerHeight: 5.5, transform: nil,
+                roundedRect: CGRect(origin: .zero, size: size), cornerWidth: size.height / 2,
+                cornerHeight: size.height / 2, transform: nil,
             ))
             context.fillPath()
             for index in 0 ..< stars {
                 Symbol.draw(
-                    "star.fill", pointSize: 6, color: white.opacity(0.9),
-                    centeredAt: CGPoint(x: 7.5 + CGFloat(index) * 7, y: size.height / 2), scale: scale,
+                    "star.fill", pointSize: 7.5, color: white.opacity(0.95),
+                    centeredAt: CGPoint(x: starInset + CGFloat(index) * starPitch, y: size.height / 2), scale: scale,
                 )
             }
         case .mark:
-            context.setFillColor(shade)
-            context.fillEllipse(in: CGRect(origin: .zero, size: size))
-            Symbol.draw("circle.fill", pointSize: 7, color: white.opacity(0.9), centeredAt: middle, scale: scale)
+            drawDisc(size, in: context)
+            Symbol.draw("circle.fill", pointSize: 7.5, color: white.opacity(0.95), centeredAt: middle, scale: scale)
         case let .ratingSlots(stars):
             for index in 0 ..< 5 {
                 Symbol.draw(
-                    index < stars ? "star.fill" : "star", pointSize: 6, color: white.opacity(index < stars ? 0.9 : 0.3),
-                    centeredAt: CGPoint(x: 7.5 + CGFloat(index) * 7, y: size.height / 2), scale: scale,
+                    index < stars ? "star.fill" : "star", pointSize: 7.5,
+                    color: white.opacity(index < stars ? 0.92 : 0.35),
+                    centeredAt: CGPoint(x: starInset + CGFloat(index) * starPitch, y: size.height / 2), scale: scale,
                 )
             }
         case .flagSlot:
-            Symbol.draw("flag", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
+            Symbol.draw("flag", pointSize: 8.5, color: white.opacity(0.35), centeredAt: middle, scale: scale)
         case .markSlot:
-            Symbol.draw("circle", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
+            Symbol.draw("circle", pointSize: 8.5, color: white.opacity(0.35), centeredAt: middle, scale: scale)
         case let .stackCount(count, open):
             drawPill("\(count)", open: open, size: size, in: context)
         case let .pairText(text, open):
@@ -325,24 +344,29 @@ enum GridBadges {
 
     /// A stack's or a pair's badge: `text` in a pill, filled while closed and outlined while open.
     private static func drawPill(_ text: String, open: Bool, size: CGSize, in context: CGContext) {
+        let radius = size.height / 2 - 0.5
         let pill = CGPath(
-            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), cornerWidth: 4,
-            cornerHeight: 4, transform: nil,
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), cornerWidth: radius,
+            cornerHeight: radius, transform: nil,
         )
         context.addPath(pill)
         if open {
-            context.setStrokeColor(NSColor(white: 1, alpha: 0.55).cgColor)
+            context.setFillColor(NSColor(white: 0, alpha: 0.3).cgColor)
+            context.setStrokeColor(NSColor(white: 1, alpha: 0.6).cgColor)
             context.setLineWidth(1)
-            context.strokePath()
+            context.drawPath(using: .fillStroke)
         } else {
-            context.setFillColor(NSColor(white: 0.08, alpha: 0.78).cgColor)
+            context.setFillColor(NSColor(white: 0.06, alpha: 0.8).cgColor)
             context.fillPath()
         }
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: textFont, .foregroundColor: NSColor(white: 1, alpha: open ? 0.75 : 0.9),
+            .font: textFont, .foregroundColor: NSColor(white: 1, alpha: open ? 0.85 : 0.95),
         ]
-        let width = (text as NSString).size(withAttributes: attributes).width
-        (text as NSString).draw(at: CGPoint(x: (size.width - width) / 2, y: 1.5), withAttributes: attributes)
+        let measured = (text as NSString).size(withAttributes: attributes)
+        (text as NSString).draw(
+            at: CGPoint(x: (size.width - measured.width) / 2, y: (size.height - measured.height) / 2),
+            withAttributes: attributes,
+        )
     }
 
     /// The library's custom labels' colours, by name (`EditorModel.customLabelCounts`), which every view of a photo's
