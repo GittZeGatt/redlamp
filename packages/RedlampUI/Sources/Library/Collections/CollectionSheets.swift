@@ -13,7 +13,7 @@ enum CollectionSheets {
     static func create(_ kind: CollectionKind, inside set: CollectionPath? = nil, model: EditorModel) -> Bool {
         let sources = model.librarySources
         guard model.library.service?.isReady == true else { return false }
-        let sheet = PanelSheet(title: kind == .set ? "New Collection Set" : "New Collection", model: model)
+        let sheet = SourceSheet(title: kind == .set ? "New Collection Set" : "New Collection", model: model)
         let name = nameField("")
         let inside = setPopUp(sources, selecting: set)
         sheet.add("Name:", name)
@@ -54,7 +54,7 @@ enum CollectionSheets {
     @discardableResult
     static func rename(_ path: CollectionPath, model: EditorModel) -> Bool {
         let sources = model.librarySources
-        let sheet = PanelSheet(title: "Rename “\(path.name)”", model: model)
+        let sheet = SourceSheet(title: "Rename “\(path.name)”", model: model)
         let name = nameField(path.name)
         sheet.add("Name:", name)
         let problem = problemLabel()
@@ -79,7 +79,9 @@ enum CollectionSheets {
             choices.insert(choices.remove(at: place), at: 0)
         }
         let photos = model.selectedCount
-        let sheet = PanelSheet(title: "Add \(LibrarySources.count(photos)) to a Collection", model: model)
+        let sheet = SourceSheet(
+            title: "Add \(photos == 1 ? "1 Photo" : "\(photos.formatted()) Photos") to a Collection", model: model,
+        )
         let popUp = NSPopUpButton()
         popUp.addItems(withTitles: choices.map(\.displayName))
         popUp.setAccessibilityIdentifier("collections.choice")

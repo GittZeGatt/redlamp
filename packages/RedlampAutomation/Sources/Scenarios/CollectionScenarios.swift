@@ -226,7 +226,8 @@
             try app.rightClickSourceRow("collections.\(picked)", choosing: "Edit Smart Collection…")
             try app.waitForSheet("Edit Smart Collection")
             try app.expect(try app.smartSheetValue("smart.rule.1.field") == "Edited", "its second rule is on Edited")
-            try app.replaceInSheet("smart.text", with: "flag:pick rating>=3 folder:\(folder)")
+            // The query is in the monospaced font: a click near the field's end lands past its text.
+            try app.replaceInSheet("smart.text", with: "flag:pick rating>=3 folder:\(folder)", across: 0.97)
             try app.wait("the rules made again from the text") { _ in
                 (try? app.smartSheetValue("smart.rule.1.field")) == "Rating"
                     && (try? app.smartSheetValue("smart.rule.1.comparison")) == "≥"

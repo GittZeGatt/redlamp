@@ -12,7 +12,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
     /// The smart collection edited; nil for a new one.
     private let editing: CollectionPath?
     private var rules: SmartRules
-    private let sheet: PanelSheet
+    private let sheet: SourceSheet
     private let name: NSTextField
     private let inside: (button: NSPopUpButton, chosen: @MainActor () -> CollectionPath?)
     private let match = NSPopUpButton()
@@ -53,7 +53,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         self.model = model
         self.editing = editing
         self.rules = rules
-        sheet = PanelSheet(title: editing == nil ? "New Smart Collection" : "Edit Smart Collection", model: model)
+        sheet = SourceSheet(title: editing == nil ? "New Smart Collection" : "Edit Smart Collection", model: model)
         self.name = CollectionSheets.nameField(name)
         inside = CollectionSheets.setPopUp(model.librarySources, selecting: set)
         super.init()
@@ -85,6 +85,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         }
         text.setAccessibilityIdentifier("smart.text")
         text.placeholderString = "flag:pick edited:no"
+        text.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         text.delegate = self
         text.widthAnchor.constraint(equalToConstant: 420).isActive = true
         count.textColor = .secondaryLabelColor
@@ -185,22 +186,27 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         )
     }
 
-    /// A row's − and +: the row taken away, and a rule put after it.
+    /// A row's − and +, round as the Mac's rule editors have them: the row taken away, and a rule put after it.
     private func buttons(at path: [Int], identifier: String) -> [NSView] {
-        let remove = NSButton(title: "−", target: nil, action: nil)
-        remove.setAccessibilityIdentifier(identifier + ".remove")
-        remove.setAccessibilityLabel("Remove This Rule")
+        let remove = Self.roundButton(NSImage.removeTemplateName, "Remove This Rule", identifier + ".remove")
         remove.onAction { [weak self] _ in
             guard let self else { return }
             rules[path] = nil
             showRules()
             rulesChanged()
         }
-        let add = NSButton(title: "+", target: nil, action: nil)
-        add.setAccessibilityIdentifier(identifier + ".add")
-        add.setAccessibilityLabel("Add a Rule After This One")
+        let add = Self.roundButton(NSImage.addTemplateName, "Add a Rule After This One", identifier + ".add")
         add.onAction { [weak self] _ in self?.insert(.rule(SmartRules.Rule()), after: path) }
         return [remove, add]
+    }
+
+    private static func roundButton(_ image: NSImage.Name, _ label: String, _ identifier: String) -> NSButton {
+        let button = NSButton(image: NSImage(named: image) ?? NSImage(), target: nil, action: nil)
+        button.bezelStyle = .circular
+        button.toolTip = label
+        button.setAccessibilityLabel(label)
+        button.setAccessibilityIdentifier(identifier)
+        return button
     }
 
     /// A row's controls, indented by how deep in groups it is.
@@ -290,7 +296,16 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
             guard !Task.isCancelled else { return }
             let found = try? await engine.list(.query(query)).count
             guard !Task.isCancelled, let self, let found else { return }
-            count.stringValue = LibrarySources.count(found).capitalizedFirst + " match these rules"
+            count.stringValue = Self.matching(found)
+        }
+    }
+
+    /// "No photos match these rules", "1 photo matches these rules", "1,204 photos match these rules".
+    static func matching(_ count: Int) -> String {
+        switch count {
+        case 0: "No photos match these rules"
+        case 1: "1 photo matches these rules"
+        default: "\(count.formatted()) photos match these rules"
         }
     }
 
@@ -326,12 +341,5 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         counting?.cancel()
         reading?.cancel()
         return sources.saveSmart(query, named: name.stringValue, inside: set, editing: editing)
-    }
-}
-
-private extension String {
-    /// `A photo`, `12 photos`.
-    var capitalizedFirst: String {
-        prefix(1).uppercased() + dropFirst()
     }
 }

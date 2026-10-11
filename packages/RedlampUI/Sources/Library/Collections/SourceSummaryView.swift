@@ -80,10 +80,13 @@ import RedlampLibrary
     }
 }
 
-/// A source's summary beside its row in the left panel, worked out as it opens.
+/// A source's summary beside its row in the left panel, worked out as it opens: its name, its photos and picks, then
+/// the rest smaller in the secondary label colour, as the Mac's info popovers set them (LIB-45).
 @MainActor
 @_spi(Harness) public enum SourceSummaryPopover {
     private static var current: NSPopover?
+    /// How wide its lines grow before they wrap.
+    static let width: CGFloat = 300
 
     /// What the summary shown says, its title first; empty while none is shown.
     @_spi(Harness) public static var shownLines: [String] {
@@ -108,8 +111,9 @@ import RedlampLibrary
         let stack = NSStackView(views: [heading, counting])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        stack.spacing = 3
+        stack.setCustomSpacing(6, after: heading)
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
         stack.setAccessibilityIdentifier("summary")
         let controller = NSViewController()
         controller.view = stack
@@ -127,10 +131,17 @@ import RedlampLibrary
             let lines = found.map { SourceSummaryText.lines($0, unreadable: unreadable) } ?? ["The library isn't open"]
             for (place, line) in lines.enumerated() {
                 let label = NSTextField(wrappingLabelWithString: line)
-                label.preferredMaxLayoutWidth = 360
+                label.preferredMaxLayoutWidth = width
                 label.isSelectable = true
+                if place > 0 {
+                    label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+                    label.textColor = .secondaryLabelColor
+                }
                 label.setAccessibilityIdentifier("summary.line.\(place)")
                 stack.addArrangedSubview(label)
+            }
+            if lines.count > 1, let first = stack.arrangedSubviews.dropFirst().first {
+                stack.setCustomSpacing(6, after: first)
             }
             popover.contentSize = stack.fittingSize
         }

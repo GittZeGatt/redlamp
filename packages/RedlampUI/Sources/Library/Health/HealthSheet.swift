@@ -270,16 +270,25 @@ final class HealthSheetController: NSViewController {
         accept.keyEquivalent = "\r"
         accept.title = model.actionTitle
         accept.setAccessibilityIdentifier("health.accept")
+        for button in [cancel, accept] {
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: SourceSheet.Layout.buttonWidth).isActive = true
+        }
         let buttons = NSStackView(views: [NSView(), cancel, accept])
         buttons.orientation = .horizontal
-        buttons.spacing = 8
-
+        buttons.spacing = 12
         let stack = NSStackView(views: [heading, count, what, undo, leftOut, choice, status, progress, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.setCustomSpacing(4, after: heading)
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
+        // Whichever line ends up last above them, the buttons keep the sheet's room above them.
+        buttons.edgeInsets = NSEdgeInsets(
+            top: SourceSheet.Layout.aboveButtons - stack.spacing,
+            left: 0,
+            bottom: 0,
+            right: 0,
+        )
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         for view in [heading, count, what, undo, leftOut, status, progress, buttons] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
