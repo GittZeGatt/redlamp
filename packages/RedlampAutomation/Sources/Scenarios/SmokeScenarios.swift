@@ -135,6 +135,7 @@
         /// matching takes the driver's event for it.
         static let keyEquivalents = Scenario(
             "diagnostics.key-equivalents", "Lists the menu bar's key equivalents", tiers: [], claims: [],
+            needsFocus: true,
         ) { app in
             let lines = try app.main { _ -> [String] in
                 ShortcutAction.allCases.filter { $0.combos.first?.command == true }.map { action in

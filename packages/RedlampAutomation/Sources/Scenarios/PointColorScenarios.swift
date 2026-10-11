@@ -38,6 +38,7 @@
             "masking.point-color",
             "Point Color in a mask: a swatch picked under it, one of the mask's own colour, a slider and Visualize Range",
             claims: [.feature("masking.point-color")],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             try app.drawGradient(.radial)

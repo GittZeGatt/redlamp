@@ -165,7 +165,9 @@
             claims.forEach { covered($0, via: path) }
         }
 
-        /// Takes the app's focus for steps that need a key window, when the run allows it.
+        /// Brings the app to the front with the editor window key, for steps that need them
+        /// (`Scenario.needsFocus`), when the run allows it (`--focus`). Returns whether it did.
+        @discardableResult
         public func focus() throws -> Bool {
             guard allowsFocus else { return false }
             try main { _ in

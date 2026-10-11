@@ -241,10 +241,13 @@
                 }
                 model.activeTool = .edit
                 model.showShortcuts = false
-                // What every scenario starts from: the panels, filmstrip and toolbar showing, and the
-                // filmstrip hiding automatically.
+                // What every scenario starts from: the photo at Fit, the panels, filmstrip and toolbar
+                // showing, and the filmstrip hiding automatically.
                 if model.isPresenting {
                     _ = model.perform(.fullScreenPreview)
+                }
+                if model.canvas.zoom != .fit {
+                    model.canvas.zoom = .fit
                 }
                 model.leftPanelVisible = true
                 model.rightPanelVisible = true

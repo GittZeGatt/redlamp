@@ -344,6 +344,7 @@
             "develop.panel-switches",
             "Panel switches: Effects' eye turns its vignette off and on in the photo, as History steps with Undo",
             claims: [.feature("workspace.panels"), .feature("develop.effects")],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             try app.choose(.resetAll)
@@ -371,6 +372,7 @@
             try app.wait("Effects On, as a History step") { $0.isOn(.effects) && $0.history.last?.name == "Effects On" }
             // The header's menu turns panels off and on too, and changing a setting of a panel that's off
             // turns it back on.
+            try app.focus()
             try app.rightClick(.panelHeader(.detail), choosing: "Turn Detail Off")
             try app.wait("Detail off from the header's menu") { !$0.isOn(.detail) }
             try app.set(.sharpenAmount, 60)
@@ -446,6 +448,7 @@
             "develop.histogram",
             "Dragging the histogram moves its region's slider; under it, the photo's values under the pointer",
             claims: [.feature("develop.histogram")],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             for parameter in [ParameterID.shadows, .exposure, .highlights] {
@@ -455,6 +458,7 @@
             }
             try app.choose(.resetAll)
             try app.waitForCanvas()
+            try app.focus()
             try app.hover(.canvas, at: CGPoint(x: 0.5, y: 0.5))
             try app.wait("the readout of the photo under the pointer") { $0.pixelReadout != nil }
             let lab = try app.main { $0.showsLabReadout }

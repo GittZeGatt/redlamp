@@ -58,8 +58,11 @@
         public let tiers: Set<Tier>
         public let group: LaunchGroup
         public let claims: [Claim]
-        /// Steps need a key window (SwiftUI gestures on the canvas), which needs the app active.
-        /// Without focus allowed, the scenario takes the model's path and the coverage says so.
+        /// Steps need the app in front, and take focus for them (`RunningApp.focus()`) when the run
+        /// allows it (`--focus`, which the release check runs with): SwiftUI gestures on the canvas,
+        /// which need a key window, and menus, which a person's click opens in the active app.
+        /// Without focus, a step takes the model's path where it has one, and the coverage says so,
+        /// or runs with the app in the background.
         public let needsFocus: Bool
         public let run: @Sendable (RunningApp) throws -> Void
 

@@ -422,6 +422,7 @@
             "The Effect menu by its controls: Redlamp's effects on a mask, a slider moved making it Custom, the "
                 + "settings saved as an effect through its name, that effect on another mask, Undo, and Delete Effect",
             claims: [.feature("masking.local-adjustments")],
+            needsFocus: true,
         ) { app in
             // The masks start from their key: SwiftUI's buttons take no click while the app isn't
             // active, and the menus this is about do.

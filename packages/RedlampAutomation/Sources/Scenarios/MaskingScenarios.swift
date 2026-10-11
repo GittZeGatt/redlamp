@@ -278,6 +278,7 @@
         static let combining = Scenario(
             "masking.combining", "Add, subtract and intersect components, invert, and reuse a mask in another",
             claims: [.feature("masking.combining"), .mask(.existingMask), .parameter(.maskDetail)],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             try app.main { $0.activeTool = .masking }
@@ -318,6 +319,7 @@
             "masking.list-and-overlay",
             "The mask list's operations, reordering masks and components, the overlay in every style and opacity, and the pins",
             claims: [.feature("masking.overlay")],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             try app.main { $0.activeTool = .masking }
@@ -384,7 +386,6 @@
         static let brushSizes = Scenario(
             "masking.brush-sizes", "[ and ] size the Masking and Healing brushes, and never the rating",
             claims: [.feature("masking.brush"), .feature("healing.remove")],
-            needsFocus: true,
         ) { app in
             try app.openWorking()
             let rating = try app.main { $0.photoMetadata.rating }

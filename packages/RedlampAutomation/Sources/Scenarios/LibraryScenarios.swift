@@ -35,6 +35,7 @@
             "library.filmstrip-hide-automatically",
             "Hide Automatically from the View menu, the filmstrip's own menu and Settings, the photo fitted above it",
             claims: [.feature("library.filmstrip")],
+            needsFocus: true,
         ) { app in
             let item = "Hide Automatically", toggle = "settings.filmstrip.hide-automatically"
             try app.openWorking()
@@ -78,6 +79,7 @@
             app.covered(.feature("library.filmstrip"), via: .menu)
 
             // A photo keeps its menu; beside it, the filmstrip's own has the item, unchecked, and turns it on.
+            try app.focus()
             let photoMenu = try app.rightClick(.filmstrip(first)).map(\.title)
             try app.expect(
                 photoMenu.contains(ShortcutAction.copySettings.title) && !photoMenu.contains(item),
@@ -434,8 +436,10 @@
             "export.choose-folder",
             "Choose… in Export to opens the folder panel once its menu has closed, and Cancel leaves the folder as it was",
             claims: [.feature("export.dialog")],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
+            try app.focus()
             try app.choose(Menus.title(of: .export))
             try app.waitForSheet("the Export dialog")
             app.pause(0.5)
