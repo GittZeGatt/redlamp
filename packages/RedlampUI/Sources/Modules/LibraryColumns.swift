@@ -3,20 +3,11 @@ import Observation
 import RedlampDesign
 import RedlampDocument
 
-/// The Library module's left column: the Library panel (LIB-23), the Folders panel and the Collections panel, which
-/// choose the source the grid and the filmstrip show.
+/// The Library module's left column, a Mac source list (LIB-45): the Library section (LIB-23), Folders and
+/// Collections, which choose the source the grid and the filmstrip show (`SourcePanels`).
 final class LibraryFoldersColumn: PanelColumnScrollView {
     init(model: EditorModel) {
-        let add = SymbolImageView("plus", pointSize: 11, color: Palette.secondaryLabel.nsColor)
-        add.toolTip = "Add Folder…"
-        add.setAccessibilityRole(.button)
-        add.setAccessibilityLabel("Add Folder…")
-        add.onClick = { FolderActions.add(model: model) }
-        let insets = NSEdgeInsets(top: 0, left: 0, bottom: Metrics.panelBottomPadding, right: 0)
-        let folders = PanelSectionView(
-            section: .folders, model: model, accessory: add, insets: insets, rows: [FolderOutlineView(model: model)],
-        )
-        super.init(views: [SourcePanels.library(model: model), folders, SourcePanels.collections(model: model)])
+        super.init(insets: SourcePanels.columnInsets, views: SourcePanels.all(model: model))
     }
 
     @available(*, unavailable)

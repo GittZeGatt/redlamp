@@ -45,8 +45,8 @@ final class FolderOutlineView: SidebarOutlineView {
         model.library
     }
 
-    override init(model: EditorModel) {
-        super.init(model: model)
+    override init(model: EditorModel, look: Look = .panel) {
+        super.init(model: model, look: look)
         expansionChanged = { [weak self] node, expanded in
             guard let self, !isReloading, case let .folder(row) = node.kind else { return }
             library.setExpanded(row.url, expanded)
@@ -164,6 +164,7 @@ final class FolderOutlineView: SidebarOutlineView {
         reloadData()
         expandRemembered(rootNodes)
         isReloading = false
+        selectHighlighted()
         invalidateColumnLayout()
     }
 

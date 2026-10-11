@@ -73,16 +73,26 @@ final class HistoryValuesView: LayerDrawnView {
 }
 
 /// A sidebar row. The current history step is highlighted, which leaves the row's trailing
-/// edge to its values; a row photos are dragged onto that takes them is outlined.
+/// edge to its values; a row photos are dragged onto that takes them is outlined. In a source list
+/// (`drawsHighlights` off), AppKit draws both: the source shown as its selection, and its own drop target.
 final class SidebarRowView: NSTableRowView {
+    var drawsHighlights = true
+
     var isCurrentStep = false {
-        didSet { needsDisplay = true }
+        didSet {
+            if drawsHighlights {
+                needsDisplay = true
+            }
+        }
     }
 
     var isDropTarget = false {
         didSet {
-            if isDropTarget != oldValue {
+            guard isDropTarget != oldValue else { return }
+            if drawsHighlights {
                 needsDisplay = true
+            } else {
+                isTargetForDropOperation = isDropTarget
             }
         }
     }
@@ -92,7 +102,7 @@ final class SidebarRowView: NSTableRowView {
 
     override func drawBackground(in dirtyRect: NSRect) {
         super.drawBackground(in: dirtyRect)
-        guard isCurrentStep || isDropTarget, let content = view(atColumn: 0) as? NSView else { return }
+        guard drawsHighlights, isCurrentStep || isDropTarget, let content = view(atColumn: 0) as? NSView else { return }
         let rect = CGRect(
             x: max(content.frame.minX - Self.highlightOutset, 0), y: 0,
             width: min(content.frame.width + Self.highlightOutset * 2, bounds.width), height: bounds.height,

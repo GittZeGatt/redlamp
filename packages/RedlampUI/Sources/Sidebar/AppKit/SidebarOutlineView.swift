@@ -40,7 +40,37 @@ final class SidebarNode: NSObject {
 /// One of the sidebar's lists: an outline view as tall as its rows, with no scroll view of its
 /// own, so the panels around it scroll together. Groups and earlier sessions expand in place.
 /// Subclasses with rows of their own (the Folders panel) override the data source and `track()`.
+///
+/// In the Library module's source list (`Look.sourceList`, LIB-45) it's a Mac source list: AppKit's style, its row
+/// heights for the sidebar size chosen in System Settings, its disclosure chevrons, the source shown as its selection,
+/// and its highlights for a drop and for a row's menu. It never takes the keyboard, which stays with the grid.
 class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSource, NSOutlineViewDelegate {
+    /// How a list looks: as the Develop panels' rows, or as a Mac source list.
+    enum Look {
+        case panel, sourceList
+    }
+
+    /// In a source list, a row's content ends this far from the list's trailing edge, inside the selection; a top-level
+    /// row's starts at most this far from its leading edge.
+    static let sourceListTrailingInset: CGFloat = 18
+    static let sourceListLeadingInset: CGFloat = 25
+    /// A list this short may hold the line that says what an empty section holds, whose height its width decides.
+    private static let mostRowsWrapped = 4
+
+    /// How much wider than its column a source list tiles itself, measured on one of AppKit's own: measured on
+    /// this one, its own column sizing would take part.
+    private static let sourceListPadding: CGFloat = {
+        let probe = NSOutlineView(frame: .zero)
+        let column = NSTableColumn(identifier: .init("probe"))
+        probe.addTableColumn(column)
+        probe.outlineTableColumn = column
+        probe.headerView = nil
+        probe.style = .sourceList
+        probe.rowSizeStyle = .default
+        probe.tile()
+        return probe.frame.width - column.width
+    }()
+
     /// The rows, read while tracked: the list reloads when anything they read changes.
     final var content: @MainActor () -> [SidebarNode] = { [] }
     /// Whether a group or session shows its rows when the list reloads.
@@ -61,6 +91,9 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     final var acceptsFiles: @MainActor ([URL]) -> [URL] = { $0 }
 
     let model: EditorModel
+    let look: Look
+    /// How much wider than its column the list tiles itself: none in the panels, a source list's padding in one.
+    private var columnPadding: CGFloat = 0
     private var roots: [SidebarNode] = []
     private var tracker: Tracker?
     /// Rows are being reloaded: expansion changes then are restorations, not the user's.
@@ -69,8 +102,9 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     private var isDraggingPhotos = false
     private(set) var photoDropRow: Int?
 
-    init(model: EditorModel) {
+    init(model: EditorModel, look: Look = .panel) {
         self.model = model
+        self.look = look
         super.init(frame: CGRect(x: 0, y: 0, width: 250, height: 0))
         let column = NSTableColumn(identifier: .init("main"))
         column.resizingMask = .autoresizingMask
@@ -78,12 +112,22 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         outlineTableColumn = column
         columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         headerView = nil
-        style = .plain
         backgroundColor = .clear
-        selectionHighlightStyle = .none
-        intercellSpacing = .zero
-        indentationPerLevel = SidebarCellView.Layout.indent
-        rowHeight = SidebarCellView.Layout.rowHeight
+        switch look {
+        case .panel:
+            style = .plain
+            selectionHighlightStyle = .none
+            intercellSpacing = .zero
+            indentationPerLevel = SidebarCellView.Layout.indent
+            rowHeight = SidebarCellView.Layout.rowHeight
+        case .sourceList:
+            style = .sourceList
+            rowSizeStyle = .default
+            selectionHighlightStyle = .regular
+            draggingDestinationFeedbackStyle = .sourceList
+            refusesFirstResponder = true
+            columnPadding = Self.sourceListPadding
+        }
         dataSource = self
         delegate = self
         target = self
@@ -129,6 +173,7 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         reloadData()
         expand(roots)
         isReloading = false
+        selectHighlighted()
         invalidateColumnLayout()
     }
 
@@ -139,29 +184,61 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         }
     }
 
+    /// A source list tiles itself taller than its rows, by its style's padding: it's as tall as it makes itself, or
+    /// setting another height would tile it again.
     func height(forWidth _: CGFloat) -> CGFloat {
-        numberOfRows > 0 ? rect(ofRow: numberOfRows - 1).maxY : 0
+        if look == .sourceList {
+            tile()
+            return frame.height
+        }
+        return numberOfRows > 0 ? rect(ofRow: numberOfRows - 1).maxY : 0
     }
 
+    /// The room above the first row and below the last, which a source list's padding leaves.
+    var padding: (top: CGFloat, bottom: CGFloat) {
+        let height = height(forWidth: bounds.width)
+        guard numberOfRows > 0 else { return (0, height) }
+        return (rect(ofRow: 0).minY, height - rect(ofRow: numberOfRows - 1).maxY)
+    }
+
+    /// The column fills the list. A source list tiles itself as wide as its column and its style's padding, which a
+    /// column as wide as the list would make wider again, without end.
     override func setFrameSize(_ newSize: NSSize) {
+        let resized = newSize.width != frame.width
         super.setFrameSize(newSize)
-        if let column = tableColumns.first, column.width != newSize.width {
-            column.width = newSize.width
+        let width = max(newSize.width - columnPadding, 0)
+        if let column = tableColumns.first, column.width != width {
+            column.width = width
+        }
+        if look == .sourceList, resized, (1 ... Self.mostRowsWrapped).contains(numberOfRows) {
+            noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0 ..< numberOfRows))
         }
     }
 
     /// Rows start at the panel's padding, a level further in for each level down, with the
-    /// first part of each for a group's chevron.
-    override func frameOfCell(atColumn _: Int, row: Int) -> NSRect {
+    /// first part of each for a group's chevron. A source list's rows are where AppKit puts them, ending inside
+    /// the selection.
+    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
         let rowRect = rect(ofRow: row)
+        guard look == .panel else {
+            var frame = super.frameOfCell(atColumn: column, row: row)
+            frame.size.width = max(rowRect.maxX - Self.sourceListTrailingInset - frame.minX, 0)
+            return frame
+        }
         let x = Metrics.panelPadding + CGFloat(level(forRow: row)) * indentationPerLevel
         return CGRect(
             x: x, y: rowRect.minY, width: max(rowRect.width - x - Metrics.panelPadding, 0), height: rowRect.height,
         )
     }
 
-    override func frameOfOutlineCell(atRow _: Int) -> NSRect {
-        .zero
+    /// A source list's disclosure chevrons are AppKit's; the panels draw their own.
+    override func frameOfOutlineCell(atRow row: Int) -> NSRect {
+        look == .sourceList ? super.frameOfOutlineCell(atRow: row) : .zero
+    }
+
+    /// Whether `point` is on the disclosure chevron of row `row` in a source list.
+    private func isOnDisclosure(_ point: CGPoint, row: Int) -> Bool {
+        look == .sourceList && frameOfOutlineCell(atRow: row).insetBy(dx: -2, dy: 0).contains(point)
     }
 
     /// A table view only passes clicks to controls in its rows: the Amount slider.
@@ -174,21 +251,28 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let index = row(at: point)
-        guard index >= 0, let node = item(atRow: index) as? SidebarNode, case let .source(source) = node.kind else {
+        guard index >= 0, let node = item(atRow: index) as? SidebarNode, case let .source(source) = node.kind,
+              !isOnDisclosure(point, row: index)
+        else {
             return super.mouseDown(with: event)
         }
         let chevronEnd = frameOfCell(atColumn: 0, row: index).minX + SidebarCellView.Layout.chevronSize.width + 4
-        if isExpandable(node), point.x < chevronEnd {
+        if look == .panel, isExpandable(node), point.x < chevronEnd {
             toggle(node)
         } else {
             model.librarySources.show(source.source)
         }
     }
 
+    /// A source list rings the row whose menu is open, as the Finder's sidebar does: the table's own handling
+    /// notes which row was clicked.
     override func menu(for event: NSEvent) -> NSMenu? {
         let row = row(at: convert(event.locationInWindow, from: nil))
         guard row >= 0,
               let view = view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView else { return nil }
+        if look == .sourceList {
+            _ = super.menu(for: event)
+        }
         return view.contextMenu()
     }
 
@@ -332,6 +416,15 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         false
     }
 
+    /// A source list's line saying what a section holds while it's empty wraps, its row as tall as its lines; every
+    /// other row is the list's height.
+    func outlineView(_: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+        guard look == .sourceList, case let .placeholder(text)? = (item as? SidebarNode)?.kind else { return rowHeight }
+        let width = bounds.width - Self.sourceListLeadingInset - Self.sourceListTrailingInset
+            - SidebarCellView.Layout.labelPadding
+        return max(rowHeight, ceil(SidebarCellView.placeholderHeight(text, width: width)) + 10)
+    }
+
     func outlineView(_: NSOutlineView, viewFor _: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
         // Rows are made only as they show, so a folder is listed (for its subfolders, and its count
@@ -339,11 +432,14 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         if case let .folder(folder) = node.kind, !folder.isMissing, model.library.node(for: folder.url) == nil {
             model.library.listTree(folder.url)
         }
-        return SidebarCellView(node: node, model: model, isExpanded: isItemExpanded(node))
+        return SidebarCellView(
+            node: node, model: model, isExpanded: isItemExpanded(node), look: look, rowSize: effectiveRowSizeStyle,
+        )
     }
 
     func outlineView(_: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let row = SidebarRowView()
+        row.drawsHighlights = look == .panel
         row.isCurrentStep = Self.isHighlighted(item as? SidebarNode)
         return row
     }
@@ -365,6 +461,20 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         enumerateAvailableRowViews { rowView, row in
             (rowView as? SidebarRowView)?.isCurrentStep = Self.isHighlighted(item(atRow: row) as? SidebarNode)
         }
+        selectHighlighted()
+    }
+
+    /// A source list selects the rows it highlights: AppKit draws them as its selection. Clicks never select, so
+    /// the selection is only ever the source shown.
+    final func selectHighlighted() {
+        guard look == .sourceList else { return }
+        var rows = IndexSet()
+        for row in 0 ..< numberOfRows where Self.isHighlighted(item(atRow: row) as? SidebarNode) {
+            rows.insert(row)
+        }
+        if rows != selectedRowIndexes {
+            selectRowIndexes(rows, byExtendingSelection: false)
+        }
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
@@ -380,12 +490,17 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         expansionChanged(node, expanded)
         (view(atColumn: 0, row: row(forItem: node), makeIfNecessary: false) as? SidebarCellView)?.isExpanded = expanded
         if !isReloading {
+            selectHighlighted()
             invalidateColumnLayout()
         }
     }
 
     @objc private func rowClicked() {
         guard let node = item(atRow: clickedRow) as? SidebarNode else { return }
+        if look == .sourceList,
+           isOnDisclosure(convert(window?.currentEvent?.locationInWindow ?? .zero, from: nil), row: clickedRow) {
+            return
+        }
         switch node.kind {
         case let .recipe(recipe):
             guard model.info != nil else { return }
@@ -410,7 +525,9 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     }
 
     /// The chevron expands a folder, and the rest of its row opens it: false when the click wasn't on the chevron.
+    /// A source list's chevron is AppKit's, which takes its own clicks.
     private func clickedChevron(of node: SidebarNode) -> Bool {
+        guard look == .panel else { return false }
         let location = convert(window?.currentEvent?.locationInWindow ?? .zero, from: nil)
         let chevronEnd = frameOfCell(atColumn: 0, row: clickedRow).minX + SidebarCellView.Layout.chevronSize.width + 4
         guard isExpandable(node), location.x < chevronEnd else { return false }

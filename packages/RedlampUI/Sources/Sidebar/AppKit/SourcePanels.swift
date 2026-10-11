@@ -1,29 +1,98 @@
 import AppKit
 import RedlampDesign
 
-/// The Library module's Library panel (LIB-23), above Folders, as Lightroom Classic's Catalog panel is, and its
-/// Collections panel, below them: each open or closed as it was left, kept between launches.
+/// The Library module's source list (LIB-23, LIB-45), in the Mac's sidebar style: its Library section, above Folders
+/// as Lightroom Classic's Catalog panel is, then Folders and Collections, each open or closed as it was left. Option-
+/// click on a section's header leaves it the only one open, and every header's menu opens or closes them all.
 @MainActor
 enum SourcePanels {
-    static func library(model: EditorModel) -> PanelSectionView {
-        section(.library, model: model, rows: [LibraryOutlineView(model: model)])
+    /// The sections, in their order.
+    enum Section: CaseIterable {
+        case library, folders, collections
+
+        @MainActor func isExpanded(_ model: EditorModel) -> Bool {
+            switch self {
+            case .library: model.librarySources.isExpanded(.library)
+            case .folders: model.expandedSidebarSections.contains(.folders)
+            case .collections: model.librarySources.isExpanded(.collections)
+            }
+        }
+
+        @MainActor func setExpanded(_ expanded: Bool, _ model: EditorModel) {
+            guard expanded != isExpanded(model) else { return }
+            switch self {
+            case .library: model.librarySources.toggle(.library)
+            case .folders: model.toggleSidebarSection(.folders, solo: false)
+            case .collections: model.librarySources.toggle(.collections)
+            }
+        }
+
+        /// Opens or closes the section; with `solo`, opens it and closes the others, or closes it when it's the only
+        /// one open.
+        @MainActor func toggle(solo: Bool, _ model: EditorModel) {
+            guard solo else { return setExpanded(!isExpanded(model), model) }
+            let alone = Section.allCases.allSatisfy { $0.isExpanded(model) == ($0 == self) }
+            for section in Section.allCases {
+                section.setExpanded(!alone && section == self, model)
+            }
+        }
+    }
+
+    /// The three sections, top to bottom.
+    static func all(model: EditorModel) -> [NSView] {
+        [library(model: model), folders(model: model), collections(model: model)]
+    }
+
+    /// The room a source list leaves under its last row.
+    static let columnInsets = NSEdgeInsets(top: 0, left: 0, bottom: 10, right: 0)
+
+    /// The Library section: All Photographs, Previous Import, Marked and Rejected, and Library Health's checks.
+    static func library(model: EditorModel) -> SourceListSectionView {
+        section(
+            .library,
+            title: LibrarySources.Panel.library.title,
+            first: true,
+            model: model,
+            list: LibraryOutlineView(model: model),
+            identifier: "sources.library",
+        )
+    }
+
+    /// The Folders section, with a + in its header that adds a folder.
+    static func folders(model: EditorModel) -> SourceListSectionView {
+        let add = SourceListHeaderView.Add(help: "Add Folder…", identifier: "sources.folders.add") { _ in
+            FolderActions.add(model: model)
+        }
+        return section(
+            .folders, title: SidebarSection.folders.title, add: add, model: model,
+            list: FolderOutlineView(model: model, look: .sourceList), identifier: "sidebar.folders",
+            isEmpty: { model.library.roots.isEmpty },
+        ) { menu in
+            menu.addItem(NSMenuItem(title: "Add Folder…") { FolderActions.add(model: model) })
+        }
     }
 
     /// The collection list, with a + in its header that makes a collection, a smart collection or a set.
-    static func collections(model: EditorModel) -> PanelSectionView {
-        let add = SymbolImageView("plus", pointSize: 11, color: Palette.secondaryLabel.nsColor)
-        add.toolTip = "New Collection, Smart Collection or Collection Set"
-        add.setAccessibilityRole(.button)
-        add.setAccessibilityLabel("New Collection, Smart Collection or Collection Set")
-        add.setAccessibilityIdentifier("sources.collections.add")
-        add.onClick = { [weak add] in
-            guard let add else { return }
-            let menu = newMenu(model: model)
-            menu.popUp(positioning: nil, at: CGPoint(x: 0, y: add.bounds.height + 4), in: add)
+    static func collections(model: EditorModel) -> SourceListSectionView {
+        let add = SourceListHeaderView.Add(
+            help: "New Collection, Smart Collection or Collection Set", identifier: "sources.collections.add",
+        ) { button in
+            newMenu(model: model).popUp(positioning: nil, at: CGPoint(x: 0, y: button.bounds.height + 4), in: button)
         }
-        let section = section(.collections, model: model, accessory: add, rows: [CollectionOutlineView(model: model)])
-        section.headerMenu = { newMenu(model: model) }
-        return section
+        let sources = model.librarySources
+        return section(
+            .collections, title: LibrarySources.Panel.collections.title, add: add, model: model,
+            list: CollectionOutlineView(model: model), identifier: "sources.collections",
+            isEmpty: {
+                _ = sources.rows
+                return sources.collections(inside: nil).isEmpty
+            },
+        ) { menu in
+            let made = newMenu(model: model)
+            let items = made.items
+            made.removeAllItems()
+            items.forEach(menu.addItem)
+        }
     }
 
     /// New Collection…, New Smart Collection… and New Collection Set…, as their actions are in the File menu.
@@ -39,20 +108,34 @@ enum SourcePanels {
     }
 
     private static func section(
-        _ panel: LibrarySources.Panel, model: EditorModel, accessory: NSView? = nil, rows: [NSView],
-    ) -> PanelSectionView {
-        let sources = model.librarySources
-        let section = PanelSectionView(
-            title: panel.title, symbol: panel.symbol, accessory: accessory,
-            insets: NSEdgeInsets(top: 0, left: 0, bottom: Metrics.panelBottomPadding, right: 0), rows: rows,
-            actions: PanelSectionView.Actions(
-                isExpanded: { sources.isExpanded(panel) },
-                isEdited: { false },
-                toggle: { solo in sources.toggle(panel, solo: solo) },
-                reset: {},
+        _ section: Section, title: String, first: Bool = false, add: SourceListHeaderView.Add? = nil,
+        model: EditorModel, list: NSView, identifier: String, isEmpty: @escaping @MainActor () -> Bool = { false },
+        commands: @escaping @MainActor (NSMenu) -> Void = { _ in },
+    ) -> SourceListSectionView {
+        let view = SourceListSectionView(
+            title: title, first: first, add: add, list: list,
+            actions: SourceListSectionView.Actions(
+                isExpanded: { section.isExpanded(model) },
+                toggle: { solo in section.toggle(solo: solo, model) },
+                isEmpty: isEmpty,
             ),
         )
-        section.identify(as: "sources.\(panel.rawValue)")
-        return section
+        view.identify(as: identifier)
+        view.header.menuProvider = {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            commands(menu)
+            if !menu.items.isEmpty {
+                menu.addItem(.separator())
+            }
+            menu.addItem(NSMenuItem(title: "Show All Sections") {
+                Section.allCases.forEach { $0.setExpanded(true, model) }
+            })
+            menu.addItem(NSMenuItem(title: "Hide All Sections") {
+                Section.allCases.forEach { $0.setExpanded(false, model) }
+            })
+            return menu
+        }
+        return view
     }
 }

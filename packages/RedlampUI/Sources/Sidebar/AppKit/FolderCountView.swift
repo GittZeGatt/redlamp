@@ -3,7 +3,8 @@ import RedlampDesign
 
 /// A folder's count at the end of its row in the Folders panel, drawn as a line of text in digits all as
 /// wide: a new count redraws this view alone, and lays out its row again only when it's wider or narrower.
-/// The library's counts change while folders are indexed and photos come and go, rows at a time.
+/// The library's counts change while folders are indexed and photos come and go, rows at a time. A source
+/// list's counts are at its rows' size, in the secondary label colour (LIB-45).
 final class FolderCountView: LayerDrawnView {
     static let font = FontSpec(size: Typography.caption.size, monospacedDigits: true)
 
@@ -11,7 +12,7 @@ final class FolderCountView: LayerDrawnView {
         didSet {
             guard text != oldValue else { return }
             setNeedsContentDisplay()
-            let width = TextLine.width(text, font: Self.font)
+            let width = TextLine.width(text, font: font)
             guard width != size.width else { return }
             size.width = width
             invalidateIntrinsicContentSize()
@@ -19,11 +20,15 @@ final class FolderCountView: LayerDrawnView {
         }
     }
 
+    private let font: FontSpec
+    private let color: NSColor
     private var size: CGSize
 
-    init(_ text: String) {
+    init(_ text: String, font: FontSpec = FolderCountView.font, color: NSColor = Palette.tertiaryLabel.nsColor) {
         self.text = text
-        size = CGSize(width: TextLine.width(text, font: Self.font), height: TextLine.lineHeight(Self.font))
+        self.font = font
+        self.color = color
+        size = CGSize(width: TextLine.width(text, font: font), height: TextLine.lineHeight(font))
         super.init(frame: .zero)
         setAccessibilityElement(false)
     }
@@ -38,9 +43,6 @@ final class FolderCountView: LayerDrawnView {
     }
 
     override func drawContent(in _: CGRect) {
-        TextLine.draw(
-            text, font: Self.font, color: Palette.tertiaryLabel.nsColor, in: bounds, alignment: .right,
-            scale: backingScale,
-        )
+        TextLine.draw(text, font: font, color: color, in: bounds, alignment: .right, scale: backingScale)
     }
 }

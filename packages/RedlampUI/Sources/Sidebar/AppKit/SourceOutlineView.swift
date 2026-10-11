@@ -2,10 +2,10 @@ import AppKit
 import RedlampDesign
 import RedlampLibrary
 
-/// A list of the left panel's sources (LIB-23): the Library section's, or the collection list. Its rows are made
-/// again when they change (an entry offered or no longer, a collection made, renamed or deleted, the source shown);
-/// a count that changes alone is shown in its row in place, so counting never makes rows again. While it's in the
-/// window, the library is counted (`LibrarySources.follow`).
+/// A list of the left panel's sources (LIB-23): the Library section's, or the collection list, in the source list's
+/// look (LIB-45). Its rows are made again when they change (an entry offered or no longer, a collection made, renamed
+/// or deleted, the source shown); a count that changes alone is shown in its row in place, so counting never makes
+/// rows again. While it's in the window, the library is counted (`LibrarySources.follow`).
 class SourceOutlineView: SidebarOutlineView {
     private var countsObservation: LibraryObservation?
     private var isFollowing = false
@@ -16,8 +16,8 @@ class SourceOutlineView: SidebarOutlineView {
         model.librarySources
     }
 
-    override init(model: EditorModel) {
-        super.init(model: model)
+    init(model: EditorModel) {
+        super.init(model: model, look: .sourceList)
         content = { [weak self] in self?.madeRows() ?? [] }
     }
 

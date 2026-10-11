@@ -65,21 +65,21 @@ extension SidebarCellView {
         let count = row.count.map { ", " + photos($0) } ?? ""
         return FolderDecoration(
             name: row.title + (row.isTarget ? " +" : ""),
-            nameColor: row.isShown ? Palette.labelHover : Palette.label,
+            nameTone: row.isShown ? .emphasized : .primary,
             help: help,
             accessibilityLabel: row.title + count + (row.isTarget ? ", target collection" : "")
                 + (row.isShown ? ", shown" : ""),
             symbol: symbol,
-            color: Palette.secondaryLabel,
+            iconTone: .primary,
             count: row.count?.formatted(),
         )
     }
 
     /// Library Health's group: its checks are inside it.
     static let healthDecoration = FolderDecoration(
-        name: "Library Health", nameColor: Palette.secondaryLabel,
+        name: "Library Health", nameTone: .group,
         help: "Checks that each list the photos needing a decision; each shows only while it finds something",
-        accessibilityLabel: "Library Health", symbol: "stethoscope", color: Palette.secondaryLabel,
+        accessibilityLabel: "Library Health", symbol: "stethoscope", iconTone: .primary,
     )
 
     /// A source's menu: its summary beside `anchor`, its row; choosing it as the target; and for the collection

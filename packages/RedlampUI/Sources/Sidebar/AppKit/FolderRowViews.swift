@@ -33,15 +33,26 @@ struct FolderRow: Equatable {
 }
 
 extension SidebarCellView {
+    /// How strongly a row's name or icon shows; each look gives it its colour (`color(of:)`).
+    enum Tone: Equatable {
+        case primary
+        /// A group's name: quieter than a row's in the panels, as a row's in a source list.
+        case group
+        /// A missing folder's, or one with nothing to show.
+        case dimmed
+        /// The open folder's or the source shown's name in the panels; a source list shows it as its selection.
+        case emphasized
+    }
+
     /// What a folder's row shows: its name, its help, its icon, and at its end its count or, for a missing
     /// root, a question mark. A row whose count changes shows the new one without anything else changing.
     struct FolderDecoration: Equatable {
         var name: String
-        var nameColor: RGBA
+        var nameTone: Tone
         var help: String
         var accessibilityLabel: String
         var symbol: String
-        var color: RGBA
+        var iconTone: Tone
         var count: String?
         var isMissing = false
     }
@@ -66,12 +77,12 @@ extension SidebarCellView {
         }
         return FolderDecoration(
             name: row.name,
-            nameColor: dimmed ? Palette.tertiaryLabel : row.isOpen ? Palette.labelHover : Palette.label,
+            nameTone: dimmed ? .dimmed : row.isOpen ? .emphasized : .primary,
             help: help,
             accessibilityLabel: row.name + (row.isMissing ? ", missing" : row.isEmpty ? ", no photos"
                 : row.count.map { ", " + Self.photos($0) } ?? "") + (row.isOpen ? ", open" : ""),
             symbol: row.isMissing ? "folder.badge.questionmark" : row.isOpen ? "folder.fill" : "folder",
-            color: dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel,
+            iconTone: dimmed ? .dimmed : .primary,
             count: row.isMissing ? nil : row.count?.formatted(), isMissing: row.isMissing,
         )
     }

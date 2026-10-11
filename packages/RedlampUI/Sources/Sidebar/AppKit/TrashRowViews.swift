@@ -21,12 +21,12 @@ extension SidebarCellView {
     static func trashDecoration(_ row: TrashRow) -> FolderDecoration {
         FolderDecoration(
             name: "Recently Trashed",
-            nameColor: row.isOpen ? Palette.labelHover : Palette.label,
+            nameTone: row.isOpen ? .emphasized : .primary,
             help: RecentlyTrashedText.help,
             accessibilityLabel: "Recently Trashed" + (row.count.map { ", " + photos($0) } ?? "")
                 + (row.isOpen ? ", open" : ""),
             symbol: row.isOpen ? "trash.fill" : "trash",
-            color: Palette.secondaryLabel,
+            iconTone: .primary,
             count: row.count?.formatted(),
         )
     }

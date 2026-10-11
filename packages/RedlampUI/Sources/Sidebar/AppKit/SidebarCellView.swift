@@ -4,8 +4,48 @@ import RedlampDocument
 import RedlampRecipes
 
 /// One row of a sidebar list. Its chevron, icon and title line up with the panel header's
-/// chevron, glyph and title, so the lists read as the inspector's panels do.
+/// chevron, glyph and title, so the lists read as the inspector's panels do. In a source list
+/// (LIB-45), its title, icon and count are a Mac sidebar's: the system's font and symbols at the
+/// sidebar size chosen in System Settings, in the system's label colours, the count in the secondary one.
 final class SidebarCellView: NSTableCellView {
+    /// A source list's sizes, for its row size: the title's font matches AppKit's, and every icon has a slot
+    /// as wide, so the titles line up.
+    @MainActor enum SourceListLayout {
+        static func textSize(_ size: NSTableView.RowSizeStyle) -> CGFloat {
+            switch size {
+            case .small: 11
+            case .large: 15
+            default: 13
+            }
+        }
+
+        static func iconSlot(_ size: NSTableView.RowSizeStyle) -> CGFloat {
+            switch size {
+            case .small: 21
+            case .large: 29
+            default: 25
+            }
+        }
+
+        /// AppKit's sidebar symbols: at the title's size, in the large scale.
+        static func symbolConfiguration(_ size: NSTableView.RowSizeStyle) -> NSImage.SymbolConfiguration {
+            NSImage.SymbolConfiguration(pointSize: textSize(size), weight: .regular, scale: .large)
+        }
+
+        static let iconGap: CGFloat = 6
+        /// The lines that say what a section holds while it's empty are quieter than its rows, and wrap.
+        static let placeholderSize: CGFloat = 11
+    }
+
+    /// The height of the line `text` saying what an empty section holds, wrapped to `width`.
+    static func placeholderHeight(_ text: String, width: CGFloat) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: SourceListLayout.placeholderSize)
+        return (text as NSString).boundingRect(
+            with: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font],
+        ).height
+    }
+
     /// Positions from where the row starts (the panel's padding, then a level further in for
     /// each level down), taken from the panel header's layout.
     @MainActor enum Layout {
@@ -28,9 +68,11 @@ final class SidebarCellView: NSTableCellView {
 
     private let node: SidebarNode
     private let model: EditorModel
+    private let look: SidebarOutlineView.Look
+    private let rowSize: NSTableView.RowSizeStyle
     private let label = NSTextField(labelWithString: "")
     private var chevron: ChevronView?
-    private var icon: SymbolImageView?
+    private var icon: NSView?
     private var trailing: NSView?
     /// What a folder's row or Recently Trashed's shows, for `refreshFolder` and `refreshTrash`.
     private var decoration: FolderDecoration?
@@ -43,14 +85,22 @@ final class SidebarCellView: NSTableCellView {
         didSet { chevron?.isExpanded = isExpanded }
     }
 
-    init(node: SidebarNode, model: EditorModel, isExpanded: Bool = false) {
+    init(
+        node: SidebarNode, model: EditorModel, isExpanded: Bool = false, look: SidebarOutlineView.Look = .panel,
+        rowSize: NSTableView.RowSizeStyle = .medium,
+    ) {
         self.node = node
         self.model = model
         self.isExpanded = isExpanded
+        self.look = look
+        self.rowSize = rowSize
         super.init(frame: .zero)
         label.lineBreakMode = .byTruncatingTail
-        label.font = Layout.rowFont
+        label.font = look == .sourceList ? .systemFont(ofSize: SourceListLayout.textSize(rowSize)) : Layout.rowFont
         addSubview(label)
+        if look == .sourceList {
+            textField = label
+        }
         var symbol: String?
         switch node.kind {
         case let .group(name):
@@ -92,7 +142,16 @@ final class SidebarCellView: NSTableCellView {
             addSubview(slider)
         case let .placeholder(text):
             label.stringValue = text
-            label.textColor = Palette.tertiaryLabel.nsColor
+            if look == .sourceList {
+                // Not AppKit's text field, which would give it a row's font.
+                textField = nil
+                label.font = .systemFont(ofSize: SourceListLayout.placeholderSize)
+                label.textColor = .secondaryLabelColor
+                label.lineBreakMode = .byWordWrapping
+                label.maximumNumberOfLines = 0
+            } else {
+                label.textColor = Palette.tertiaryLabel.nsColor
+            }
         case let .snapshot(snapshot):
             label.stringValue = snapshot.name
             symbol = "camera.viewfinder"
@@ -105,13 +164,15 @@ final class SidebarCellView: NSTableCellView {
             show(Self.trashDecoration(row))
         case let .source(row):
             setAccessibilityIdentifier(row.identifier)
-            if row.hasChildren {
+            if row.hasChildren, look == .panel {
                 showChevron()
             }
             show(Self.sourceDecoration(row))
         case .libraryHealth:
             setAccessibilityIdentifier("sources.health")
-            showChevron()
+            if look == .panel {
+                showChevron()
+            }
             show(Self.healthDecoration)
         }
         if let symbol {
@@ -128,7 +189,7 @@ final class SidebarCellView: NSTableCellView {
 
     private func decorate(_ row: FolderRow) {
         setAccessibilityIdentifier("folders." + row.url.standardizedFileURL.path)
-        if row.hasSubfolders {
+        if row.hasSubfolders, look == .panel {
             showChevron()
         }
         show(Self.folderDecoration(row))
@@ -160,8 +221,8 @@ final class SidebarCellView: NSTableCellView {
             label.stringValue = shown.name
             relayout = true
         }
-        if shown.nameColor != before?.nameColor {
-            label.textColor = shown.nameColor.nsColor
+        if shown.nameTone != before?.nameTone {
+            label.textColor = color(of: shown.nameTone)
         }
         if shown.help != before?.help {
             toolTip = shown.help
@@ -169,16 +230,16 @@ final class SidebarCellView: NSTableCellView {
         if shown.accessibilityLabel != before?.accessibilityLabel {
             setAccessibilityLabel(shown.accessibilityLabel)
         }
-        if shown.symbol != before?.symbol || shown.color != before?.color {
+        if shown.symbol != before?.symbol || shown.iconTone != before?.iconTone {
             icon?.removeFromSuperview()
-            showIcon(shown.symbol, color: shown.color)
+            showIcon(shown.symbol, tone: shown.iconTone)
             relayout = true
         }
         if let count = trailing as? FolderCountView, let text = shown.count {
             count.text = text
         } else if shown.count != before?.count || shown.isMissing != before?.isMissing {
             trailing?.removeFromSuperview()
-            trailing = Self.trailing(shown)
+            trailing = trailing(shown)
             if let trailing, before != nil {
                 addSubview(trailing)
             }
@@ -189,13 +250,34 @@ final class SidebarCellView: NSTableCellView {
         }
     }
 
-    /// The view at the end of a folder's row: its count, or a missing root's question mark.
-    private static func trailing(_ decoration: FolderDecoration) -> NSView? {
-        if let count = decoration.count {
-            return FolderCountView(count)
+    /// A name's colour for `tone`: the panels' palette, or a source list's system colours.
+    private func color(of tone: Tone) -> NSColor {
+        switch (look, tone) {
+        case (.panel, .primary): Palette.label.nsColor
+        case (.panel, .group): Palette.secondaryLabel.nsColor
+        case (.panel, .dimmed): Palette.tertiaryLabel.nsColor
+        case (.panel, .emphasized): Palette.labelHover.nsColor
+        case (.sourceList, .dimmed): .tertiaryLabelColor
+        case (.sourceList, _): .labelColor
         }
-        return decoration.isMissing
-            ? SymbolImageView("questionmark.circle", pointSize: 10, color: Palette.tertiaryLabel.nsColor) : nil
+    }
+
+    /// The view at the end of a folder's row: its count, or a missing root's question mark.
+    private func trailing(_ decoration: FolderDecoration) -> NSView? {
+        let sourceList = look == .sourceList
+        if let count = decoration.count {
+            return sourceList
+                ? FolderCountView(
+                    count, font: FontSpec(size: SourceListLayout.textSize(rowSize), monospacedDigits: true),
+                    color: .secondaryLabelColor,
+                )
+                : FolderCountView(count)
+        }
+        guard decoration.isMissing else { return nil }
+        return SymbolImageView(
+            "questionmark.circle", pointSize: sourceList ? SourceListLayout.textSize(rowSize) : 10,
+            color: sourceList ? .tertiaryLabelColor : Palette.tertiaryLabel.nsColor,
+        )
     }
 
     private func showChevron() {
@@ -205,14 +287,38 @@ final class SidebarCellView: NSTableCellView {
         chevron = view
     }
 
-    private func showIcon(_ symbol: String, color: RGBA = Palette.secondaryLabel) {
-        let image = SymbolImageView(symbol, pointSize: Layout.iconPointSize, color: color.nsColor)
+    /// The row's icon: drawn in the panels' colour, or in a source list AppKit's image view, which sizes and tints
+    /// its symbol as the sidebar's.
+    private func showIcon(_ symbol: String, tone: Tone = .group) {
+        guard look == .sourceList else {
+            let color = tone == .dimmed ? Palette.tertiaryLabel : Palette.secondaryLabel
+            let image = SymbolImageView(symbol, pointSize: Layout.iconPointSize, color: color.nsColor)
+            addSubview(image)
+            icon = image
+            return
+        }
+        let image = NSImageView()
+        image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        image.symbolConfiguration = SourceListLayout.symbolConfiguration(rowSize)
+        // AppKit may size the symbol again once the row is in its list: drawn at its own size, it's never shrunk to
+        // fit.
+        image.imageScaling = .scaleNone
+        image.contentTintColor = tone == .dimmed ? .tertiaryLabelColor : nil
+        image.setAccessibilityElement(false)
         addSubview(image)
+        imageView = image
         icon = image
     }
 
     override var isFlipped: Bool {
         true
+    }
+
+    /// In a source list the row takes the clicks on its title, icon and count, as AppKit's rows do: a text field in a
+    /// list that selects keeps a right-click to itself in a window that isn't key, and the row's menu never opens.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return look == .sourceList && hit != nil ? self : hit
     }
 
     override func viewDidMoveToWindow() {
@@ -233,7 +339,16 @@ final class SidebarCellView: NSTableCellView {
         func centeredY(_ size: CGSize) -> CGFloat {
             PixelGrid.round((bounds.height - size.height) / 2, scale: scale)
         }
-        var titleX = Layout.titleInset
+        let iconCenter: CGFloat
+        var titleX: CGFloat
+        if look == .sourceList {
+            let slot = SourceListLayout.iconSlot(rowSize)
+            iconCenter = slot / 2
+            titleX = icon == nil ? 0 : slot + SourceListLayout.iconGap
+        } else {
+            iconCenter = Layout.iconCenter
+            titleX = Layout.titleInset
+        }
         if let amountSlider {
             let width = min(max(bounds.width * 0.55, 80), 160)
             amountSlider.frame = CGRect(
@@ -247,7 +362,7 @@ final class SidebarCellView: NSTableCellView {
         if let image = icon {
             let size = image.intrinsicContentSize
             image.frame = CGRect(
-                x: PixelGrid.round(Layout.iconCenter - size.width / 2, scale: scale), y: centeredY(size),
+                x: PixelGrid.round(iconCenter - size.width / 2, scale: scale), y: centeredY(size),
                 width: size.width, height: size.height,
             )
         }
@@ -264,9 +379,15 @@ final class SidebarCellView: NSTableCellView {
             )
             titleMaxX = trailing.frame.minX + padding - 6
         }
-        let size = label.intrinsicContentSize
+        var size = label.intrinsicContentSize
         if let values {
             titleMaxX = place(values, from: titleX, to: titleMaxX, title: size.width)
+        }
+        if label.maximumNumberOfLines == 0 {
+            size.height = ceil(Self.placeholderHeight(
+                label.stringValue,
+                width: titleMaxX - titleX - Layout.labelPadding,
+            ))
         }
         titleX -= Layout.labelPadding
         label.frame = CGRect(x: titleX, y: centeredY(size), width: max(titleMaxX - titleX, 0), height: size.height)
@@ -405,7 +526,7 @@ extension SidebarCellView {
     private func showStep(_ step: HistoryStep, current: Bool, undone: Bool) {
         label.stringValue = step.title
         label.textColor = (undone ? Palette.tertiaryLabel : current ? Palette.labelHover : Palette.label).nsColor
-        showIcon(step.action.symbol, color: undone ? Palette.tertiaryLabel : Palette.secondaryLabel)
+        showIcon(step.action.symbol, tone: undone ? .dimmed : .group)
         if let after = step.after {
             values = HistoryValuesView(before: step.before, after: after, dimmed: undone)
         }
