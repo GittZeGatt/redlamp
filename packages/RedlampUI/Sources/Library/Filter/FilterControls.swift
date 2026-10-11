@@ -61,9 +61,14 @@ final class FilterToggle: NSButton {
         }
     }
 
+    /// A colour of its own is drawn in its symbol's palette: the bezel draws a template image in its own colour.
     private func update() {
         state = isOn ? .on : .off
-        contentTintColor = color.map { isOn ? $0 : $0.withAlphaComponent(0.55) }
+        if let color, let symbol {
+            let tint = isOn ? color : color.withAlphaComponent(0.55)
+            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))
+        }
     }
 
     override func accessibilityValue() -> Any? {

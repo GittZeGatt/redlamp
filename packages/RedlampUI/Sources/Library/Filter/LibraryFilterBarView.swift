@@ -67,6 +67,7 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
         searchAll.toolTip = "Search All Photographs for this filter"
         searchAll.isHidden = true
         filterOff.title = "Filter Off"
+        filterOff.isHidden = true
         filterOff.toolTip = "The filter is off: click to turn it on (\(ShortcutAction.toggleFilters.title))"
         filterOff.onPress = { [weak self] in self?.model.perform(.toggleFilters) }
         sort.onChoose = { [weak self] tag in
