@@ -61,6 +61,9 @@ indirect enum QueryPlan: Sendable, Hashable {
         case unpickedMoments(MomentScope)
         /// The photos Library Health's Damaged Files check lists (LIB-40).
         case damaged
+        /// The photos the soft-frame check gives `verdict`, among those of `moments`' source, in the engine's mode
+        /// (LIB-42).
+        case softFrames(MomentScope, SoftFrames.Verdict)
     }
 
     /// `query` against `store`: nil is every photo. `moments` are the photos `is:unpicked-moment`
@@ -215,6 +218,9 @@ indirect enum QueryPlan: Sendable, Hashable {
         case .wideOpen: return .leaf(.wideOpen)
         case .unpickedMoment: return .leaf(.rows(.unpickedMoments(moments)))
         case .damaged: return .leaf(.rows(.damaged))
+        case .proposed: return .leaf(.rows(.softFrames(moments, .proposed)))
+        case .soft: return .leaf(.rows(.softFrames(moments, .soft)))
+        case .changedByYou: return .leaf(.rows(.softFrames(moments, .changed)))
         default:
             guard let query = trait.query else { return .nothing }
             return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)

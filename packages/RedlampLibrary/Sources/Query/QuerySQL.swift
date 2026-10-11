@@ -120,8 +120,8 @@ struct QuerySQL: Sendable, Hashable {
             case (.trait, .trait(.wideOpen)):
                 return ColumnEncoding.wideOpenSQL
             case let (.trait, .trait(trait)):
-                // `is:unpicked-moment` and `is:damaged` need the column store: the engine waits for it rather
-                // than ask SQL.
+                // `is:unpicked-moment`, `is:damaged` and the soft-frame terms need the column store: the engine
+                // waits for it rather than ask SQL.
                 return trait.query.map { predicate($0) } ?? "0"
             case let (.has, .detail(detail)):
                 return Self.predicate(detail: detail)

@@ -201,6 +201,14 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         /// read, is empty, starts as no image does or ends early, but not one still being written or kept
         /// anyway. Those that can't be read are found too, which lists otherwise leave out.
         case damaged
+        /// A frame the soft-frame check proposes as a pick (`SoftFrames`, LIB-42), in the mode the engine
+        /// proposes in, among the photos the query filters as `unpicked-moment`'s are.
+        case proposed
+        /// A frame soft against its burst's sharpest, that the user hasn't decided.
+        case soft
+        /// A frame the user decided against what the check would propose: picked or rated though soft,
+        /// or rejected though it's the frame it proposes.
+        case changedByYou = "changed-by-you"
 
         /// Its name as the filter bar shows it.
         public var title: String {
@@ -215,6 +223,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .ultraWide: "Ultra Wide"
             case .unpickedMoment: "Moments without a Pick"
             case .damaged: "Damaged Files"
+            case .proposed: "Proposed Picks"
+            case .soft: "Soft Frames"
+            case .changedByYou: "Changed by You"
             }
         }
 
@@ -224,6 +235,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .damaged: ["unreadable"]
             case .wideOpen: ["wideopen"]
             case .ultraWide: ["ultrawide"]
+            case .proposed: ["proposal", "suggested"]
+            case .soft: ["blurred", "blurry", "unsharp", "focus"]
+            case .changedByYou: ["overruled"]
             default: []
             }
         }
@@ -240,7 +254,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .noLocation: .not(.filter(Filter(.has, .equal, [.detail(.gps)])))
             case .telephoto: .filter(Filter(.focal35, .greaterOrEqual, [.number(70)]))
             case .ultraWide: .filter(Filter(.focal35, .less, [.number(24)]))
-            case .wideOpen, .unpickedMoment, .damaged: nil
+            case .wideOpen, .unpickedMoment, .damaged, .proposed, .soft, .changedByYou: nil
             }
         }
     }
@@ -279,9 +293,14 @@ public extension LibraryQuery {
     }
 
     /// Whether it has `is:unpicked-moment`, whose photos depend on the photos it filters and the
-    /// Tighter–Looser setting it's run with (LIB-41).
+    /// Tighter–Looser setting it's run with (LIB-41), or a soft-frame term, which depends on them too (LIB-42).
     var findsMoments: Bool {
-        has(.unpickedMoment)
+        has(.unpickedMoment) || findsSoftFrames
+    }
+
+    /// Whether it has `is:proposed`, `is:soft` or `is:changed-by-you` (LIB-42).
+    var findsSoftFrames: Bool {
+        has(.proposed) || has(.soft) || has(.changedByYou)
     }
 
     /// Whether `trait` is anywhere in it.
@@ -296,10 +315,10 @@ public extension LibraryQuery {
 }
 
 extension LibraryQuery {
-    /// Whether it needs the column store, which SQL can't stand in for: it has `is:unpicked-moment` or
-    /// `is:damaged`.
+    /// Whether it needs the column store, which SQL can't stand in for: it has `is:unpicked-moment`,
+    /// `is:damaged` or a soft-frame term.
     var needsStore: Bool {
-        has(.unpickedMoment) || has(.damaged)
+        has(.unpickedMoment) || has(.damaged) || findsSoftFrames
     }
 
     /// Whether `trait` keeps photos in it: under no `-` or `!=`, or under two.

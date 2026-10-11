@@ -88,6 +88,27 @@ public final class QueryEngine: Sendable {
         var pairs: HealthPairs?
         /// The names the store's columns hold, ranked for completion, and the lists they were made of.
         var storeNames: (lists: [ContiguousArray<String>], table: NameTable)?
+        /// The soft frames' measurements, stacks and verdicts, and the mode proposals are made in (LIB-42).
+        var softFrames = SoftFrameState()
+    }
+
+    /// `body` on the soft frames' state and the store's generation, under the engine's lock (LIB-42).
+    func withSoftFrames<T>(_ body: (_ generation: Int, inout SoftFrameState) -> T) -> T {
+        state.withLock { state in body(state.generation, &state.softFrames) }
+    }
+
+    /// Drops the rows the soft-frame terms found, and every result, once the mode they were found in changes.
+    func dropSoftFrameResults() {
+        state.withLock { state in
+            state.rowSets = state.rowSets.filter { key, _ in
+                if case .softFrames = key {
+                    return false
+                }
+                return true
+            }
+            state.matches.removeAll()
+            state.softFrames.verdicts.removeAll()
+        }
     }
 
     /// What a change to the store does to the photos kept for the pairs check: keeps them, drops
@@ -386,6 +407,7 @@ public final class QueryEngine: Sendable {
             state.postings.removeAll()
             state.pairs = nil
             state.storeNames = nil
+            state.softFrames.trim()
             if state.generation == generation {
                 state.vocabulary = vocabulary
             }
@@ -713,6 +735,9 @@ extension QueryEngine {
             return store.unpickedMoments(of: photos, setting: scope.setting)
         case .damaged:
             return try await store.rows(withIDs: damagedPhotos(in: store, generation: generation))
+        case let .softFrames(scope, verdict):
+            let found = try await softFrames(scope, in: store, vocabulary: vocabulary, generation: generation)
+            return store.rows(withIDs: found.photos(verdict))
         }
     }
 

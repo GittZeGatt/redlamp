@@ -52,6 +52,10 @@ protocol QuerySource: Sendable {
     func pairFindings(_ rule: PairRule, store: ColumnStore, pairs: inout HealthPairs) async throws -> HealthFindings
     /// The photos whose findings were kept anyway (LIB-40).
     func keptAnyway() async throws -> [Int64]
+    /// The soft-frame measurements of `ids`, or of every photo with one, by photo ID (LIB-42).
+    func photoSharpness(of ids: [Int64]?) async throws -> [Int64: PhotoSharpness]
+    /// The library's stacks, whose bursts soft frames are judged in (LIB-42).
+    func softFrameStacks(store: ColumnStore) async throws -> Stacks
     /// The IDs `sql` returns, handing the first `pageSize` to `firstPage` as soon as they're read.
     func run(
         _ sql: QuerySQL, pageSize: Int, cancellation: QueryCancellation,
