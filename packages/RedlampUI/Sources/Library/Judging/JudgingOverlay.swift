@@ -97,6 +97,13 @@ final class JudgingOverlay {
     private var tracker: Tracker?
     /// The image the host shows, which the lens magnifies and focus peaking reads when it's an edit's render.
     var shownImage: () -> CGImage? = { nil }
+    private weak var host: NSView?
+
+    /// The window's colour space, which the tools' images are made in.
+    private var colorSpace: CGColorSpace? {
+        host?.window?.colorSpace?.cgColorSpace
+    }
+
     /// Overlays came in: the host's accessibility and tests hear of it.
     var onChange: (() -> Void)?
 
@@ -123,6 +130,7 @@ final class JudgingOverlay {
 
     /// Puts the overlay's layers over `photo`, and the histogram and the lens over everything, in `host`.
     func install(in host: NSView, above photo: CALayer) {
+        self.host = host
         var below = photo
         for layer in [clipping, clippingRegion, peaking, afPoints] {
             host.layer?.insertSublayer(layer, above: below)
@@ -308,11 +316,12 @@ final class JudgingOverlay {
         guard clippingFailed != photo else { return }
         let clipping = sensorClipping
         clipping.prefetch(model.workingSet(around: url, comingFrom: previousURL), for: self)
+        let space = colorSpace
         clippingTask = Task { [weak self] in
             guard let self, let recipe = await editRecipe() else { return }
             let marks: ClippingMarks?
             do {
-                marks = try await clipping.marks(.init(url: url, recipe: recipe, size: size, region: nil))
+                marks = try await clipping.marks(.init(url: url, recipe: recipe, size: size, region: nil), in: space)
             } catch {
                 // Cancelled: the next refresh asks again.
                 if !Task.isCancelled, shownPhoto == photo {
@@ -353,10 +362,14 @@ final class JudgingOverlay {
             height: max(1, Int((visible.height * placement.scale).rounded())),
         )
         let clipping = sensorClipping
+        let space = colorSpace
         regionTask = Task { [weak self] in
             try? await Task.sleep(for: Self.settle)
             guard let self, !Task.isCancelled, let recipe = await editRecipe() else { return }
-            let marks = try? await clipping.marks(.init(url: url, recipe: recipe, size: size, region: region))
+            let marks = try? await clipping.marks(
+                .init(url: url, recipe: recipe, size: size, region: region),
+                in: space,
+            )
             guard !Task.isCancelled, self.url == url, regionTaskRegion == region else { return }
             regionTask = nil
             regionTaskRegion = nil
@@ -414,7 +427,7 @@ final class JudgingOverlay {
         let frame = placement.isZoomed ? fittedFrame : placement.photoFrame
         let longEdge = Int((max(frame.width, frame.height) * placement.scale).rounded())
         model.libraryJudging.peaking.request(
-            key, scheduler: model.library.scheduler, shownLongEdge: longEdge, source: source,
+            key, scheduler: model.library.scheduler, shownLongEdge: longEdge, space: colorSpace, source: source,
         ) { [weak self] entry in
             guard let self, self.url == url, edit == key.edit else { return }
             peakingEntry = entry
@@ -620,11 +633,15 @@ final class JudgingOverlay {
         guard let url, model.showRawClipping, SupportedFormats.isRaw(url), clippingFailed != shownPhoto,
               let region = lens.region, let size = lens.regionPixels else { return }
         let clipping = sensorClipping
+        let space = colorSpace
         lens.marksTask?.cancel()
         lens.marksTask = Task { [weak self] in
             try? await Task.sleep(for: Self.lensSettle)
             guard let self, !Task.isCancelled, let recipe = await editRecipe() else { return }
-            let marks = try? await clipping.marks(.init(url: url, recipe: recipe, size: size, region: region))
+            let marks = try? await clipping.marks(
+                .init(url: url, recipe: recipe, size: size, region: region),
+                in: space,
+            )
             guard !Task.isCancelled, self.url == url, let marks = marks ?? nil else { return }
             lens.regionMarks = marks
             lens.update(with: self)

@@ -70,11 +70,15 @@ final class PeakingCache {
         /// The mask pooled to the size the photo was last shown at fit, and that size's long edge.
         var shown: (longEdge: Int, image: CGImage?)?
 
-        init(mask: PeakingMask, shownLongEdge: Int) {
+        /// The images made in `space`, the window's.
+        let space: CGColorSpace?
+
+        init(mask: PeakingMask, shownLongEdge: Int, space: CGColorSpace?) {
             self.mask = mask
-            image = mask.image()
+            self.space = space
+            image = mask.image(in: space)
             if shownLongEdge < max(mask.width, mask.height) {
-                shown = (shownLongEdge, mask.pooled(toLongEdge: shownLongEdge).image())
+                shown = (shownLongEdge, mask.pooled(toLongEdge: shownLongEdge).image(in: space))
             }
         }
 
@@ -96,7 +100,9 @@ final class PeakingCache {
         guard pooling[id] != longEdge else { return }
         pooling[id] = longEdge
         Task { [weak self] in
-            let image = try? await scheduler.run(.onScreen) { entry.mask.pooled(toLongEdge: longEdge).image() }
+            let image = try? await scheduler.run(.onScreen) {
+                entry.mask.pooled(toLongEdge: longEdge).image(in: entry.space)
+            }
             guard let self, pooling[id] == longEdge else { return }
             pooling[id] = nil
             entry.shown = (longEdge, image ?? nil)
@@ -117,10 +123,10 @@ final class PeakingCache {
     }
 
     /// Reads the mask of the image `source` gives, off the main thread, pooled for a photo shown `shownLongEdge`
-    /// pixels long at fit, unless it's kept.
+    /// pixels long at fit, its images in `space` (the window's), unless it's kept.
     func request(
-        _ key: ShownPhoto, scheduler: WorkScheduler, shownLongEdge: Int, source: @escaping @Sendable () -> CGImage?,
-        then done: @escaping (Entry?) -> Void,
+        _ key: ShownPhoto, scheduler: WorkScheduler, shownLongEdge: Int, space: CGColorSpace?,
+        source: @escaping @Sendable () -> CGImage?, then done: @escaping (Entry?) -> Void,
     ) {
         if let entry = entries[key] {
             return done(entry)
@@ -133,7 +139,9 @@ final class PeakingCache {
         let started = ContinuousClock.now
         Task { [weak self] in
             let made = try? await scheduler.run(.onScreen) {
-                source().flatMap { FocusPeaking.mask(of: $0) }.map { Entry(mask: $0, shownLongEdge: shownLongEdge) }
+                source().flatMap { FocusPeaking.mask(of: $0) }.map {
+                    Entry(mask: $0, shownLongEdge: shownLongEdge, space: space)
+                }
             }
             guard let self else { return }
             let entry = made ?? nil

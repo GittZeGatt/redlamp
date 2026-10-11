@@ -87,16 +87,18 @@ struct FocusPeakingTests {
         #expect(mask.pooled(toLongEdge: 2000).width == 1000, "never larger than the mask")
     }
 
-    @Test func `the marks are drawn in peaking's colour on clear`() throws {
+    @Test func `the marks are drawn in peaking's colour on clear, as BGRA in the window's colour space`() throws {
         var marks = Data(count: 40 * 30)
         marks[10 * 40 + 20] = 255
-        let image = try #require(PeakingMask(width: 40, height: 30, marks: marks, markedShare: 0).image())
+        let space = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+        let image = try #require(PeakingMask(width: 40, height: 30, marks: marks, markedShare: 0).image(in: space))
         #expect(image.width == 40 && image.height == 30 && image.alphaInfo == .premultipliedFirst)
+        #expect(image.bitmapInfo.contains(.byteOrder32Little) && image.colorSpace == space)
         let data = try #require(image.dataProvider?.data)
         let bytes = try #require(CFDataGetBytePtr(data))
         let mark = 10 * image.bytesPerRow + 20 * 4
         let color = PeakingMask.color
-        #expect((0 ..< 4).map { bytes[mark + $0] } == [255, color.red, color.green, color.blue], "alpha first")
+        #expect((0 ..< 4).map { bytes[mark + $0] } == [color.blue, color.green, color.red, 255], "blue first")
         #expect((0 ..< 4).map { bytes[mark + 4 + $0] } == [0, 0, 0, 0], "clear beside it")
     }
 

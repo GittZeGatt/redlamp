@@ -14,13 +14,14 @@ struct PeakingMask: @unchecked Sendable {
     /// The share of the pixels marked.
     let markedShare: Double
 
-    /// The colour marks are drawn in, sRGB: a green apart from sensor clipping's pure red, green and blue.
+    /// The colour marks are drawn in: a green apart from sensor clipping's pure red, green and blue.
     static let color: (red: UInt8, green: UInt8, blue: UInt8) = (60, 235, 90)
 
-    /// The marks in `color` on clear, at the mask's size.
-    func image() -> CGImage? {
+    /// The marks in `color` on clear, at the mask's size, premultiplied BGRA in `space`: the window's, which Core
+    /// Animation shows without converting the image as it's committed (40 ms for 4,000 pixels in another space).
+    func image(in space: CGColorSpace? = nil) -> CGImage? {
         guard width > 0, height > 0, marks.count == width * height,
-              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+              let space = space ?? CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         var pixels = Data(count: width * height * 4)
         var planes = [Data](repeating: Data(count: width * height), count: 3)
         let ok = marks.withUnsafeBytes { (alpha: UnsafeRawBufferPointer) -> Bool in
@@ -53,8 +54,9 @@ struct PeakingMask: @unchecked Sendable {
                                 buffer(blue.baseAddress, rowBytes: width),
                             )
                             var output = buffer(target.baseAddress, rowBytes: width * 4)
+                            // Interleaved in memory order: blue, green, red, alpha.
                             return vImageConvert_Planar8toARGB8888(
-                                &alphaPlane, &r, &g, &b, &output, vImage_Flags(kvImageNoFlags),
+                                &b, &g, &r, &alphaPlane, &output, vImage_Flags(kvImageNoFlags),
                             ) == kvImageNoError
                         }
                     }
@@ -65,7 +67,7 @@ struct PeakingMask: @unchecked Sendable {
         return CGImage(
             width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4, space: space,
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-                .union(.byteOrder32Big),
+                .union(.byteOrder32Little),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent,
         )
     }

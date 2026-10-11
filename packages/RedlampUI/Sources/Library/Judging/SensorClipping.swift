@@ -120,9 +120,10 @@ final class SensorClipping {
         self.makeEngine = makeEngine
     }
 
-    /// The marks for `request`; nil when the photo can't be read. Throws `CancellationError` when the caller's task
-    /// was cancelled first, or the engine dropped the photo, so it's asked for again rather than taken for unreadable.
-    func marks(_ request: Request) async throws -> ClippingMarks? {
+    /// The marks for `request`, their image in `space` (the window's); nil when the photo can't be read. Throws
+    /// `CancellationError` when the caller's task was cancelled first, or the engine dropped the photo, so it's asked
+    /// for again rather than taken for unreadable.
+    func marks(_ request: Request, in space: CGColorSpace? = nil) async throws -> ClippingMarks? {
         await takeTurn()
         defer {
             endTurn()
@@ -161,8 +162,9 @@ final class SensorClipping {
         guard let frame = await frame(for: render, from: engine), frame.comparison != nil else { return nil }
         let region = request.region
         let found = await Task.detached(priority: .userInitiated) {
-            frame.comparison
-                .map { Self.marks(surface: frame.surface, comparison: $0, size: frame.size, region: region) }
+            frame.comparison.map {
+                Self.marks(surface: frame.surface, comparison: $0, size: frame.size, region: region, space: space)
+            }
         }.value
         guard var marks = found else { return nil }
         if region == nil {
@@ -309,6 +311,7 @@ final class SensorClipping {
     /// difference elsewhere, such as a heal's maps refreshed after the frame, isn't taken for a mark. Both `RGhA`.
     nonisolated static func marks(
         surface: IOSurfaceRef, comparison: IOSurfaceRef, size: PixelSize, region: ImageRect?,
+        space: CGColorSpace? = nil,
     ) -> ClippingMarks {
         let (width, height) = (size.width, size.height)
         let none = ClippingMarks(image: nil, size: size, region: region, shares: .zero, allShare: 0)
@@ -341,17 +344,20 @@ final class SensorClipping {
         // Black marks are where all three channels clipped, which counts for each of them.
         let all = counts.marks - counts.coloured
         let shares = SIMD3(counts.red + all, counts.green + all, counts.blue + all) / pixels
-        let image = counts.marks > 0 ? Self.image(bytes, width: width, height: height) : nil
+        let image = counts.marks > 0 ? Self.image(bytes, width: width, height: height, space: space) : nil
         return ClippingMarks(image: image, size: size, region: region, shares: shares, allShare: all / pixels)
     }
 
-    private nonisolated static func image(_ bytes: [UInt8], width: Int, height: Int) -> CGImage? {
-        guard let space = CGColorSpace(name: CGColorSpace.displayP3),
+    /// The marks as premultiplied BGRA in `space`, the window's, which Core Animation shows without converting the
+    /// image as it's committed; Display P3, the frame's own, without a window.
+    private nonisolated static func image(_ bytes: [UInt8], width: Int, height: Int, space: CGColorSpace?)
+        -> CGImage? {
+        guard let space = space ?? CGColorSpace(name: CGColorSpace.displayP3),
               let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
         return CGImage(
             width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4, space: space,
-            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue), provider: provider,
-            decode: nil, shouldInterpolate: false, intent: .defaultIntent,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue).union(.byteOrder32Little),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent,
         )
     }
 }
@@ -465,22 +471,22 @@ private struct MarkBand {
         vDSP_vmul(m, 1, o, 1, m, 1, length)
     }
 
-    /// The marks' colours into `p`, 0 ... 255, and what they count: marks, each channel's, and those with a colour
-    /// (the rest being black). `coloured` is scratch, a value a pixel.
+    /// The marks' colours into `p`, 0 ... 255, blue, green, red and alpha, and what they count: marks, each channel's,
+    /// and those with a colour (the rest being black). `coloured` is scratch, a value a pixel.
     private static func paint(
         _ a: UnsafePointer<Float>, mask m: UnsafePointer<Float>, into p: UnsafeMutablePointer<Float>,
         coloured c: UnsafeMutablePointer<Float>, length: vDSP_Length, all: vDSP_Length,
     ) -> (marks: Float, red: Float, green: Float, blue: Float, coloured: Float) {
         var (low, high, scale, none) = (Float(0), Float(1), Float(255), Float(0))
         for channel in 0 ..< 3 {
-            vDSP_vmul(a + channel, 4, m, 1, p + channel, 4, length)
+            vDSP_vmul(a + channel, 4, m, 1, p + 2 - channel, 4, length)
         }
         vDSP_vsadd(m, 1, &none, p + 3, 4, length)
         vDSP_vclip(p, 1, &low, &high, p, 1, all)
         var sums = [Float](repeating: 0, count: 5)
         vDSP_sve(m, 1, &sums[0], length)
         for channel in 0 ..< 3 {
-            vDSP_sve(p + channel, 4, &sums[channel + 1], length)
+            vDSP_sve(p + 2 - channel, 4, &sums[channel + 1], length)
         }
         vDSP_vmax(p, 4, p + 1, 4, c, 1, length)
         vDSP_vmax(c, 1, p + 2, 4, c, 1, length)

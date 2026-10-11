@@ -143,6 +143,9 @@ struct LibraryJudgingTests {
         #expect(drawn.clipping && drawn.peaking && drawn.histogram)
         let spoken = loupe.accessibilityValue() as? String ?? ""
         #expect(spoken.contains("sensor clipping marked") && spoken.contains("focus peaking"), "VoiceOver: \(spoken)")
+        // In the window's colour space, which Core Animation shows without converting them on the main thread.
+        let space = loupe.window?.colorSpace?.cgColorSpace
+        #expect(judging.marks?.image?.colorSpace == space && judging.peakingEntry?.image?.colorSpace == space)
         #expect(judging.clippingFrame == loupe.photoFrame, "the marks lie over the photo")
         #expect(judging.histogram
             .summary == "Clipped on the sensor: red 20%, green 20%, blue 20%, all three 4.0% of the photo")

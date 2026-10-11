@@ -128,11 +128,11 @@ final class FakeClippingEngine: ClippingEngine, @unchecked Sendable {
 /// each channel's share counted, and the engine opened once a photo, only for raws, and let go.
 @MainActor
 struct SensorClippingTests {
-    /// The image's premultiplied RGBA at a pixel.
+    /// The image's premultiplied red, green, blue and alpha at a pixel, from its BGRA.
     private func pixel(_ image: CGImage, _ x: Int, _ y: Int) -> [UInt8] {
         guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return [] }
         let at = y * image.bytesPerRow + x * 4
-        return (0 ..< 4).map { bytes[at + $0] }
+        return [2, 1, 0, 3].map { bytes[at + $0] }
     }
 
     @Test func `the marks are where the frame differs from its comparison, in their channels' colours`() throws {
