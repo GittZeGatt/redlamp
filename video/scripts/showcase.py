@@ -62,6 +62,8 @@ REPO = Path(__file__).resolve().parents[2]
 CLI = Path(os.environ.get("REDLAMP_CLI", REPO / "build/cli/redlamp"))
 FONT = REPO / "video/public/fonts/InterVariable.woff2"
 ICON = REPO / "docs/brand/images/app-icon.png"
+LOGOS = REPO / "docs/brand/logo"
+CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 W, H = 1080, 1350
 MARGIN = 64
@@ -90,6 +92,7 @@ BASIC = [
 CURVE = [("toneCurve.highlights", "Highlights"), ("toneCurve.lights", "Lights"),
          ("toneCurve.darks", "Darks"), ("toneCurve.shadows", "Shadows")]
 RANGES = {"wb.temperature": (2000, 50000), "wb.tint": (-150, 150), "basic.exposure": (-5, 5)}
+GEOMETRY = ("crop.", "transform.")
 BANDS = ["red", "orange", "yellow", "green", "aqua", "blue", "purple", "magenta"]
 
 
@@ -107,9 +110,14 @@ def stock(slug):
     return json.loads(out.stdout)
 
 
+def geometry(edit):
+    """The edit's straighten angle and Transform, which every render of it keeps, the before included."""
+    return {key: value for key, value in edit["values"].items() if key.startswith(GEOMETRY)}
+
+
 def look_recipe(edit, film):
     """The edit's crop and exposure, with the film look's Base Look and its own settings (grain, halation)."""
-    values = dict(film.get("settings", {}).get("values", {}))
+    values = {**geometry(edit), **film.get("settings", {}).get("values", {})}
     for key in ("basic.exposure",):
         if key in edit["values"]:
             values[key] = edit["values"][key]
@@ -122,7 +130,7 @@ def before_recipe(edit):
     recipe = {key: edit[key] for key in ("version", "processVersion", "crop", "orientation") if key in edit}
     recipe.update(treatment="color", whiteBalance="asShot",
                   baseLook={"id": "redlamp/base/color", "version": 1, "name": "Redlamp Color", "amount": 100},
-                  values={})
+                  values=geometry(edit))
     return recipe
 
 
@@ -359,11 +367,39 @@ def label_pill(img, xy, text, f, tracking=0.12, anchor="l"):
 # Slides
 
 
+def logo_mark(variant):
+    """Redlamp's flat mark (docs/brand/logo), cropped to its edges. PIL can't read SVG, so headless Chrome
+    renders it once to a PNG in build/showcase/, which later runs read."""
+    png = REPO / "build/showcase" / f"{variant}-1024.png"
+    if not png.exists():
+        png.parent.mkdir(parents=True, exist_ok=True)
+        page = png.with_suffix(".html")
+        page.write_text(f'<html><body style="margin:0"><img src="{(LOGOS / f"{variant}.svg").as_uri()}" '
+                        'style="width:1024px;height:1024px;display:block"></body></html>')
+        subprocess.run([CHROME, "--headless", "--no-sandbox", "--disable-gpu-sandbox", "--use-angle=swiftshader",
+                        "--enable-unsafe-swiftshader", f"--user-data-dir={png.parent / 'chrome'}", "--hide-scrollbars",
+                        "--default-background-color=00000000", "--window-size=1024,1024", f"--screenshot={png}",
+                        page.as_uri()], check=True, capture_output=True)
+    mark = Image.open(png).convert("RGBA")
+    return mark.crop(mark.getbbox())
+
+
 def cover(after, spec):
+    """The finished photo under BEFORE AND AFTER / IN REDLAMP, with Redlamp's mark in front of the two lines,
+    as tall as their block and a quarter of its height away."""
     img = shade(frame(after, spec["frameTop"]), top=480, strength=0.5)
+    title, line = font(62, 700), font(30, 600)
+    top = MARGIN + 58 + title.getbbox("B", anchor="ls")[1]
+    size = MARGIN + 112 - top
+    behind = np.asarray(img.convert("L").crop((MARGIN, top, MARGIN + size, top + size)), np.float32).mean()
+    mark = logo_mark("redlamp-mark" if behind < 60 else "redlamp-mark-white").resize((size, size), Image.LANCZOS)
+    img = img.convert("RGBA")
+    img.alpha_composite(mark, (MARGIN, top))
+    img = img.convert("RGB")
     d = ImageDraw.Draw(img, "RGBA")
-    draw_text(d, (MARGIN, MARGIN + 58), "BEFORE AND AFTER", font(62, 700), PAPER, tracking=0.02)
-    draw_text(d, (MARGIN, MARGIN + 112), "IN REDLAMP", font(30, 600), PAPER + (215,), tracking=0.2)
+    x = MARGIN + size + round(size / 4)
+    draw_text(d, (x, MARGIN + 58), "BEFORE AND AFTER", title, PAPER, tracking=0.02)
+    draw_text(d, (x, MARGIN + 112), "IN REDLAMP", line, PAPER + (215,), tracking=0.2)
     return img
 
 
@@ -500,7 +536,7 @@ def flow_steps(edit, spec):
     """The steps, each a list of panels: the spec's, or one per panel the edit uses."""
     if spec.get("steps"):
         return spec["steps"]
-    used = {panel_of(key) for key in edit["values"]}
+    used = {panel_of(key) for key in edit["values"] if not key.startswith(GEOMETRY)}
     if edit.get("pointCurve"):
         used.add("toneCurve")
     if flow_masks(edit, spec):
@@ -516,7 +552,8 @@ def step_recipe(edit, panels):
     recipe = before_recipe(edit)
     if "basic" in panels:
         recipe.update({key: edit[key] for key in ("treatment", "whiteBalance", "baseLook") if key in edit})
-    recipe["values"] = {key: value for key, value in edit["values"].items() if panel_of(key) in panels}
+    recipe["values"] = {**geometry(edit), **{key: value for key, value in edit["values"].items()
+                                             if not key.startswith(GEOMETRY) and panel_of(key) in panels}}
     if "toneCurve" in panels and edit.get("pointCurve"):
         recipe["pointCurve"] = edit["pointCurve"]
     if "masking" in panels and edit.get("masks"):
