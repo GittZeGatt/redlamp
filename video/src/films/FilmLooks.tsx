@@ -246,7 +246,7 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
 
 /**
  * Redlamp's flat mark beside the hook from the first frame, so the brand is there before anything moves: the
- * one-colour white version, for photographic backgrounds, unaltered, a quarter of its height from the words,
+ * colour version with its red disc, as the owner chose, unaltered, a quarter of its height from the words,
  * leaving with the hook's lines.
  */
 function HookMark({ frame, out, size }: { frame: number; out: number; size: number }) {
@@ -255,7 +255,7 @@ function HookMark({ frame, out, size }: { frame: number; out: number; size: numb
   if (o > 0.999) return null;
   return (
     <Img
-      src={staticFile("synced/brand/logo/redlamp-mark-white.svg")}
+      src={staticFile("synced/brand/logo/redlamp-mark.svg")}
       style={{ display: "block", flex: "none", height: size, width: size, opacity: 1 - o, transform: `translateY(${-o * size * 0.2}px)` }}
     />
   );
