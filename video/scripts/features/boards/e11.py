@@ -578,8 +578,8 @@ PANELS = [
             "The full beat comes in; a key for ↵ on the bar's first beat and air falling as the palette rolls up, "
             "⇧ down half a beat later, and a key and a slider tick for each → a beat apart."),
     w.Panel(5, 9.6, at(s4 + 3.2), " / ".join(CAPTIONS[3][1]),
-            "A key for ↓, 2, 0 and ↵ a beat apart, and a tick as ↵ sets Contrast; toms fall into the stop, and the "
-            "riff's E flat holds through it."),
+            "A key for ↓, 2, 0 and ↵ a beat apart, and a tick as ↵ sets Contrast; a snare roll doubles into the "
+            "stop, and the riff's F sharp holds through it."),
     w.Panel(6, 12.0, at(CUE["flip"] + 0.6), " / ".join(CAPTION_RESULT) + "; before, then after at 13.2 s",
             "The drop and the sting; a tick and a burst of sparkles as the field develops on the flip."),
     w.Panel(7, 14.4, at(CUE["cta"] + 0.5), " / ".join(EPISODE["endLine"]) + ", then " + " / ".join(w.END_CARD),
