@@ -79,6 +79,8 @@
             }
             try app.wait("every frame again", timeout: 20) { $0.items.count == 7 }
 
+            let checked = try app.main { _ in item("Bursts Only")?.state == .on && item("Off")?.state == .off }
+            try app.expect(checked, "The Proposals menu checks Bursts Only")
             try choose(app, "Soft Frames")
             try app.wait("the menu's Soft Frames to show them alone", timeout: 20) { model in
                 model.libraryFilters?.filter.text == "is:soft" && model.items.map(\.name).sorted() == [
