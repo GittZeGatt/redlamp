@@ -219,6 +219,7 @@ final class PaletteSession {
         case let .historyStep(index): model.history.indices.contains(index) ? model.history[index].name : "Step"
         case let .filterPreset(id): model.libraryFilters?.presets.first { $0.id == id }?.name ?? id
         case let .customLabel(name): name
+        case .customLabels: "Custom Labels…"
         case let .libraryName(.folder, path), let .photo(path): URL(fileURLWithPath: path).lastPathComponent
         case let .libraryName(_, value): value
         case let .photosNamed(text): "Photos Named “\(text)”"
