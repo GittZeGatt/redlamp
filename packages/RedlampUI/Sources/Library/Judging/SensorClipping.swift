@@ -89,12 +89,14 @@ final class SensorClipping {
         var opening = Duration.zero
         var rendered = 0
         var rendering = Duration.zero
+        /// Times the engine let its photos go, no host wanting any.
+        var relieved = 0
     }
 
     /// How long a frame may take before the request gives up.
     static let frameTimeout = Duration.seconds(20)
-    /// How long the engine is kept with nothing asked of it, as the library's renders keep theirs.
-    static let idleRelease = Duration.seconds(10)
+    /// How long the engine keeps its photos once no host wants any, as the library's renders keep theirs.
+    let idleRelease: Duration
 
     private let makeEngine: () -> (any ClippingEngine)?
     private var engine: (any ClippingEngine)?
@@ -113,19 +115,17 @@ final class SensorClipping {
     private var idle: Task<Void, Never>?
     private(set) var statistics = Statistics()
 
-    init(makeEngine: @escaping () -> (any ClippingEngine)?) {
+    init(idleRelease: Duration = .seconds(10), makeEngine: @escaping () -> (any ClippingEngine)?) {
+        self.idleRelease = idleRelease
         self.makeEngine = makeEngine
     }
 
     /// The marks for `request`; nil when the photo can't be read. Throws `CancellationError` when the caller's task
     /// was cancelled first, or the engine dropped the photo, so it's asked for again rather than taken for unreadable.
     func marks(_ request: Request) async throws -> ClippingMarks? {
-        idle?.cancel()
-        idle = nil
         await takeTurn()
         defer {
             endTurn()
-            releaseWhenIdle()
         }
         try Task.checkCancellation()
         guard SupportedFormats.isRaw(request.url), let engine = engineReady() else { return nil }
@@ -184,13 +184,18 @@ final class SensorClipping {
         } else {
             wanted.append((id, raws))
         }
+        idle?.cancel()
+        idle = nil
         sendList(first: nil)
     }
 
-    /// `host` shows nothing now: its photos aren't decoded ahead any longer.
+    /// `host` shows no raw now, or no tool that reads one: its photos aren't decoded ahead any longer, and once no
+    /// host wants any, the engine lets them go after `idleRelease`.
     func forget(_ host: AnyObject) {
         let id = ObjectIdentifier(host)
+        guard wanted.contains(where: { $0.host == id }) else { return }
         wanted.removeAll { $0.host == id }
+        releaseWhenIdle()
     }
 
     /// The hosts' photos, `first` before them, each host's shown photo before the photos around them.
@@ -203,15 +208,25 @@ final class SensorClipping {
         guard !merged.isEmpty, merged != listed, let engine = engineReady() else { return }
         listed = merged
         engine.prefetch(merged)
-        releaseWhenIdle()
     }
 
+    /// While no host wants a raw, lets the engine's photos go after `idleRelease`, in a turn of its own so no request
+    /// is opening one meanwhile. The engine stays: making one again holds the main thread.
     private func releaseWhenIdle() {
         idle?.cancel()
+        idle = nil
+        guard wanted.isEmpty, engine != nil else { return }
         idle = Task { [weak self] in
-            try? await Task.sleep(for: Self.idleRelease)
-            guard !Task.isCancelled, let self, !busy else { return }
-            release()
+            guard let delay = self?.idleRelease else { return }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, wanted.isEmpty else { return }
+            await takeTurn()
+            defer { endTurn() }
+            guard !Task.isCancelled, wanted.isEmpty, let engine else { return }
+            opened = nil
+            listed = []
+            statistics.relieved += 1
+            await engine.releaseResources()
         }
     }
 

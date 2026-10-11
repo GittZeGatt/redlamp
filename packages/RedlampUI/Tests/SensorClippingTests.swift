@@ -211,6 +211,26 @@ struct SensorClippingTests {
         #expect(engine.prefetched.withLock { $0.last } == [photos[1], photos[2]], "a host showing nothing has no say")
     }
 
+    @Test func `the engine keeps its photos while a view wants raws, and lets them go a while after none does`(
+    ) async throws {
+        let engine = FakeClippingEngine.corner()
+        let clipping = SensorClipping(idleRelease: .milliseconds(50)) { engine }
+        let host = NSObject()
+        let photo = URL(fileURLWithPath: "/photos/IMG_0001.NEF")
+        let request = SensorClipping.Request(
+            url: photo, recipe: EditRecipe(), size: PixelSize(width: 64, height: 64), region: nil,
+        )
+        clipping.prefetch([photo], for: host)
+        _ = try await clipping.marks(request)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(engine.releases.withLock { $0 } == 0, "a photo looked at for a while keeps the ones decoded ahead")
+        clipping.forget(host)
+        try await waitUntil { engine.releases.withLock { $0 } == 1 }
+        #expect(clipping.hasEngine && clipping.statistics.relieved == 1, "the engine stays, its photos gone")
+        _ = try await clipping.marks(request)
+        #expect(engine.opened.withLock { $0 } == [photo, photo], "opened again once its photos went")
+    }
+
     @Test func `a frame the sensor clipped nothing in has no marks`() throws {
         let size = PixelSize(width: 130, height: 300)
         let plain = { (column: Int, row: Int) in SIMD4<Float>(Float(column) / 130, Float(row) / 300, 0.5, 1) }

@@ -62,8 +62,8 @@ final class AFPointCache {
 /// following loupe, as the alpha its layer shows.
 @MainActor
 final class PeakingCache {
-    /// A photo's peaking: the mask at the size read, and its alpha image for the zoomed views. Made off the main
-    /// thread, then read and pooled again only on it.
+    /// A photo's peaking: the mask at the size read, and its image for the zoomed views. Made off the main thread;
+    /// `shown` is read and set only on the main actor, and pooled again off it.
     final class Entry: @unchecked Sendable {
         let mask: PeakingMask
         let image: CGImage?
@@ -78,15 +78,29 @@ final class PeakingCache {
             }
         }
 
-        /// The alpha image to show the photo `longEdge` pixels long at, pooled from the mask when it's larger.
-        func image(forLongEdge longEdge: Int) -> CGImage? {
-            guard longEdge < max(mask.width, mask.height) else { return image }
-            if let shown, shown.longEdge == longEdge {
-                return shown.image
-            }
-            let image = mask.pooled(toLongEdge: longEdge).image()
-            shown = (longEdge, image)
-            return image
+        /// The image to show the photo `longEdge` pixels long at: the mask's own when it isn't larger, else the
+        /// mask pooled to that size, nil until it's been pooled (`PeakingCache.pool`).
+        func image(forLongEdge longEdge: Int) -> CGImage?? {
+            guard longEdge < max(mask.width, mask.height) else { return .some(image) }
+            guard let shown, shown.longEdge == longEdge else { return nil }
+            return .some(shown.image)
+        }
+    }
+
+    /// The entries being pooled and the long edge each is pooled to.
+    private var pooling: [ObjectIdentifier: Int] = [:]
+
+    /// Pools `entry`'s mask for a photo shown `longEdge` pixels long, off the main thread, then calls `done`.
+    func pool(_ entry: Entry, toLongEdge longEdge: Int, scheduler: WorkScheduler, then done: @escaping () -> Void) {
+        let id = ObjectIdentifier(entry)
+        guard pooling[id] != longEdge else { return }
+        pooling[id] = longEdge
+        Task { [weak self] in
+            let image = try? await scheduler.run(.onScreen) { entry.mask.pooled(toLongEdge: longEdge).image() }
+            guard let self, pooling[id] == longEdge else { return }
+            pooling[id] = nil
+            entry.shown = (longEdge, image ?? nil)
+            done()
         }
     }
 

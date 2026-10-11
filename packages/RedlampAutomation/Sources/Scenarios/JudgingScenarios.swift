@@ -10,10 +10,11 @@
     enum JudgingScenarios {
         static let all: [Scenario] = [judging]
 
-        /// The Pixel 4a's street lights, which its sensor clipped (UX-05), and the Nikon Z 6's frame, whose maker
-        /// notes give the AF area.
+        /// The Pixel 4a's street lights, which its sensor clipped (UX-05), the Nikon Z 6's frame, whose maker notes
+        /// give the AF area, and the Sony's sun, clipped too, with its AF point.
         private static let clipped = "PXL_20201121_100251397.dng"
         private static let focused = "DSC_0750.NEF"
+        private static let sun = "_DSC0009.ARW"
 
         /// What's drawn over the photo of the view carrying `identifier`, as its accessibility value says.
         @MainActor private static func spoken(_ identifier: String) -> String {
@@ -62,7 +63,8 @@
             try app.withCulling { names in
                 defer { _ = try? app.main { allOff($0) } }
                 try app.expect(
-                    names.contains(clipped) && names.contains(focused), "The folder lacks \(clipped) or \(focused)",
+                    [clipped, focused, sun].allSatisfy(names.contains),
+                    "The folder lacks \(clipped), \(focused) or \(sun)",
                 )
                 try app.click(.identifier("grid.\(clipped)"))
                 try app.wait("\(clipped) active") { $0.selection?.lastPathComponent == clipped }
@@ -123,8 +125,18 @@
                         .contains("focus peaking") && clippingRead("library.loupe")
                 }
 
+                // Two raws side by side: C compares the active photo with the other selected.
+                try app.press(.gridView)
+                try app.wait("the grid") { $0.libraryView == .grid }
+                try app.clickView("grid.\(sun)", modifiers: .command)
+                try app.wait("\(sun) active beside \(focused)") { model in
+                    model.selection?.lastPathComponent == sun && model.selectedPhotos.count == 2
+                }
                 try app.press(.compareView)
-                try app.wait("Compare") { $0.libraryView == .compare }
+                try app.wait("Compare of \(sun) and \(focused)") { model in
+                    model.libraryView == .compare && model.libraryCompare.select?.lastPathComponent == sun
+                        && model.libraryCompare.candidate?.lastPathComponent == focused
+                }
                 let sides = ["library.compare.select", "library.compare.candidate"]
                 do {
                     try app.wait("each tool over both photos", timeout: 60) { _ in
@@ -142,10 +154,7 @@
                     }
                     throw ScenarioFailure("\(error); \(state)")
                 }
-                try app.expect(
-                    try app.main { _ in spoken("library.compare.select").contains("AF point") },
-                    "\(focused)'s AF area isn't drawn in Compare",
-                )
+                try app.wait("both photos' AF points") { _ in sides.allSatisfy { spoken($0).contains("AF point") } }
                 try app.hover(.identifier("library.compare.select"), at: CGPoint(x: 0.5, y: 0.5))
                 try app.wait("a lens over the same point of both photos") { _ in
                     sides.allSatisfy { spoken($0).contains("loupe at 400%") }

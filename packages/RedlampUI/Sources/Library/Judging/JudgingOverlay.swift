@@ -239,6 +239,8 @@ final class JudgingOverlay {
         if model.showRawClipping || judging.showsHistogram {
             requestMarks()
             requestRegionMarks()
+        } else {
+            judging.clipping?.forget(self)
         }
         if judging.showsPeaking {
             requestPeaking()
@@ -503,7 +505,19 @@ final class JudgingOverlay {
         }
         peaking.frame = frame
         let longEdge = Int((max(frame.width, frame.height) * placement.scale).rounded())
-        peaking.contents = peakingEntry?.image(forLongEdge: longEdge)
+        if let entry = peakingEntry {
+            if let image = entry.image(forLongEdge: longEdge) {
+                peaking.contents = image
+            } else {
+                // The nearest image there is, until the mask's pooled for this size.
+                peaking.contents = entry.shown?.image ?? entry.image
+                model.libraryJudging.peaking.pool(entry, toLongEdge: longEdge, scheduler: model.library.scheduler) {
+                    [weak self] in self?.layoutLayers()
+                }
+            }
+        } else {
+            peaking.contents = nil
+        }
         afPoints.frame = frame
         let areas = shownAreas
         // Areas chosen where the camera didn't focus are drawn dashed, and only when it focused nowhere.
