@@ -110,6 +110,15 @@ extension LibraryFilterTests {
         #expect(bar.field.pieces == [.token("rating>=3"), .token("camera:\"Fujifilm X-T5\"")])
         try await eventually { bar.completions.isHidden }
 
+        // ⌫ after a token takes it out, as it takes out a character.
+        editor.deleteBackward(nil)
+        #expect(bar.field.pieces == [.token("rating>=3")] && filters.filter.text == "rating>=3")
+        for character in " camera:fu" {
+            LibraryFilterBars.type(String(character), in: window)
+        }
+        try await eventually { filters.completions.first?.title == "Fujifilm X-T5" && !bar.completions.isHidden }
+        #expect(bar.control(bar.field, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
+
         for character in "ori" {
             LibraryFilterBars.type(String(character), in: window)
         }

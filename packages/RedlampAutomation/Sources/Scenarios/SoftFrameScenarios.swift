@@ -44,7 +44,7 @@
             try app.wait("the filter bar's text to take the keyboard") { _ in
                 (Views.editorWindow?.firstResponder as? NSTextView)?.delegate is NSTextField
             }
-            try app.clickView("library.filter.attribute", modifiers: .shift)
+            try app.clickButton("library.filter.attribute")
             try app.wait("the Attribute section") { model in
                 model.libraryFilters?.filter.sections.contains(.attribute) == true
             }

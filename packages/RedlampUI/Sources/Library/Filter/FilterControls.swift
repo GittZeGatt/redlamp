@@ -1,9 +1,10 @@
 import AppKit
 import RedlampDesign
 
-/// A button of the filter bar: a title or a symbol, in a colour of its own (a label's), lit while it's
-/// on, acting as it's pressed, as the Library toolbar's buttons do. ⇧ and ⌘ held reach `onPress`.
-final class FilterToggle: NSView {
+/// A button of the filter bar's Attribute row (LIB-45): the system's accessory bar button, which stays lit while it's
+/// on, with a title or a symbol in a colour of its own (a label's); ⇧ and ⌘ held reach `onPress`. Its state follows
+/// `isOn`, which the filter sets, rather than the click.
+final class FilterToggle: NSButton {
     var onPress: ((NSEvent.ModifierFlags) -> Void)?
     var isOn = false {
         didSet {
@@ -16,36 +17,29 @@ final class FilterToggle: NSView {
     var symbol: String? {
         didSet {
             if symbol != oldValue {
-                image.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+                image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
             }
         }
     }
 
-    private let image = NSImageView()
-    private let label = NSTextField(labelWithString: "")
     private let color: NSColor?
 
     init(symbol: String? = nil, title: String? = nil, color: NSColor? = nil, identifier: String, tip: String) {
         self.color = color
         super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 4
+        bezelStyle = .accessoryBar
+        setButtonType(.pushOnPushOff)
+        controlSize = .small
+        font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        self.title = title ?? ""
         if let symbol {
-            image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
-            addSubview(image)
+            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            imagePosition = title == nil ? .imageOnly : .imageLeading
         }
         self.symbol = symbol
-        if let title {
-            label.stringValue = title
-            label.font = Typography.caption.nsFont
-            label.alignment = .center
-            label.lineBreakMode = .byTruncatingTail
-            addSubview(label)
-        }
+        target = self
+        action = #selector(pressed)
         toolTip = tip
-        setAccessibilityElement(true)
-        setAccessibilityRole(.button)
         setAccessibilityIdentifier(identifier)
         setAccessibilityLabel(tip)
         update()
@@ -56,54 +50,33 @@ final class FilterToggle: NSView {
         fatalError("init(coder:) is not supported")
     }
 
-    /// The width its title or symbol needs.
+    /// The width its title or symbol needs, its bezel close around it so the row's every button fits beside the
+    /// others in a window 1,600 points wide.
     var fittingWidth: CGFloat {
-        label.stringValue.isEmpty ? 22 : ceil(label.intrinsicContentSize.width) + 12
-    }
-
-    /// Its title, for a button made with one.
-    var title: String {
-        get { label.stringValue }
-        set {
-            if label.stringValue != newValue {
-                label.stringValue = newValue
-                needsLayout = true
-            }
+        let text = title.isEmpty ? 0 : ceil((title as NSString).size(withAttributes: [.font: font as Any]).width)
+        return switch (image != nil, text > 0) {
+        case (true, false): 24
+        case (true, true): text + 32
+        default: text + 14
         }
     }
 
     private func update() {
-        let tint = color ?? (isOn ? Palette.label : Palette.secondaryLabel).nsColor
-        image.contentTintColor = color.map { isOn ? $0 : $0.withAlphaComponent(0.55) } ?? tint
-        label.textColor = tint
-        layer?.backgroundColor = isOn ? NSColor(white: 1, alpha: 0.16).cgColor : nil
-        layer?.borderColor = NSColor(white: 1, alpha: isOn ? 0.35 : 0).cgColor
-        layer?.borderWidth = isOn ? 1 : 0
-        setAccessibilityValue(isOn ? "on" : "off")
+        state = isOn ? .on : .off
+        contentTintColor = color.map { isOn ? $0 : $0.withAlphaComponent(0.55) }
     }
 
-    override func layout() {
-        super.layout()
-        image.frame = bounds.insetBy(dx: 3, dy: 2)
-        let height = label.intrinsicContentSize.height
-        label.frame = CGRect(x: 0, y: (bounds.height - height) / 2, width: bounds.width, height: height)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        !isHidden && frame.contains(point) ? self : nil
+    override func accessibilityValue() -> Any? {
+        isOn ? "on" : "off"
     }
 
     override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
         true
     }
 
-    override func mouseDown(with event: NSEvent) {
-        onPress?(event.modifierFlags)
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        onPress?([])
-        return true
+    @objc private func pressed() {
+        state = isOn ? .on : .off
+        onPress?(NSApp.currentEvent?.modifierFlags.intersection([.shift, .command]) ?? [])
     }
 }
 

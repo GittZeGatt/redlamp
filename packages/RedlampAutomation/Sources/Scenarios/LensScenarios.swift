@@ -90,7 +90,7 @@
             try clear(app)
 
             try app.main { $0.libraryFilters?.setColumns([.focal35, .widestAperture]) }
-            try app.clickView("library.filter.metadata", modifiers: .shift)
+            try app.clickButton("library.filter.metadata")
             try app.wait("the Metadata section") { model in
                 model.libraryFilters?.filter.sections.contains(.metadata) == true
             }

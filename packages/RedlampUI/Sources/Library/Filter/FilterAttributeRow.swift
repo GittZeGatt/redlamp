@@ -191,12 +191,12 @@ final class FilterAttributeRow: NSView {
             }
             if shown {
                 let width = filterWidth(group.label)
-                group.label.frame = CGRect(x: x, y: (bounds.height - 16) / 2, width: width, height: 16)
+                group.label.frame = CGRect(x: x, y: (bounds.height - 15) / 2, width: width, height: 15)
                 x += width + 4
             }
             for control in group.controls {
                 let controlWidth = width(of: control)
-                control.frame = CGRect(x: x, y: (bounds.height - 20) / 2, width: controlWidth, height: 20)
+                control.frame = CGRect(x: x, y: (bounds.height - 22) / 2, width: controlWidth, height: 22)
                 x += controlWidth + 1
             }
             x += gap

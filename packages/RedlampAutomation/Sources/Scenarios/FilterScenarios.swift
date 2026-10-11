@@ -103,6 +103,30 @@
         func filterText() throws -> String {
             try main { $0.libraryFilters?.filter.text ?? "" }
         }
+
+        /// Clicks the button under `identifier` as `clickView` clicks a view, its release queued ahead of the press:
+        /// a button's press tracks the mouse until the release, which a release sent after it can't reach.
+        func clickButton(_ identifier: String) throws {
+            let frame = try frame(of: .identifier(identifier))
+            let location = NSPoint(x: frame.midX, y: frame.midY)
+            try main { _ in
+                guard let window = Views.editorWindow,
+                      let view = window.contentView?.superview?.hitTest(location) else {
+                    throw ScenarioFailure("Nothing to click at \(identifier)")
+                }
+                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                    NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                    )
+                }
+                guard events.count == 2 else { return }
+                NSApp.postEvent(events[1], atStart: true)
+                view.mouseDown(with: events[0])
+            }
+            pause(0.05)
+        }
     }
 
     extension Keyboard {
@@ -189,16 +213,16 @@
                 try app.main { model in
                     model.libraryFilters?.setColumns([.kind, .camera])
                 }
-                try app.clickView("library.filter.attribute", modifiers: .shift)
-                try app.clickView("library.filter.metadata", modifiers: .shift)
+                try app.clickButton("library.filter.attribute")
+                try app.clickButton("library.filter.metadata")
                 try app.wait("the three sections") { model in
                     model.libraryFilters?.filter.sections == [.text, .attribute, .metadata]
                 }
-                try app.clickView("library.filter.kind.raw")
+                try app.clickButton("library.filter.kind.raw")
                 try app.wait("the Raw button's filter in the text") { model in
                     model.libraryFilters?.filter.text == "ext:raw" && model.items.count == raws.count
                 }
-                try app.clickView("library.filter.kind.raw")
+                try app.clickButton("library.filter.kind.raw")
                 try app.wait("Raw again to take it out") { $0.libraryFilters?.filter.text.isEmpty == true }
                 try app.wait("the File Type column's counts", timeout: 20) { model in
                     model.libraryFilters?.columns[0]?.values.contains { $0.name == "raw" } == true
@@ -217,7 +241,7 @@
                     try app.main { $0.libraryFilters?.columns[0]?.total == names.count },
                     "The first column counts every photo",
                 )
-                try app.clickView("library.filter.offline")
+                try app.clickButton("library.filter.offline")
                 try app.wait("offline photos only: none") { model in
                     model.libraryFilters?.filter.text == "ext:raw offline:yes" && model.items.isEmpty
                 }
@@ -338,7 +362,7 @@
                 try app.wait("its button on screen") { _ in
                     Views.editorWindow.flatMap { Views.find("library.filter.removal", in: $0) } != nil
                 }
-                try app.clickView("library.filter.removal")
+                try app.clickButton("library.filter.removal")
                 try app.wait("the raws back, the keyword taken out") { model in
                     model.libraryFilters?.filter.text == "ext:raw" && model.items.count == raws.count
                         && model.libraryFilters?.removal == nil
@@ -385,7 +409,7 @@
                     return !button.isHiddenOrHasHiddenAncestor
                         && button.accessibilityLabel() == "Did you mean Lisbon? 2 photos"
                 }
-                try app.clickView("library.filter.suggestion")
+                try app.clickButton("library.filter.suggestion")
                 try app.wait("Lisbon in place of lisbom, and its two photos") { model in
                     model.libraryFilters?.filter.text == "Lisbon" && Set(model.items.map(\.url)) == [a, b]
                         && model.libraryFilters?.suggestion == nil
@@ -439,15 +463,15 @@
                     }
                     app.covered(.feature("library.filter"), via: .key)
 
-                    try app.clickView("library.filter.attribute", modifiers: .shift)
+                    try app.clickButton("library.filter.attribute")
                     try app.wait("the Attribute section") { model in
                         model.libraryFilters?.filter.sections.contains(.attribute) == true
                     }
-                    try app.clickView("library.filter.unpicked-moments")
+                    try app.clickButton("library.filter.unpicked-moments")
                     try app.wait("its Moment button to take the term out") { model in
                         model.libraryFilters?.filter.text.isEmpty == true && model.items.count == all.count
                     }
-                    try app.clickView("library.filter.unpicked-moments")
+                    try app.clickButton("library.filter.unpicked-moments")
                     try app.wait("and to put it back") { model in
                         model.libraryFilters?.filter.text == "is:unpicked-moment"
                             && Set(model.items.map(\.name)) == unpicked[0]
@@ -515,15 +539,15 @@
             }
             app.covered(.feature("library.filter"), via: .key)
 
-            try app.clickView("library.filter.attribute", modifiers: .shift)
+            try app.clickButton("library.filter.attribute")
             try app.wait("the Attribute section") { model in
                 model.libraryFilters?.filter.sections.contains(.attribute) == true
             }
-            try app.clickView("library.filter.damaged")
+            try app.clickButton("library.filter.damaged")
             try app.wait("its Damaged button to take the term out") { model in
                 model.libraryFilters?.filter.text.isEmpty == true && model.items.count == 3
             }
-            try app.clickView("library.filter.damaged")
+            try app.clickButton("library.filter.damaged")
             try app.wait("and to put it back") { model in
                 model.libraryFilters?.filter.text == "is:damaged" && model.items.map(\.name) == ["Empty.jpg"]
             }
