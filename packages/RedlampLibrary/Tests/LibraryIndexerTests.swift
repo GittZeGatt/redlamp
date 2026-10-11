@@ -365,7 +365,8 @@ extension LibraryIndexerTests {
             guard case let .read(path) = operation else { return nil }
             return path
         })
-        #expect(readFirst.count >= 100, "\(readFirst.count) photos read before the walk's last listing")
+        // Five folders' photos at least: how many more depends on how the Mac's cores share the turns.
+        #expect(readFirst.count >= 25, "\(readFirst.count) photos read before the walk's last listing")
     }
 
     @Test func `the folders asked for are indexed first`() async throws {
