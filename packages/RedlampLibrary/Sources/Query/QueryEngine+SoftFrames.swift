@@ -102,6 +102,21 @@ public extension QueryEngine {
     var measuredCount: Int? {
         withSoftFrames { _, state in state.sharpness?.count }
     }
+
+    /// The photos of `source` the soft-frame check measures, in the order to measure them: each burst's frames, then
+    /// the frames of its moments (as `setting` finds them) of more than one; a raw and its JPEG once, by the raw.
+    /// Those measured already are among them. Off the caller's thread.
+    func softFrameCandidates(of source: PhotoSource, setting: MomentSetting = MomentSetting()) async throws -> [Int64] {
+        try await Task.detached(priority: .utility) { [self] in
+            if await loadedSnapshot() == nil {
+                try await load()
+            }
+            guard let (store, vocabulary, generation) = snapshot() else { return [] }
+            let stacks = try await softFrameStacks(in: store, generation: generation)
+            let rows = try await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+            return store.softFrameCandidates(of: rows, stacks: stacks, setting: setting)
+        }.value
+    }
 }
 
 extension QueryEngine {
@@ -175,7 +190,7 @@ extension QueryEngine {
     }
 
     /// The library's stacks for `store`, found once for each version of it.
-    private func softFrameStacks(in store: ColumnStore, generation: Int) async throws -> Stacks {
+    func softFrameStacks(in store: ColumnStore, generation: Int) async throws -> Stacks {
         if let kept = withSoftFrames({ _, state in
             state.stacks.flatMap { $0.generation == generation ? $0.stacks : nil } }) {
             return kept

@@ -40,11 +40,17 @@ public struct PhotoSharpness: Sendable, Hashable {
 public enum SharpnessReader {
     /// `url`'s sharpness, its upright size `imageSize` (as the index has it, which Fujifilm's and SubjectArea's AF
     /// points are counted in): reading the file on `scheduler`'s background lane, which waits while anything on screen
-    /// does, and drawing and measuring its preview there.
+    /// does, and drawing and measuring its preview there. Throws when the file can't be read, so a file away isn't
+    /// taken for one without a preview.
     public static func measure(
         _ url: URL, imageSize: CGSize?, scheduler: WorkScheduler,
     ) async throws -> PhotoSharpness {
-        let points = try await scheduler.run(.background) { AFPointReader.read(url, imageSize: imageSize) }
+        let points = try await scheduler.run(.background) {
+            guard FileManager.default.isReadableFile(atPath: url.path) else {
+                throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: url.path])
+            }
+            return AFPointReader.read(url, imageSize: imageSize)
+        }
         if let points, let preview = await LargestPreview.open(url),
            let rect = SharpnessMeasure.region(around: points.areas, width: preview.width, height: preview.height) {
             return try await scheduler.run(.background) {

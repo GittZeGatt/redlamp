@@ -80,6 +80,46 @@ extension ColumnStore {
         return SoftFrames.judge(frames, bursts: ordering.compactMap { bursts[$0] }, moments: moments, mode: mode)
     }
 
+    /// The photos of `rows` worth measuring, in the order to measure them: each burst's frames, then the frames of
+    /// moments (as `setting` finds them) of more than one frame; a raw and its JPEG once, by the raw.
+    func softFrameCandidates(of rows: RowBits, stacks: Stacks, setting: MomentSetting) -> [Int64] {
+        let ordered = datedRows(of: rows)
+        var frames: [Int64] = []
+        var times = ContiguousArray<Int64>()
+        var inBursts: [Int64] = []
+        frames.reserveCapacity(ordered.count)
+        times.reserveCapacity(ordered.count)
+        let pairCount = stacks.pairOf.count
+        captured.withUnsafeBufferPointer { captured in
+            for row in ordered {
+                let id = ids[Int(row)]
+                let pair = id >= 0 && id < pairCount ? Int(stacks.pairOf[Int(id)]) : -1
+                if pair >= 0, let top = stacks.members(of: pair).first, top != id, let topRow = self.row(of: top),
+                   rows.contains(topRow) {
+                    continue
+                }
+                let group = id >= 0 && id < stacks.groupOf.count ? stacks.groupOf[Int(id)] : -1
+                if group >= 0, stacks.kinds[Int(group)] == .burst {
+                    inBursts.append(id)
+                }
+                frames.append(id)
+                times.append(captured[Int(row)])
+            }
+        }
+        let starts = times.withUnsafeBufferPointer { MomentFinder.starts($0, setting: setting) }
+        var candidates = inBursts
+        let measured = Set(inBursts)
+        var first = 0
+        for start in starts + [Int32(frames.count)] {
+            let moment = frames[first ..< Int(start)]
+            if moment.count > 1 {
+                candidates.append(contentsOf: moment.lazy.filter { !measured.contains($0) })
+            }
+            first = Int(start)
+        }
+        return candidates
+    }
+
     /// The rows of `rows` with a capture time, in capture order.
     private func datedRows(of rows: RowBits) -> ContiguousArray<Int32> {
         var dated = ContiguousArray<Int32>()

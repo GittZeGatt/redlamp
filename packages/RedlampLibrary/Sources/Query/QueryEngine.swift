@@ -97,16 +97,19 @@ public final class QueryEngine: Sendable {
         state.withLock { state in body(state.generation, &state.softFrames) }
     }
 
-    /// Drops the rows the soft-frame terms found, and every result, once the mode they were found in changes.
+    /// Drops what the soft-frame terms found, and the results and counts of queries with them, once the mode they were
+    /// found in or the measurements they were judged from change.
     func dropSoftFrameResults() {
-        state.withLock { state in
-            state.rowSets = state.rowSets.filter { key, _ in
-                if case .softFrames = key {
-                    return false
-                }
+        func isSoftFrames(_ set: QueryPlan.RowSet) -> Bool {
+            if case .softFrames = set {
                 return true
             }
-            state.matches.removeAll()
+            return false
+        }
+        state.withLock { state in
+            state.rowSets = state.rowSets.filter { !isSoftFrames($0.key) }
+            state.matches = state.matches.filter { !$0.key.rowSets.contains(where: isSoftFrames) }
+            state.columnCounts = state.columnCounts.filter { $0.key.query?.findsSoftFrames != true }
             state.softFrames.verdicts.removeAll()
         }
     }
