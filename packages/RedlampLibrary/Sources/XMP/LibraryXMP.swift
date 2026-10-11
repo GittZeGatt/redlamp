@@ -156,9 +156,12 @@ public struct LibraryXMP: Sendable {
         }
     }
 
-    /// The photos whose `.redlamp` sidecars changed in `report`: the rows to hand `LibraryLive`.
+    /// The photos whose `.redlamp` sidecars changed in `report`, or that went back to other apps' values: the rows to
+    /// hand `LibraryLive`.
     public static func changedPhotos(_ report: XMPReport) -> [Int64] {
-        report.dryRun ? [] : report.photos.filter { !$0.taken.isEmpty && $0.problem == nil }.compactMap(\.photo)
+        guard !report.dryRun else { return [] }
+        return report.photos.filter { !($0.taken.isEmpty && $0.restored.isEmpty) && $0.problem == nil }
+            .compactMap(\.photo)
     }
 
     /// Removes what's recorded of photos the index no longer has, but for those a batch of the file journal

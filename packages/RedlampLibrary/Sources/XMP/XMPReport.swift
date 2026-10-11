@@ -22,6 +22,8 @@ public struct XMPPhotoSync: Sendable, Hashable {
     public var taken: [XMPField]
     /// Fields both changed, where the `.redlamp`'s later value stayed.
     public var kept: [XMPField]
+    /// Fields its `.redlamp` holds none of again that go back to what other apps had written (LIB-24).
+    public var restored: [XMPField] = []
     /// Fields written to the `.xmp`, or that would be in a dry run.
     public var written: [XMPField] = []
     /// Fields the `.redlamp` decides that the `.xmp` doesn't hold, since writing is off.

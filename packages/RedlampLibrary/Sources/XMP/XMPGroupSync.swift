@@ -23,9 +23,9 @@ struct XMPGroupOutcome: Sendable {
     var photos: [XMPPhotoSync] = []
     var records: [Int64: XMPMergeRecord] = [:]
     var dropped: [Int64] = []
-    /// Photos whose `.redlamp` took other apps' fields, with its fields as merged.
+    /// Photos whose `.redlamp` took other apps' fields, or that went back to theirs, with the fields as merged.
     var organising: [(id: Int64, fields: XMPFields)] = []
-    /// Photos whose `.redlamp` took other apps' keywords, with them.
+    /// Photos whose `.redlamp` took other apps' keywords, or that went back to theirs, with them.
     var keywords: [(id: Int64, paths: [String])] = []
     /// Photos whose `.redlamp` took other apps' capture time, with its fields as merged.
     var captures: [(id: Int64, fields: XMPFields)] = []
@@ -282,13 +282,13 @@ extension XMPGroup {
                 continue
             }
             guard !side.failed else { continue }
-            if !merge.takenIn.isEmpty {
+            if !merge.takenIn.isEmpty || !merge.restored.isEmpty {
                 outcome.organising.append((id, merge.fields))
             }
             if let saved = side.saved {
                 outcome.sidecars.append((id, saved, merge.takenIn))
             }
-            if merge.takenIn.contains(.keywords) {
+            if merge.takenIn.contains(.keywords) || merge.restored.contains(.keywords) {
                 outcome.keywords.append((id, merge.fields.keywords ?? []))
             }
             if merge.takenIn.contains(.captureTime) {
@@ -305,13 +305,62 @@ extension XMPGroup {
                 sidecar: written ?? file.stamp, darktable: side.member.darktable.map(XMPFileStamp.init),
                 photo: XMPFileStamp(side.member.entry), redlamp: side.editStamp, embedded: side.embedded,
                 other: XMPSource.combining([final, side.darktable, side.embedded]), redlampFields: merge.redlampFields,
-                unwritten: side.unwritten,
+                unwritten: side.unwritten, replaced: Self.replaced(
+                    side,
+                    merge,
+                    held: file.source(for: side.member.camera),
+                ),
             )
             if record != side.record {
                 outcome.records[id] = record
             }
         }
         return outcome
+    }
+
+    /// What the member's record keeps of other apps' values that `held`, the `.xmp` as this sync read it, had of the
+    /// fields its `.redlamp` decides (`XMPMergeRecord.replaced`). A field the `.redlamp` begins to decide keeps the
+    /// `.xmp`'s value then, but on a first sync where the `.xmp` holds the `.redlamp`'s own value already, which may be
+    /// Redlamp's earlier write; one given back to them goes, once written; one other apps changed since goes too, as
+    /// the `.redlamp` took their change, unless the `.redlamp`'s later value stays over it, which keeps theirs.
+    private static func replaced(_ side: Side, _ merge: XMPMerge.Outcome, held: XMPSource?) -> XMPSource? {
+        var replaced = side.record?.replaced ?? XMPSource()
+        func keep(_ field: XMPField) {
+            if let held, held.present.contains(field), held.fields.holds(field) {
+                replaced.fields.take(field, from: held.fields)
+                replaced.present.insert(field)
+            } else {
+                replaced.present.remove(field)
+            }
+        }
+        let redlamp = side.redlamp ?? XMPFields()
+        for field in replaced.present.sorted() {
+            if merge.restored.contains(field) {
+                if !side.unwritten.contains(field) {
+                    replaced.present.remove(field)
+                }
+            } else if let record = side.record, !side.other.same(field, as: record.other),
+                      !redlamp.same(field, as: side.other) {
+                if merge.kept.contains(field) {
+                    keep(field)
+                } else {
+                    replaced.present.remove(field)
+                }
+            }
+        }
+        for field in merge.decided where redlamp.holds(field) && !replaced.present.contains(field) {
+            if let record = side.record {
+                if !record.redlampFields.holds(field) {
+                    keep(field)
+                }
+            } else if let held, !held.fields.same(field, as: redlamp) {
+                keep(field)
+            }
+        }
+        for field in XMPField.allCases where !replaced.present.contains(field) {
+            replaced.fields.take(field, from: XMPFields())
+        }
+        return replaced.present.isEmpty ? nil : replaced
     }
 
     /// A member's `.redlamp` and record, read where the locator finds them. A `.redlamp` the record says the
@@ -399,11 +448,18 @@ extension XMPGroup {
         side.merge = XMPMerge.merge(
             redlamp: redlamp, other: side.other, record: side.record,
             fields: member.camera == nil ? context.fields.subtracting([.captureTime]) : context.fields,
-            otherIsLater: otherIsLater, filling: context.fills,
+            otherIsLater: otherIsLater, filling: context.fills, cleared: Self.cleared(member),
         )
         if side.removed, let taken = side.merge?.taken {
             side.merge?.theirs = taken
         }
+    }
+
+    /// The fields the `.redlamp` can hold no value of (a rating, a flag, a label) that the member's row shows as the
+    /// `.redlamp`'s: taken off by the user. Undo shows the ones it gives back to other apps as theirs.
+    private static func cleared(_ member: Member) -> Set<XMPField> {
+        guard let row = member.record else { return [] }
+        return Set([XMPField.rating, .flag, .label]).subtracting(row.otherFields)
     }
 
     private func photo(_ side: Side, other: XMPFields, merged: XMPFields, unchanged: Bool) -> XMPPhotoSync {
@@ -412,8 +468,9 @@ extension XMPGroup {
             sharedWith: members.map(\.name).filter { $0 != side.member.name },
             darktable: side.member.darktable.map { url($0.name).path }, other: other,
             redlamp: side.removed ? nil : side.redlamp,
-            merged: merged, taken: side.merge?.takenIn ?? [], kept: side.merge?.kept ?? [], unwritten: side.unwritten,
-            unchanged: unchanged, problem: side.problem,
+            merged: merged, taken: side.merge?.takenIn ?? [], kept: side.merge?.kept ?? [],
+            restored: side.merge?.restored ?? [], unwritten: side.unwritten, unchanged: unchanged,
+            problem: side.problem,
         )
     }
 

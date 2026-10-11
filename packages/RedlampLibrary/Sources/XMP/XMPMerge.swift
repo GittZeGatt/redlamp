@@ -80,11 +80,15 @@ public struct XMPMergeRecord: Sendable, Hashable, Codable {
     public var redlampFields: XMPFields
     /// Fields the `.redlamp` decides that the `.xmp` doesn't hold: writing was off, or failed.
     public var unwritten: [XMPField]
+    /// What the `.xmp` held of each field the `.redlamp` decides, from other apps, when it began to decide it
+    /// (`present` names the fields): the `.xmp` gets it back once the `.redlamp` holds none of the field again, as
+    /// the Undo of the change that set it leaves it. Nil when there's none.
+    public var replaced: XMPSource?
 
     public init(
         sidecar: XMPFileStamp? = nil, darktable: XMPFileStamp? = nil, photo: XMPFileStamp? = nil,
         redlamp: XMPFileStamp? = nil, embedded: XMPSource? = nil, other: XMPFields, redlampFields: XMPFields,
-        unwritten: [XMPField] = [],
+        unwritten: [XMPField] = [], replaced: XMPSource? = nil,
     ) {
         self.sidecar = sidecar
         self.darktable = darktable
@@ -94,6 +98,7 @@ public struct XMPMergeRecord: Sendable, Hashable, Codable {
         self.other = other
         self.redlampFields = redlampFields
         self.unwritten = unwritten
+        self.replaced = replaced
     }
 }
 
@@ -108,6 +113,10 @@ public struct XMPMergeRecord: Sendable, Hashable, Codable {
 ///   decided by Redlamp if it holds one or changed it since, and is otherwise left to them; a field
 ///   only other apps changed takes theirs, clearing included; a field both changed takes the later
 ///   change, other apps' when their file was modified after the `.redlamp` was saved.
+/// - **A field the `.redlamp` no longer holds**, as the Undo of the change that set it leaves it, goes
+///   back to what other apps' `.xmp` held before the `.redlamp` decided it (the record's `replaced`):
+///   their value, written to the `.xmp` again and left to them. A rating, flag or label the user
+///   cleared (`cleared`) is no value the `.redlamp` can hold, and stays cleared.
 ///
 /// Only the fields asked about are touched: whatever else the `.redlamp` holds stays as it is.
 public enum XMPMerge {
@@ -122,6 +131,9 @@ public enum XMPMerge {
         public var kept: [XMPField]
         /// Fields whose value is Redlamp's: what the `.xmp` gets when writing is on.
         public var decided: [XMPField]
+        /// Of `theirs`, those given back the value other apps' `.xmp` held before the `.redlamp` decided them,
+        /// which the `.xmp` gets again.
+        public var restored: [XMPField] = []
 
         /// The fields the `.redlamp` takes in from other apps.
         public var takenIn: [XMPField] {
@@ -145,11 +157,20 @@ public enum XMPMerge {
                 theirs.append(field)
             }
         }
+
+        /// Gives `field` back the value `replaced` kept of it, left to other apps and written to the `.xmp`.
+        mutating func restore(_ field: XMPField, from replaced: XMPFields) {
+            take(field, from: replaced, into: false)
+            decided.append(field)
+            restored.append(field)
+        }
     }
 
+    /// `cleared`: of the fields the `.redlamp` holds none of, those the user took off rather than an Undo,
+    /// which the index shows as the `.redlamp`'s.
     public static func merge(
         redlamp: XMPFields, other: XMPFields, record: XMPMergeRecord?, fields: Set<XMPField> = XMPField.held,
-        otherIsLater: Bool, filling: Bool = true,
+        otherIsLater: Bool, filling: Bool = true, cleared: Set<XMPField> = [],
     ) -> Outcome {
         var outcome = Outcome(fields: redlamp, taken: [], theirs: [], kept: [], decided: [])
         for field in fields.sorted() {
@@ -164,7 +185,12 @@ public enum XMPMerge {
             let otherChanged = !other.same(field, as: record.other)
             let redlampChanged = !redlamp.same(field, as: record.redlampFields)
             if !otherChanged || redlamp.same(field, as: other) {
-                if redlamp.holds(field) || redlampChanged {
+                if redlamp.holds(field) {
+                    outcome.decided.append(field)
+                } else if redlampChanged || record.unwritten.contains(field), !cleared.contains(field),
+                          let replaced = record.replaced, replaced.present.contains(field) {
+                    outcome.restore(field, from: replaced.fields)
+                } else if redlampChanged {
                     outcome.decided.append(field)
                 } else if other.holds(field) {
                     outcome.take(field, from: other, into: false)
