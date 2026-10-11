@@ -134,10 +134,40 @@ public extension EditorModel {
         activity.record(.action, change.title)
     }
 
-    /// The custom label `name` on the photos a culling key would reach, toggled as a colour's key toggles it.
+    /// The custom label `name` on the photos a culling key would reach, toggled as a colour's key toggles it: in
+    /// Compare and Survey, those of the active photo's cell alone.
     func setCustomLabel(_ name: String) {
-        cull(.toggleCustomLabel(name), advance: autoAdvance)
-        activity.record(.action, CullingChange.toggleCustomLabel(name).title)
+        cullCustomLabel(.toggleCustomLabel(name))
+    }
+
+    /// `change`, a custom label, on the photos a culling key would reach.
+    private func cullCustomLabel(_ change: CullingChange) {
+        if showsCompareOrSurvey, !showsMissingPhotos {
+            cullActiveCell(change, advance: autoAdvance)
+        } else {
+            cull(change, advance: autoAdvance)
+        }
+        activity.record(.action, change.title)
+    }
+
+    /// `change` on the photos the active photo's cell stands for (a closed stack's, a raw and its JPEG), as Compare's
+    /// and Survey's culling keys make it; `advance` then moves Compare's candidate on, or makes Survey's next photo
+    /// active.
+    private func cullActiveCell(_ change: CullingChange, advance: Bool) {
+        let order = gridOrder
+        guard let active = selection.flatMap(library.photoID(of:)) else { return }
+        let cell = order.cell(for: active) ?? active
+        let stacked = order.stacks?.photos(of: cell) ?? []
+        let list = library.photoList
+        let rows = (stacked.isEmpty ? [cell] : stacked).compactMap(list.index(of:))
+        guard !rows.isEmpty else { return }
+        cull(change, rows: rows)
+        guard advance else { return }
+        if libraryView == .compare {
+            stepCandidate(by: 1)
+        } else {
+            stepSurvey(by: 1)
+        }
     }
 
     /// The rows of the photos selected, in order; the active photo's alone when nothing else is selected. The
@@ -154,6 +184,54 @@ public extension EditorModel {
         return rows
     }
 
+    // MARK: - B on the target collection (DEC-62)
+
+    /// The collection B puts photos in: in Library, the target collection when one is set; nil while Marked is the
+    /// target, and B marks them.
+    private var markTarget: CollectionPath? {
+        guard module == .library, let target = librarySources.target,
+              (librarySources.collections[target]?.kind ?? .collection) == .collection
+        else { return nil }
+        return target
+    }
+
+    /// B with a target collection set, as Lightroom Classic's with its target collection: the photos of `listed`
+    /// (the list's IDs) go in `target`, or come out of it when every one is in it already, as one change with Undo in
+    /// Library's one order.
+    private func toggle(inTarget target: CollectionPath, listed: [Int64]) {
+        guard librarySources.canAdd, !listed.isEmpty, let collections = library.service?.metadata?.collections
+        else { return }
+        let urls = listed.compactMap(library.url(ofPhoto:))
+        let known = library.showsIndexIDs ? listed : nil
+        let sources = librarySources
+        let panels = libraryPanels
+        Task { [weak self] in
+            let ids = if let known {
+                known
+            } else {
+                await sources.indexIDs(of: urls)
+            }
+            guard self != nil, !ids.isEmpty else { return }
+            let inside = await Set((try? collections.photoIDs(in: target)) ?? [])
+            let name = "“\(target.displayName)”"
+            let change: CollectionChange
+            let title: String
+            if ids.allSatisfy(inside.contains) {
+                change = .remove(ids, from: target)
+                title = "Remove \(LibrarySources.count(ids.count)) from \(name)"
+            } else {
+                let adding = ids.filter { !inside.contains($0) }
+                change = .add(adding, to: target)
+                title = "Add \(LibrarySources.count(adding.count)) to \(name)"
+            }
+            guard panels.make([.collections(change)], title: title, onSelection: false, photos: (urls, ids)) else {
+                return
+            }
+            await panels.written()
+            sources.recount()
+        }
+    }
+
     // MARK: - Undo and Redo
 
     /// Takes back the Library's last culling change: each photo that still shows what it gave goes back.
@@ -162,6 +240,9 @@ public extension EditorModel {
         guard module == .library, let step = cullingUndo.popLast() else { return false }
         step.turn = nextLibraryTurn()
         cullingRedo.append(step)
+        if cullingProblem?.step == ObjectIdentifier(step) {
+            cullingProblem = nil
+        }
         let shown = find(step) { shown, place in
             shown.matches(step.after[place], in: step.field) ? step.before[place] : nil
         }
@@ -218,9 +299,13 @@ public extension EditorModel {
     // MARK: - Making a change
 
     /// Gives the photos of `rows` (places in `items`) what `change` asks for, as one change with Undo: shown
-    /// at once, then made in the background. A read-only photo open in Develop is left as it is.
+    /// at once, then made in the background. A read-only photo open in Develop is left as it is. B, with a
+    /// target collection set, puts them in it instead (`toggle(inTarget:listed:)`).
     internal func cull(_ change: CullingChange, rows: [Int]) {
         let ids = library.photoIDs
+        if change == .toggleMark, let target = markTarget {
+            return toggle(inTarget: target, listed: rows.filter(ids.indices.contains).map { ids[$0] })
+        }
         if library.items.readsOnRequest,
            rows.contains(where: { ids.indices.contains($0) && library.items.row($0) == nil }) {
             return cullReading(change, photos: rows.filter(ids.indices.contains).map { ids[$0] })
@@ -231,6 +316,9 @@ public extension EditorModel {
     /// `change` on a large source's photos `photos`, by their IDs in the list, in order: made at once when their rows
     /// are read, as `cull(_:rows:)` makes it, else once what culling needs of them is read (`cullReading`).
     private func cull(_ change: CullingChange, photos: [Int64]) {
+        if change == .toggleMark, let target = markTarget {
+            return toggle(inTarget: target, listed: photos)
+        }
         guard library.hasRead(photos) else { return cullReading(change, photos: photos) }
         let list = library.photoList
         cull(change, rows: photos.compactMap(list.index(of:)), read: [:])
@@ -260,8 +348,13 @@ public extension EditorModel {
     /// `cull(_:rows:)` once what culling needs of the photos whose rows aren't read is in `read`, by their IDs.
     private func cull(_ change: CullingChange, rows: [Int], read: [Int64: LargeListRows.Badges]) {
         guard let step = cullingStep(change, rows: rows, read: read) else { return }
+        begin(step)
+    }
+
+    /// Shows `step` at once, puts it on Undo and makes it in the background.
+    private func begin(_ step: CullingStep) {
         let sequence = cullingQueue.request(step.photos)
-        show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
+        show(step.after, field: step.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
         step.turn = nextLibraryTurn()
         cullingUndo.append(step)
         endLibraryRedo()
@@ -331,7 +424,7 @@ public extension EditorModel {
                 current.append(values)
             }
         }
-        let wanted = change.resolved(current)
+        let wanted = change.resolved(current, color: change.customLabel.flatMap(givenLabelColor(of:)))
         var changed: [Int] = []
         var photoIDs: [Int64] = []
         var photos: [URL] = []
@@ -527,6 +620,7 @@ public extension EditorModel {
         let later = cullingQueue.changedLater(than: sequence)
         let unwritten = written.unwritten.filter { !later.contains($0) }
         guard !unwritten.isEmpty else { return }
+        noteProblem(unwritten, written, of: step, title: title, undoing: undoing)
         cullingOverlay.drop(sequence)
         var badges = await library.service?.badges(of: unwritten) ?? [:]
         let rest = unwritten.filter { badges[$0] == nil }
@@ -565,6 +659,68 @@ public extension EditorModel {
         )
     }
 
+    // MARK: - Photos a change didn't reach
+
+    /// Says above the photos which of the step's photos the library couldn't write, and why (`cullingProblem`):
+    /// those of `unwritten`, which no change asked for since changes again.
+    private func noteProblem(
+        _ unwritten: [URL], _ written: CullingWritten, of step: CullingStep, title: String, undoing: Bool,
+    ) {
+        let missed = Set(unwritten)
+        let places = step.photos.indices.filter { missed.contains(step.photos[$0]) }
+        guard !places.isEmpty else { return }
+        let reasons = Set(places.compactMap { written.reasons[step.photos[$0]] }).union(written.errors)
+        cullingProblem = CullingProblem(
+            title: title, field: step.field, photos: places.map { step.photos[$0] },
+            values: places.map { undoing ? step.before[$0] : step.after[$0] }, reasons: reasons.sorted(),
+            step: ObjectIdentifier(step),
+        )
+    }
+
+    /// Select, beside the photos a change didn't reach: those of them still listed, the first active.
+    func selectCullingProblem() {
+        guard let problem = cullingProblem else { return }
+        let ids = problem.photos.compactMap(library.photoID(of:))
+        guard let first = ids.first, let url = library.url(ofPhoto: first) else { return }
+        select(url)
+        photoSelection.select(ids, active: first, in: library.photoList)
+    }
+
+    /// Try Again: what the change was to give the photos it didn't reach, those of them still listed that don't
+    /// show it, as a change of its own with Undo. False when none is left to try.
+    @discardableResult
+    func retryCulling() -> Bool {
+        guard module == .library, let problem = cullingProblem else { return false }
+        cullingProblem = nil
+        let items = library.items
+        let ids = library.photoIDs
+        var rows: [Int] = []
+        var photos: [URL] = []
+        var before: [CullingValues] = []
+        var after: [CullingValues] = []
+        for (url, wanted) in zip(problem.photos, problem.values) {
+            guard let row = library.index(of: url), let item = items.row(row) else { continue }
+            let current = CullingValues(item.metadata)
+            guard !wanted.matches(current, in: problem.field) else { continue }
+            rows.append(row)
+            photos.append(url)
+            before.append(current)
+            after.append(wanted)
+        }
+        guard !rows.isEmpty else { return false }
+        begin(CullingStep(
+            title: problem.title, field: problem.field, photos: photos, rows: rows, photoIDs: rows.map { ids[$0] },
+            before: before, after: after,
+        ))
+        activity.record(.action, "Try Again: \(problem.title)")
+        return true
+    }
+
+    /// Close, beside the photos a change didn't reach.
+    func closeCullingProblem() {
+        cullingProblem = nil
+    }
+
     // MARK: - Develop
 
     /// `change` on the active photo, saved with its edit as Develop saves it; a read-only photo's metadata
@@ -572,7 +728,7 @@ public extension EditorModel {
     private func cullActivePhoto(_ change: CullingChange) {
         guard let url = opening ?? selection, opening != nil || !isReadOnly else { return }
         let before = CullingValues(opening == nil ? photoMetadata : library.item(for: url)?.metadata ?? PhotoMetadata())
-        let after = change.resolved([before])[0]
+        let after = change.resolved([before], color: change.customLabel.flatMap(givenLabelColor(of:)))[0]
         guard !after.matches(before, in: change.field) else { return }
         let setting = after.setting(change.field)
         if opening == nil {
@@ -645,7 +801,7 @@ public extension EditorModel {
         customLabelsReading = Task { [weak self] in
             let counts = await service.customLabels()
             guard let self else { return }
-            customLabelCounts = counts
+            showCustomLabelCounts(counts)
             remember(counts.map(\.name))
             customLabelsReading = nil
             if customLabelsStale {
@@ -659,6 +815,111 @@ public extension EditorModel {
         let new = Set(names).subtracting(customLabels)
         guard !new.isEmpty else { return }
         customLabels = (customLabels + new).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    // MARK: - Custom labels' colours
+
+    /// The colour the custom label `name` is given with it: the library's, the one most of its photos have; nil
+    /// when it has none.
+    internal func givenLabelColor(of name: String) -> LabelColor? {
+        customLabelCounts.first { $0.name == name }?.color
+    }
+
+    /// The colour the custom label `name` is shown in: the library's, else the palette's it's named after, as Capture
+    /// One's Orange; nil for neither, which is drawn grey.
+    func customLabelColor(of name: String) -> LabelColor? {
+        givenLabelColor(of: name) ?? LabelColor(named: name)
+    }
+
+    /// The library's custom labels, with their counts and colours, shown wherever a label's colour shows: the listed
+    /// photos of a label whose colour changed are drawn again.
+    private func showCustomLabelCounts(_ counts: [CustomLabelCount]) {
+        customLabelCounts = counts
+        let colors = Dictionary(counts.compactMap { label in label.color.map { (label.name, $0) } }) { first, _ in
+            first
+        }
+        let before = GridBadges.customLabelColors
+        guard colors != before else { return }
+        GridBadges.customLabelColors = colors
+        redrawLabels(Set(colors.keys).union(before.keys).filter { colors[$0] != before[$0] })
+    }
+
+    /// Draws again the listed photos of the custom labels `names`, in their labels' colours now.
+    private func redrawLabels(_ names: Set<String>) {
+        guard !names.isEmpty else { return }
+        let items = library.items
+        var rows: [Int] = []
+        for row in items.indices {
+            if let name = items.row(row)?.metadata.customLabel, names.contains(name) {
+                rows.append(row)
+            }
+        }
+        guard !rows.isEmpty else { return }
+        let colors = GridBadges.customLabelColors
+        cullingOverlay.publishing = true
+        library.updateMetadata(rows) { _, metadata in
+            metadata.customLabelColor = metadata.customLabel.flatMap { colors[$0] }
+        }
+        cullingOverlay.publishing = false
+    }
+
+    /// The custom label `name` in `color` on every photo of the library that has it, as one change with Undo, shown at
+    /// once wherever the label shows, as the Custom Labels sheet chooses it. The change is on Undo once the library
+    /// has found the photos, when the task returned ends; nil when there's no such label, or it has that colour
+    /// already.
+    @discardableResult
+    func setColor(_ color: LabelColor?, ofCustomLabel name: String) -> Task<Void, Never>? {
+        guard let service = library.service, service.isReady, let metadata = service.metadata,
+              let place = customLabelCounts.firstIndex(where: { $0.name == name }),
+              customLabelCounts[place].color != color
+        else { return nil }
+        var counts = customLabelCounts
+        counts[place] = CustomLabelCount(name: name, photos: counts[place].photos, color: color)
+        showCustomLabelCounts(counts)
+        let panels = libraryPanels
+        return Task {
+            let ids = await (try? metadata.photoIDs(withCustomLabel: name)) ?? []
+            guard !ids.isEmpty else { return }
+            panels.make(
+                [.metadata(.set([.namedLabel(name), .customLabelColor(color)], on: ids))],
+                title: "Color of “\(name)”", onSelection: false, photos: ([], ids),
+            )
+        }
+    }
+
+    /// Whether `name` can be a custom label: not empty, and no colour label's name in any label set.
+    static func canNameCustomLabel(_ name: String) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && MetadataField.colorLabel(named: name) == nil
+    }
+
+    /// Photo ▸ Set Color Label ▸ Custom Labels…: the sheet that names custom labels and chooses their colours.
+    func showCustomLabels() {
+        guard module == .library else { return }
+        CustomLabelsSheet.present(editor: self)
+    }
+
+    /// The custom label `name`, in `color`, on the photos a culling key would reach, or on `photo` (a cell's context
+    /// menu's) or the selection it's in, as the Custom Labels sheet gives it: a label of that name takes the colour
+    /// first, with an Undo of its own. False for a name no custom label can have, or with no photo to reach.
+    @discardableResult
+    func giveCustomLabel(_ name: String, color: LabelColor?, to photo: URL? = nil) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.canNameCustomLabel(name), photo.flatMap(library.index(of:)) != nil || canCull else { return false }
+        if let label = customLabelCounts.first(where: { $0.name == name }) {
+            if label.color != color {
+                setColor(color, ofCustomLabel: name)
+            }
+        } else {
+            let counts = customLabelCounts + [CustomLabelCount(name: name, photos: 0, color: color)]
+            showCustomLabelCounts(counts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+        }
+        if let photo {
+            cull(.customLabel(name), from: photo)
+        } else {
+            cullCustomLabel(.customLabel(name))
+        }
+        return true
     }
 }
 

@@ -1,5 +1,6 @@
 import AppKit
 import RedlampDesign
+import RedlampDocument
 import RedlampLibrary
 
 /// The filter bar's Metadata section: columns side by side, each counting the photos of the filter by
@@ -269,9 +270,21 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         let cell = outline.makeView(withIdentifier: FilterColumnCell.identifier, owner: nil) as? FilterColumnCell
             ?? FilterColumnCell()
         let count = row === all ? counts?.total ?? 0 : row.count
-        cell.show(row.title, count: count, isUnknown: row.value == nil && row !== all)
+        cell.show(row.title, count: count, isUnknown: row.value == nil && row !== all, color: color(of: row))
         cell.setAccessibilityIdentifier("library.filter.column.\(index).\(row === all ? "all" : "value." + row.key)")
         return cell
+    }
+
+    /// A label's colour, beside its row in the Label and Custom Label columns: a custom label's as the library gives
+    /// it (LIB-15).
+    private func color(of row: FilterColumnRow) -> NSColor? {
+        guard row !== all, row.value != nil, kind == .label || kind == .customLabel, row.key != "none" else {
+            return nil
+        }
+        if kind == .label, let label = ColorLabel(rawValue: row.key) {
+            return label.nsColor
+        }
+        return GridBadges.color(ofCustomLabel: row.key)
     }
 
     func outlineView(_: NSOutlineView, shouldSelectItem item: Any) -> Bool {
@@ -335,16 +348,21 @@ final class FilterColumnOutline: NSOutlineView {
     }
 }
 
-/// A row's name and count.
+/// A row's name and count, and a label's colour before its name.
 final class FilterColumnCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("filter.column.cell")
     private let name = filterLabel("", secondary: false)
     private let number = filterLabel("")
+    private let swatch = CALayer()
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
         number.alignment = .right
+        wantsLayer = true
+        swatch.cornerRadius = 4
+        swatch.isHidden = true
+        layer?.addSublayer(swatch)
         addSubview(name)
         addSubview(number)
     }
@@ -354,11 +372,17 @@ final class FilterColumnCell: NSTableCellView {
         fatalError("init(coder:) is not supported")
     }
 
-    func show(_ title: String, count: Int, isUnknown: Bool) {
+    func show(_ title: String, count: Int, isUnknown: Bool, color: NSColor? = nil) {
         name.stringValue = title
         name.textColor = (isUnknown ? Palette.tertiaryLabel : Palette.label).nsColor
         number.stringValue = count.formatted()
         setAccessibilityLabel("\(title), \(count)")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        swatch.isHidden = color == nil
+        swatch.backgroundColor = color?.cgColor
+        CATransaction.commit()
+        needsLayout = true
     }
 
     /// Clicks go on to the column, which chooses the row.
@@ -369,10 +393,15 @@ final class FilterColumnCell: NSTableCellView {
     override func layout() {
         super.layout()
         let numberWidth: CGFloat = 54
+        let indent: CGFloat = swatch.isHidden ? 0 : 13
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        swatch.frame = CGRect(x: 3, y: (bounds.height - 8) / 2, width: 8, height: 8)
+        CATransaction.commit()
         name.frame = CGRect(
-            x: 2,
+            x: 2 + indent,
             y: (bounds.height - 15) / 2,
-            width: max(bounds.width - numberWidth - 6, 0),
+            width: max(bounds.width - numberWidth - 6 - indent, 0),
             height: 15,
         )
         number.frame = CGRect(

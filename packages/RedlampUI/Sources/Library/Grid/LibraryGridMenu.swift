@@ -258,12 +258,18 @@ enum LibraryGridMenu {
                 let item = NSMenuItem(title: name, state: metadata.customLabel == name ? .on : .off) {
                     model.cull(.toggleCustomLabel(name), fromCell: photo)
                 }
+                item.image = GridBadges.swatch(GridBadges.color(ofCustomLabel: name))
                 item.setAccessibilityIdentifier("library.menu.customLabel.\(name)")
                 menu.addItem(item)
             }
         }
         menu.addItem(.separator())
         menu.addItem(cull(.clearLabel, photo, model))
+        let labels = NSMenuItem(title: "Custom Labels…", state: .off) {
+            CustomLabelsSheet.present(editor: model, giving: photo)
+        }
+        labels.setAccessibilityIdentifier("library.menu.customLabels")
+        menu.addItem(labels)
         return menu
     }
 

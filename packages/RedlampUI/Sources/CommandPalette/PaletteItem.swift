@@ -80,6 +80,8 @@ import RedlampLibrary
     case filterPreset(String)
     /// A custom label, by its name, on the photos a label's key reaches (LIB-15).
     case customLabel(String)
+    /// The Custom Labels sheet, which names custom labels and chooses their colours (LIB-15).
+    case customLabels
     /// A name of the library's (LIB-19), by its field and value: a folder, which ↵ shows, or a
     /// collection, keyword, camera, lens or place, which ↵ makes the filter's term on its field.
     case libraryName(LibraryQuery.Field, String)

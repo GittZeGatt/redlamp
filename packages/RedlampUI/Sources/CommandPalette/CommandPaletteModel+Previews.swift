@@ -22,7 +22,7 @@ extension CommandPaletteModel {
 
     static func previews(_ kind: PaletteItemKind) -> Bool {
         switch kind {
-        case .compareLayout, .filterPreset, .customLabel: false
+        case .compareLayout, .filterPreset, .customLabel, .customLabels: false
         default: true
         }
     }
@@ -103,6 +103,8 @@ extension CommandPaletteModel {
             }
         case let .customLabel(name):
             editor.setCustomLabel(name)
+        case .customLabels:
+            editor.showCustomLabels()
         case let .libraryName(.folder, path):
             editor.open([URL(fileURLWithPath: path, isDirectory: true)])
         case let .libraryName(field, value):

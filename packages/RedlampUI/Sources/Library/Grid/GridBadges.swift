@@ -288,11 +288,59 @@ enum GridBadges {
         (text as NSString).draw(at: CGPoint(x: (size.width - width) / 2, y: 1.5), withAttributes: attributes)
     }
 
-    /// The colour a label's bar and chip are drawn in: a custom label's is neutral.
+    /// The library's custom labels' colours, by name (`EditorModel.customLabelCounts`), which every view of a photo's
+    /// label draws.
+    static var customLabelColors: [String: LabelColor] = [:]
+
+    /// The colour of a custom label without one.
+    static let neutral = NSColor(white: 0.78, alpha: 1)
+
+    /// The colour a label's bar and chip are drawn in: a custom label's is the one the library gives it, as
+    /// `color(ofCustomLabel:own:)` finds it.
     static func color(of metadata: PhotoMetadata) -> NSColor? {
         if let label = metadata.label {
             return label.nsColor
         }
-        return metadata.customLabel == nil ? nil : NSColor(white: 0.78, alpha: 1)
+        return metadata.customLabel.map { color(ofCustomLabel: $0, own: metadata.customLabelColor) }
+    }
+
+    /// The colour the custom label `name` is drawn in: the one `colors` (the library's) gives it, else `own`, its
+    /// photo's sidecar's, else the palette's it's named after (Capture One's Orange), else neutral.
+    static func color(
+        ofCustomLabel name: String, own: LabelColor? = nil, colors: [String: LabelColor]? = nil,
+    ) -> NSColor {
+        let known = own.flatMap { $0.isKnown ? $0 : nil }
+        let given = (colors ?? customLabelColors)[name] ?? known ?? LabelColor(named: name)
+        return given?.nsColor ?? neutral
+    }
+
+    /// A round swatch of `color`, for menus.
+    static func swatch(_ color: NSColor) -> NSImage {
+        let image = NSImage(size: CGSize(width: 12, height: 12), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+}
+
+extension LabelColor {
+    /// How it's drawn: as the colour label of its name where there's one; nil for a colour this build doesn't know.
+    var nsColor: NSColor? {
+        switch self {
+        case .red: ColorLabel.red.nsColor
+        case .orange: NSColor(red: 0.95, green: 0.55, blue: 0.2, alpha: 1)
+        case .yellow: ColorLabel.yellow.nsColor
+        case .green: ColorLabel.green.nsColor
+        case .teal: NSColor(red: 0.2, green: 0.72, blue: 0.72, alpha: 1)
+        case .blue: ColorLabel.blue.nsColor
+        case .purple: ColorLabel.purple.nsColor
+        case .pink: NSColor(red: 0.95, green: 0.45, blue: 0.7, alpha: 1)
+        case .brown: NSColor(red: 0.62, green: 0.45, blue: 0.3, alpha: 1)
+        case .gray: NSColor(white: 0.55, alpha: 1)
+        default: nil
+        }
     }
 }

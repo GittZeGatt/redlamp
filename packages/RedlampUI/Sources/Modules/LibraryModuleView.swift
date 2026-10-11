@@ -14,6 +14,8 @@ final class LibraryModuleView: NSView {
     let toolbar: LibraryToolbarView
     /// The filter bar above the grid (LIB-18), shown by `\`.
     let filterBar: LibraryFilterBarView
+    /// A culling change some photos didn't get, floating over the top of the photos shown (LIB-15).
+    private let problem: NSView
     private let filmstrip: NSView
     private let model: EditorModel
     private var trackers: [Tracker] = []
@@ -43,12 +45,15 @@ final class LibraryModuleView: NSView {
         let hosting = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme).focusEffectDisabled())
         hosting.sizingOptions = []
         filmstrip = hosting
+        let strip = NSHostingView(rootView: CullingProblemStrip(model: model).focusEffectDisabled())
+        strip.sizingOptions = [.intrinsicContentSize]
+        problem = strip
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
         wantsLayer = true
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
-        for view in [grid, loupe, compare, survey, toolbar, filmstrip, filterBar] as [NSView] {
+        for view in [grid, loupe, compare, survey, toolbar, filmstrip, filterBar, problem] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -68,6 +73,9 @@ final class LibraryModuleView: NSView {
             filterBar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
             filterBar.topAnchor.constraint(equalTo: stage.topAnchor),
             filterHeight,
+            problem.centerXAnchor.constraint(equalTo: stage.centerXAnchor),
+            problem.topAnchor.constraint(equalTo: filterBar.bottomAnchor, constant: 10),
+            problem.widthAnchor.constraint(lessThanOrEqualTo: stage.widthAnchor, constant: -32),
         ]
         for view in [grid, loupe, compare, survey] as [NSView] {
             constraints += [

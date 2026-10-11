@@ -118,6 +118,7 @@ public final class CommandPaletteModel {
         switch item.kind {
         case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .customLabel: return editor.selection != nil && !editor.isModalDialogOpen
+        case .customLabels: return editor.module == .library && !editor.isModalDialogOpen
         case .libraryName(.folder, _), .photo, .rowAction: return !editor.isModalDialogOpen
         case .libraryName, .photosNamed, .queryTerm: return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .queryField: return true

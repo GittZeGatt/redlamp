@@ -649,8 +649,10 @@ public final class EditorModel {
     /// The custom labels the photos shown, the library and the culling of this session have, for the menus and
     /// the palette.
     public internal(set) var customLabels: [String] = []
-    /// The library's custom labels, each with how many of its photos have it, by name.
+    /// The library's custom labels, each with how many of its photos have it and its colour, by name.
     public internal(set) var customLabelCounts: [CustomLabelCount] = []
+    /// The last culling change some photos didn't get, shown above them until it's closed or tried again.
+    public internal(set) var cullingProblem: CullingProblem?
     @ObservationIgnored var customLabelsReading: Task<Void, Never>?
     /// The library's custom labels changed while they were being read.
     @ObservationIgnored var customLabelsStale = false

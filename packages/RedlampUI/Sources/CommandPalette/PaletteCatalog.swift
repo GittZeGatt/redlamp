@@ -134,14 +134,19 @@ enum PaletteCatalog {
             + deepChoiceItems(editor: editor)
     }
 
-    /// The custom labels the photos have, beside the colour labels' actions.
+    /// The custom labels the photos have, beside the colour labels' actions, and the sheet that names them.
     static func customLabelItems(editor: EditorModel) -> [PaletteItem] {
         editor.customLabels.map { name in
             PaletteItem(
                 kind: .customLabel(name), title: "Label “\(name)”", context: ShortcutCategory.rating.rawValue,
                 symbol: "tag", keywords: ["label", "custom label", name],
             )
-        }
+        } + [
+            PaletteItem(
+                kind: .customLabels, title: "Custom Labels…", context: ShortcutCategory.rating.rawValue,
+                symbol: "tag", keywords: ["label", "custom label", "color", "colour", "name", "library"],
+            ),
+        ]
     }
 
     // MARK: - Sliders

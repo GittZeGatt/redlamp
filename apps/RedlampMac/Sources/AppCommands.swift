@@ -191,12 +191,18 @@ struct AppCommands: Commands {
             if !shown.customLabels.isEmpty {
                 Divider()
                 ForEach(shown.customLabels, id: \.self) { name in
-                    Button(name) { model.setCustomLabel(name) }
-                        .disabled(!menu.isEnabled(.clearLabel))
+                    Button { model.setCustomLabel(name) } label: {
+                        Label { Text(name) } icon: {
+                            Image(nsImage: MenuBarState.swatch(ofCustomLabel: name, in: shown))
+                        }
+                    }
+                    .disabled(!menu.isEnabled(.clearLabel))
                 }
             }
             Divider()
             item(.clearLabel)
+            Button("Custom Labels…") { model.showCustomLabels() }
+                .disabled(shown.module != .library || shown.isModalDialogOpen)
         }
         item(.toggleMark)
         keywordSetMenu

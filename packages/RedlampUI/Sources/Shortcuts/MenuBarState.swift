@@ -1,6 +1,8 @@
+import AppKit
 import CoreFoundation
 import Foundation
 import Observation
+import RedlampDocument
 import RedlampLibrary
 
 /// What the menu bar shows (`AppCommands`): each item's enabled state as `canPerform` has it, the checkmarks, and the
@@ -17,6 +19,8 @@ import RedlampLibrary
         public internal(set) var hasSelection = false
         public internal(set) var hasFilters = false
         public internal(set) var customLabels: [String] = []
+        /// The colours the library gives its custom labels, by name.
+        public internal(set) var customLabelColors: [String: LabelColor] = [:]
         public internal(set) var keywordSets: [KeywordSet] = []
         public internal(set) var activeKeywordSet = ""
         /// The active keyword set's keywords, ⌥1 to ⌥9.
@@ -29,6 +33,12 @@ import RedlampLibrary
     }
 
     public private(set) var shown = Shown()
+
+    /// The swatch beside the custom label `name` in the Photo menu, in the colour `shown` gives it.
+    public static func swatch(ofCustomLabel name: String, in shown: Shown) -> NSImage {
+        GridBadges.swatch(GridBadges.color(ofCustomLabel: name, colors: shown.customLabelColors))
+    }
+
     @ObservationIgnored private weak var model: EditorModel?
     /// The actions the menus have asked about. Until they have, every action's check runs.
     @ObservationIgnored private var asked: Set<ShortcutAction> = []
@@ -105,6 +115,9 @@ import RedlampLibrary
         let filters = model.libraryFilters
         shown.hasFilters = filters != nil
         shown.customLabels = model.customLabels
+        shown.customLabelColors = Dictionary(
+            model.customLabelCounts.compactMap { label in label.color.map { (label.name, $0) } },
+        ) { first, _ in first }
         let panels = model.libraryPanels
         shown.keywordSets = panels.keywordSets
         let active = panels.activeSet

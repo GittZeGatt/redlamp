@@ -26,6 +26,14 @@ enum PanelChange: Sendable, Hashable {
         }
         return false
     }
+
+    /// Fields given to photos, which may be labels or their colours, as the library's custom labels follow them.
+    var isMetadata: Bool {
+        if case .metadata = self {
+            return true
+        }
+        return false
+    }
 }
 
 /// What a batch the panels asked for made: its ID in the journal, for its Undo, or why it wasn't made.

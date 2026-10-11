@@ -490,6 +490,9 @@ extension LibraryPanels {
         if step.changes.contains(where: \.isKeywords) {
             refreshKeywords()
         }
+        if step.changes.contains(where: \.isMetadata) {
+            model.refreshCustomLabels()
+        }
     }
 
     /// Hands a batch's progress to the panels from the threads writing its sidecars, at most every 50 ms.

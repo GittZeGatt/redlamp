@@ -16,6 +16,8 @@ public enum CullingChange: Sendable, Hashable {
     case toggleLabel(ColorLabel)
     /// A custom label by its name, as a colour toggles.
     case toggleCustomLabel(String)
+    /// A custom label by its name on every photo, as the Custom Labels sheet gives it.
+    case customLabel(String)
     /// B: every photo marked, or none when every one is.
     case toggleMark
     case mark(Bool)
@@ -49,8 +51,16 @@ public enum CullingChange: Sendable, Hashable {
         switch self {
         case .rating, .ratingStep: .rating
         case .flag, .toggleFlag: .flag
-        case .label, .toggleLabel, .toggleCustomLabel: .label
+        case .label, .toggleLabel, .toggleCustomLabel, .customLabel: .label
         case .toggleMark, .mark: .mark
+        }
+    }
+
+    /// The custom label it gives, by its name.
+    var customLabel: String? {
+        switch self {
+        case let .toggleCustomLabel(name), let .customLabel(name): name
+        default: nil
         }
     }
 
@@ -64,14 +74,15 @@ public enum CullingChange: Sendable, Hashable {
         case .flag(.reject), .toggleFlag(.reject): "Flag as Rejected"
         case let .label(label): label.map { "\($0.rawValue.capitalized) Label" } ?? "No Label"
         case let .toggleLabel(label): "\(label.rawValue.capitalized) Label"
-        case let .toggleCustomLabel(name): "Label “\(name)”"
+        case let .toggleCustomLabel(name), let .customLabel(name): "Label “\(name)”"
         case .toggleMark: "Mark / Unmark"
         case let .mark(marked): marked ? "Mark" : "Unmark"
         }
     }
 
-    /// What each photo's culling fields become, from what they are.
-    func resolved(_ photos: [CullingValues]) -> [CullingValues] {
+    /// What each photo's culling fields become, from what they are; a custom label given comes with `color`, the
+    /// label's.
+    func resolved(_ photos: [CullingValues], color: LabelColor? = nil) -> [CullingValues] {
         switch self {
         case let .rating(stars):
             return photos.map { var photo = $0; photo.rating = min(max(stars, 0), 5); return photo }
@@ -83,7 +94,13 @@ public enum CullingChange: Sendable, Hashable {
             let every = photos.allSatisfy { $0.flag == flag }
             return Self.flag(every ? nil : flag).resolved(photos)
         case let .label(label):
-            return photos.map { var photo = $0; photo.label = label; photo.customLabel = nil; return photo }
+            return photos.map { photo in
+                var photo = photo
+                photo.label = label
+                photo.customLabel = nil
+                photo.customLabelColor = nil
+                return photo
+            }
         case let .toggleLabel(label):
             let every = photos.allSatisfy { $0.label == label }
             return Self.label(every ? nil : label).resolved(photos)
@@ -93,6 +110,15 @@ public enum CullingChange: Sendable, Hashable {
                 var photo = photo
                 photo.label = nil
                 photo.customLabel = every ? nil : name
+                photo.customLabelColor = every ? nil : color
+                return photo
+            }
+        case let .customLabel(name):
+            return photos.map { photo in
+                var photo = photo
+                photo.label = nil
+                photo.customLabel = name
+                photo.customLabelColor = color
                 return photo
             }
         case .toggleMark:
@@ -114,6 +140,8 @@ struct CullingValues: Hashable, Sendable {
     var flag: PhotoFlag?
     var label: ColorLabel?
     var customLabel: String?
+    /// The colour its sidecar gives `customLabel`, written with the label; the badges show the label's own.
+    var customLabelColor: LabelColor?
     var mark = false
 
     init(_ metadata: PhotoMetadata) {
@@ -121,9 +149,11 @@ struct CullingValues: Hashable, Sendable {
         flag = metadata.flag
         label = metadata.label
         customLabel = metadata.label == nil ? metadata.customLabel : nil
+        customLabelColor = customLabel == nil ? nil : metadata.customLabelColor
         mark = metadata.mark
     }
 
+    /// Whether `other` shows the same in `field`: a custom label's colour is the label's, whatever its sidecar says.
     func matches(_ other: CullingValues, in field: CullingField) -> Bool {
         switch field {
         case .rating: rating == other.rating
@@ -141,6 +171,7 @@ struct CullingValues: Hashable, Sendable {
         case .label:
             metadata.label = label
             metadata.customLabel = customLabel
+            metadata.customLabelColor = customLabelColor
         case .mark: metadata.mark = mark
         }
     }
@@ -156,7 +187,12 @@ struct CullingValues: Hashable, Sendable {
         switch field {
         case .rating: [.rating(rating)]
         case .flag: [.flag(flag)]
-        case .label: [customLabel.map { .namedLabel($0) } ?? .label(label)]
+        case .label:
+            if let customLabel {
+                [.namedLabel(customLabel)] + (customLabelColor.map { [.customLabelColor($0)] } ?? [])
+            } else {
+                [.label(label)]
+            }
         case .mark: [.mark(mark)]
         }
     }
@@ -171,7 +207,35 @@ extension CullingValues {
         case .label:
             other.label = label
             other.customLabel = customLabel
+            other.customLabelColor = customLabelColor
         case .mark: other.mark = mark
         }
+    }
+}
+
+/// A culling change some photos didn't get, as their sidecars couldn't be read or written (LIB-15): shown above the
+/// photos until it's closed or tried again, or the change is taken back.
+public struct CullingProblem: Sendable, Hashable {
+    /// The change as Undo names it: `3 Stars`, `Undo Red Label`.
+    public let title: String
+    let field: CullingField
+    /// The photos it didn't reach, in the change's order, with what each was to get.
+    public let photos: [URL]
+    let values: [CullingValues]
+    /// Why, each reason once: "its sidecar can't be read".
+    public let reasons: [String]
+    /// The step it was a part of, which its Undo takes away.
+    let step: ObjectIdentifier
+
+    /// "3 Stars wasn't saved to 4 photos (A.ARW, B.ARW, C.ARW and 1 more): its sidecar can't be read."
+    public var message: String {
+        let names = photos.prefix(3).map(\.lastPathComponent)
+        let who = switch photos.count {
+        case 1: names[0]
+        case 2, 3: names.dropLast().joined(separator: ", ") + " and " + (names.last ?? "")
+        default: "\(photos.count) photos (\(names.joined(separator: ", ")) and \(photos.count - names.count) more)"
+        }
+        let why = reasons.isEmpty ? "" : ": " + reasons.joined(separator: "; ")
+        return "\(title) wasn't saved to \(who)\(why)."
     }
 }
