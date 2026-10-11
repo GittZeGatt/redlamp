@@ -668,6 +668,23 @@ extension LibraryGroupsTests {
         #expect(again.restore("/Somewhere")?.group == .lens && again.groupKey == .lens)
     }
 
+    @Test func `a source shown for the first time starts ungrouped, and Previous Import by moment, each keeping its own choice`() {
+        let state = LibraryViewState(defaults: nil)
+        let previousImport = LibrarySource.previousImport.key
+        state.setGroupKey(.camera)
+        #expect(
+            state.restore("/Elsewhere") == nil && state.groupKey == .ungrouped,
+            "not the grouping of the last source",
+        )
+        #expect(state.restore(previousImport) == nil && state.groupKey == .moment, "a shoot just in, by moment")
+        state.setGroupKey(.ungrouped)
+        state.remember(previousImport, selection: [], active: nil)
+        state.setGroupKey(.lens)
+        state.remember("/Elsewhere", selection: [], active: nil)
+        #expect(state.restore(previousImport)?.group == .ungrouped && state.groupKey == .ungrouped)
+        #expect(state.restore("/Elsewhere")?.group == .lens && state.groupKey == .lens)
+    }
+
     @Test func `the moments without a pick are counted, and shown alone`() async throws {
         defer { cleanUp() }
         let (model, _, window) = try await open()

@@ -193,9 +193,13 @@ public final class LibraryViewState {
     }
 
     /// `source`'s view as it was left, its size, cell style, grouping and open stacks shown again, and the grid
-    /// going back to its top photo; nil for a source not seen lately.
+    /// going back to its top photo; nil for a source not seen lately, which is grouped as it starts
+    /// (`startingGroupKey(of:)`).
     func restore(_ source: String) -> SourceView? {
-        guard let view = views.last(where: { $0.source == source }) else { return nil }
+        guard let view = views.last(where: { $0.source == source }) else {
+            setGroupKey(Self.startingGroupKey(of: source))
+            return nil
+        }
         setThumbnailSize(view.size)
         setCellStyle(view.style)
         setGroupKey(view.group ?? .ungrouped)
@@ -209,6 +213,12 @@ public final class LibraryViewState {
             }
         }
         return view
+    }
+
+    /// How a source is grouped the first time it's shown, or once its view is forgotten (DEC-69): Previous Import, a
+    /// shoot just come in, by moment; every other source ungrouped until a grouping is chosen for it.
+    static func startingGroupKey(of source: String) -> GroupKey {
+        source == LibrarySource.previousImport.key ? .moment : .ungrouped
     }
 
     private func save() {
