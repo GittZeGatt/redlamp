@@ -53,6 +53,8 @@ final class LibraryCompareView: NSView {
         swap.toolTip = "Swap (\(ShortcutAction.swapCompared.combos.first?.display ?? ""))"
         makeSelect.toolTip = "Make Select (\(ShortcutAction.makeSelect.combos.first?.display ?? ""))"
         done.toolTip = "Done (\(ShortcutAction.loupeView.combos.first?.display ?? ""))"
+        makeSelect.isBordered = true
+        done.isBordered = true
         link.onPress = { model.toggleCompareLink() }
         swap.onPress = { model.perform(.swapCompared) }
         makeSelect.onPress = { model.perform(.makeSelect) }
@@ -243,7 +245,7 @@ final class CompareHalfView: NSView {
     var details: PhotoDetails? {
         didSet {
             caption.stringValue = details.map { [$0.date, $0.settings].filter { !$0.isEmpty }
-                .joined(separator: "     ")
+                .joined(separator: "  ·  ")
             } ?? ""
         }
     }
@@ -253,12 +255,12 @@ final class CompareHalfView: NSView {
         self.photo = photo
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
         role.stringValue = side == .select ? "Select" : "Candidate"
-        role.font = Typography.label.nsFont
-        role.textColor = Palette.secondaryLabel.nsColor
-        name.font = Typography.label.nsFont
-        name.textColor = Palette.label.nsColor
-        caption.font = Typography.caption.nsFont
-        caption.textColor = Palette.secondaryLabel.nsColor
+        role.font = .systemFont(ofSize: NSFont.systemFontSize)
+        role.textColor = Palette.label.nsColor
+        name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        name.textColor = Palette.value.nsColor
+        caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        caption.textColor = Palette.label.nsColor
         for label in [name, caption] {
             label.lineBreakMode = .byTruncatingMiddle
         }
@@ -287,9 +289,9 @@ final class CompareHalfView: NSView {
         )
         let roleWidth = role.intrinsicContentSize.width
         let text = max(bounds.width - size.width - 12, 0)
-        role.frame = CGRect(x: 0, y: 4, width: min(roleWidth, text), height: role.intrinsicContentSize.height)
+        role.frame = CGRect(x: 0, y: 2, width: min(roleWidth, text), height: role.intrinsicContentSize.height)
         name.frame = CGRect(
-            x: roleWidth + 6, y: 4, width: max(text - roleWidth - 6, 0), height: name.intrinsicContentSize.height,
+            x: roleWidth + 6, y: 2, width: max(text - roleWidth - 6, 0), height: name.intrinsicContentSize.height,
         )
         caption.frame = CGRect(x: 0, y: 18, width: text, height: caption.intrinsicContentSize.height)
         photo.frame = CGRect(

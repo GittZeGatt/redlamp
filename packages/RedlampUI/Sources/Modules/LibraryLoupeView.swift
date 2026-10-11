@@ -12,7 +12,8 @@ import RedlampLibrary
 /// library has rendered it, and until then its embedded preview, marked in its corner as a grid cell is
 /// (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and Survey. The judging tools (LIB-38)
 /// draw over the photo, their buttons in the caption row; with the following loupe on, the photo itself is decoded
-/// as for 1:1, for the lens to magnify.
+/// as for 1:1, for the lens to magnify. The caption row also shows the loupe's own Auto Advance, on until it's turned
+/// off there (DEC-68), and turns it on or off.
 final class LibraryLoupeView: NSView {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
@@ -25,6 +26,7 @@ final class LibraryLoupeView: NSView {
     let badges = LoupeBadgesView()
     let judging: JudgingOverlay
     let judgingBar: JudgingBar
+    let autoAdvance = ToolbarButton(symbol: "arrow.right.to.line", identifier: "library.loupe.autoAdvance")
     private let details: PhotoDetailsCache
     private var trackers: [Tracker] = []
     private var editObservation: LibraryObservation?
@@ -58,16 +60,18 @@ final class LibraryLoupeView: NSView {
         mark.actions = LibraryGridCell.noActions
         mark.isHidden = true
         layer?.addSublayer(mark)
-        name.font = Typography.label.nsFont
-        name.textColor = Palette.label.nsColor
-        caption.font = Typography.caption.nsFont
-        caption.textColor = Palette.secondaryLabel.nsColor
+        name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        name.textColor = Palette.value.nsColor
+        caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        caption.textColor = Palette.label.nsColor
         for label in [name, caption] {
             label.lineBreakMode = .byTruncatingMiddle
             addSubview(label)
         }
         addSubview(badges)
         addSubview(judgingBar)
+        autoAdvance.onPress = { model.perform(.autoAdvance) }
+        addSubview(autoAdvance)
         judging.install(in: self, above: photo)
         judging.histogram.setAccessibilityIdentifier("library.loupe.histogram")
         judging.shownImage = { [weak self] in self?.image }
@@ -134,6 +138,12 @@ final class LibraryLoupeView: NSView {
                 guard let self else { return }
                 _ = model.libraryViews.loupeZoom
                 zoomChanged()
+            },
+            Tracker { [weak self] in
+                guard let self else { return }
+                let on = model.autoAdvance(in: .loupe)
+                autoAdvance.isOn = on
+                autoAdvance.toolTip = "Auto Advance in the Loupe: \(on ? "on" : "off")"
             },
             Tracker { [weak self] in
                 guard let self else { return }
@@ -255,7 +265,7 @@ final class LibraryLoupeView: NSView {
 
     private func showDetails(of item: LibraryItem) {
         guard let details = details.details(for: item.url) else { return }
-        caption.stringValue = [details.date, details.settings].filter { !$0.isEmpty }.joined(separator: "     ")
+        caption.stringValue = [details.date, details.settings].filter { !$0.isEmpty }.joined(separator: "  ·  ")
         if let width = details.width, let height = details.height, width > 0, height > 0, !showsFullPhoto {
             pixelSize = CGSize(width: width, height: height)
             layoutPhoto()
@@ -369,13 +379,17 @@ final class LibraryLoupeView: NSView {
             x: bounds.width - Self.inset - size.width, y: (Self.captionHeight - size.height) / 2, width: size.width,
             height: size.height,
         )
+        autoAdvance.frame = CGRect(
+            x: badges.frame.minX - Self.inset - 28, y: (Self.captionHeight - JudgingBar.height) / 2, width: 28,
+            height: JudgingBar.height,
+        )
         let tools = judgingBar.width
         judgingBar.frame = CGRect(
-            x: badges.frame.minX - Self.inset - tools, y: (Self.captionHeight - JudgingBar.height) / 2, width: tools,
+            x: autoAdvance.frame.minX - 12 - tools, y: (Self.captionHeight - JudgingBar.height) / 2, width: tools,
             height: JudgingBar.height,
         )
         let width = max(judgingBar.frame.minX - Self.inset * 2, 0)
-        name.frame = CGRect(x: Self.inset, y: 4, width: width, height: name.intrinsicContentSize.height)
+        name.frame = CGRect(x: Self.inset, y: 2, width: width, height: name.intrinsicContentSize.height)
         caption.frame = CGRect(x: Self.inset, y: 18, width: width, height: caption.intrinsicContentSize.height)
         layoutPhoto()
     }

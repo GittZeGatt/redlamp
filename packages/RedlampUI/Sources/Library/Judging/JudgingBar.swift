@@ -3,7 +3,8 @@ import RedlampDesign
 
 /// The judging tools' buttons (LIB-38), in the loupe's caption row and Compare's bar: sensor clipping (Develop's
 /// button, on Develop's key), the raw histogram, focus peaking, the AF point, and the following loupe with its
-/// magnifications, shown while it's on. Each button's tooltip names what it shows.
+/// magnifications, shown while it's on. Each button's tooltip names what it shows. The tools are one group and the
+/// magnifications another, each drawn as a segmented control.
 final class JudgingBar: NSView {
     static let height: CGFloat = 22
     private static let iconWidth: CGFloat = 26
@@ -18,6 +19,8 @@ final class JudgingBar: NSView {
     let loupe: ToolbarButton
     let magnifications: [LoupeMagnification: ToolbarButton]
     private var tracker: Tracker?
+    private let toolsGroup = CALayer()
+    private let magnificationsGroup = CALayer()
 
     /// `prefix` starts the buttons' identifiers: `library.loupe.judging` or `library.compare.judging`.
     init(model: EditorModel, prefix: String) {
@@ -32,6 +35,7 @@ final class JudgingBar: NSView {
             let button = ToolbarButton(
                 title: magnification.title,
                 identifier: "\(prefix).loupe.\(magnification.rawValue)",
+                small: true,
             )
             button.toolTip = "Loupe at \(magnification.title)"
             button.onPress = { model.setFollowingLoupe(magnification) }
@@ -54,6 +58,8 @@ final class JudgingBar: NSView {
             + LoupeMagnification.allCases.compactMap({ magnifications[$0] }) {
             addSubview(button)
         }
+        ToolbarLook.install(toolsGroup, in: self)
+        ToolbarLook.install(magnificationsGroup, in: self)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Judging Tools")
@@ -73,7 +79,7 @@ final class JudgingBar: NSView {
     var width: CGFloat {
         let icons = 5 * Self.iconWidth + 4 * Self.gap
         guard model.libraryJudging.magnification != nil else { return icons }
-        return icons + CGFloat(LoupeMagnification.allCases.count) * (Self.titleWidth + Self.gap)
+        return icons + 8 + CGFloat(LoupeMagnification.allCases.count) * (Self.titleWidth + Self.gap)
     }
 
     override func viewDidMoveToWindow() {
@@ -105,9 +111,12 @@ final class JudgingBar: NSView {
             button.frame = CGRect(x: x, y: 0, width: Self.iconWidth, height: Self.height)
             x += Self.iconWidth + Self.gap
         }
+        x += 8
         for magnification in LoupeMagnification.allCases {
             magnifications[magnification]?.frame = CGRect(x: x, y: 0, width: Self.titleWidth, height: Self.height)
             x += Self.titleWidth + Self.gap
         }
+        ToolbarLook.place(toolsGroup, behind: [clipping, histogram, peaking, afPoint, loupe])
+        ToolbarLook.place(magnificationsGroup, behind: LoupeMagnification.allCases.compactMap { magnifications[$0] })
     }
 }

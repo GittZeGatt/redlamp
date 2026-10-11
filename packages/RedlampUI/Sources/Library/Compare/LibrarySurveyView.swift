@@ -252,7 +252,10 @@ final class SurveyCell: NSView {
 
     let photo: ComparePhotoView
     let badges = LoupeBadgesView()
-    let remove = ToolbarButton(symbol: "xmark.circle.fill", identifier: "survey.remove")
+    let remove = ToolbarButton(
+        symbol: "xmark.circle.fill", identifier: "survey.remove",
+        palette: [NSColor(white: 0.1, alpha: 0.9), NSColor(white: 0.72, alpha: 0.9)],
+    )
 
     /// The photo shown.
     var url: URL? {
