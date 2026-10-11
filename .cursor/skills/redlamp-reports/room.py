@@ -15,8 +15,9 @@ question, and open ones with no tracker ID, but never the issues the tracker mir
 already follows them, as it does a suggestion once it's accepted). For each, GitHub gives its state,
 labels, the redlamp-feedback line the app writes, the reporter's words and the comments; git gives
 the commits naming #n on origin/main and on local branches (copies of commits already on main are
-ignored), and the first v* tag that holds them. A commit on main that changes only the tracker and
-the roadmap documents, as accepting a suggestion does, isn't its fix. The room's notes, one JSON file per report in
+ignored), and the first v* tag that holds those changing the app's code (its tests, when a fix changed
+nothing else). A commit on main that changes only the tracker and the roadmap documents, as accepting
+a suggestion does, isn't its fix. The room's notes, one JSON file per report in
 ~/.cursor/projects/<workspace>/reports-room/reports/, hold what agents record; the owner's clicks are
 read from reports-room.canvas.data.json, which only the canvas writes.
 
@@ -49,6 +50,8 @@ MARKER = re.compile(r"<!-- redlamp-feedback v1 (\{.*?\}) -->")
 SECTIONS = ("What happened", "What I expected", "Steps to reproduce", "What I'd like to do", "How it could work", "Message")
 # A fix touching only these paths ships without a release: the site deploys and the cask updates from main.
 OUTSIDE_APP = ("web/", "Casks/", "docs/", "README.md", ".cursor/", ".github/", "research/", "video/", "CONTRIBUTING.md")
+# Tests never ship: when a fix changes the app's code, its commits that change only tests don't decide its release.
+TESTS = re.compile(r"^tests/|^packages/[^/]+/Tests/")
 # A commit that changes the tracker and nothing past these adds or updates rows, such as an accepted
 # suggestion's: it plans the work and never fixes the report it names.
 TRACKER_DOC = "docs/research/research-tracker.md"
@@ -305,8 +308,14 @@ def changed_files(shas):
 
 
 def app_commits(files):
-    """The commits, of those in `changed_files`, that change something in the app."""
+    """The commits, of those in `changed_files`, that change something in the app, its tests included."""
     return {sha for sha, paths in files.items() if any(not path.startswith(OUTSIDE_APP) for path in paths)}
+
+
+def code_commits(files):
+    """The commits, of those in `changed_files`, that change the app's code: more than its tests."""
+    return {sha for sha, paths in files.items()
+            if any(not path.startswith(OUTSIDE_APP) and not TESTS.match(path) for path in paths)}
 
 
 def roadmap_commits(files):
@@ -429,6 +438,7 @@ def build(offline):
     holding = tags_holding(shas)
     files = changed_files(shas)
     in_app = app_commits(files)
+    in_code = code_commits(files)
     planning = roadmap_commits(files)
     all_tags = [t for t in git("tag", "--list", "v*", "--sort=v:refname").splitlines() if t]
     rel = release(offline)
@@ -461,18 +471,19 @@ def build(offline):
                 note_round = {k: v for k, v in note.items() if k not in ROUND_KEYS}
         fix_info = None
         if fix:
-            held = [holding.get(c["sha"]) for c in fix]
+            app = [c for c in fix if c["sha"] in in_app]
+            shipped = [c for c in app if c["sha"] in in_code] or app
+            held = [holding.get(c["sha"]) for c in shipped]
             tag = None if None in held or not held else max(held, key=lambda t: all_tags.index(t) if t in all_tags else -1)
-            app = any(c["sha"] in in_app for c in fix)
             if not app:
                 state, version = "live", None
             elif tag:
                 state, version = "released", tag.removeprefix("v")
             else:
-                state, version = "expected", expected_release(fix, rel)
+                state, version = "expected", expected_release(shipped, rel)
             promised = (note_round.get("reply") or {}).get("release")
             missed = bool(promised and state != "released" and f"v{promised}" in all_tags)
-            fix_info = {"commits": [{k: c[k] for k in ("short", "at", "subject")} for c in fix], "insideApp": app,
+            fix_info = {"commits": [{k: c[k] for k in ("short", "at", "subject")} for c in fix], "insideApp": bool(app),
                         "state": "missed" if missed else state, "version": version, "promised": promised}
         triage = note_round.get("triage") or None
         if mark and reopened and stamp(mark.get("at")) < stamp(reopened["at"]):
