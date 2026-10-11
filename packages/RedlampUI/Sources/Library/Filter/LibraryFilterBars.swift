@@ -1,7 +1,7 @@
 import AppKit
 
-/// The filter bar in a window, for the measurements: typing into its text through the field editor,
-/// as the keyboard does, and clearing it.
+/// The filter bar in a window, for the measurements and the regression suite: typing into its search field through
+/// the field editor, as the keyboard does, clearing it, and its tokens.
 @_spi(Harness) public enum LibraryFilterBars {
     /// Types `text` at the end of the bar's text; false when the window shows no bar.
     @MainActor @discardableResult
@@ -16,6 +16,21 @@ import AppKit
         guard let editor = editor(in: window), !editor.string.isEmpty else { return }
         editor.selectAll(nil)
         editor.deleteBackward(nil)
+    }
+
+    /// The bar's search field as it shows the query: its tokens' terms, and the text being typed after them, if any.
+    @MainActor public static func shown(in window: NSWindow) -> (tokens: [String], typing: String?)? {
+        guard let bar = find(in: window.contentView) else { return nil }
+        var tokens: [String] = []
+        var typing: String?
+        for piece in bar.field.pieces {
+            switch piece {
+            case let .token(term): tokens.append(term)
+            case let .typing(text) where !text.trimmingCharacters(in: .whitespaces).isEmpty: typing = text
+            case .typing: break
+            }
+        }
+        return (tokens, typing)
     }
 
     /// The field editor of the bar's text, which takes the keyboard for it.
