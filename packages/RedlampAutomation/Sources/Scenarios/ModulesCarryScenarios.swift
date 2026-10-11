@@ -63,7 +63,7 @@
         static let oneUndo = Scenario(
             "modules.one-undo",
             "⌘Z in either module takes back the newest change of either, a nudge in Develop and a rating in Library in "
-                + "turn, by its key and from the Edit menu, the notice naming the module out of sight; ⇧⌘Z makes "
+                + "turn, by its key and from the Edit menu, the notice naming the module out of sight; Redo makes "
                 + "them again in turn",
             claims: [.action(.undo), .action(.redo), .feature("history.undo"), .feature("library.modules")],
         ) { app in
@@ -103,12 +103,14 @@
                 try app.wait("the Edit menu's Undo: the rating back") { rating(of: open, in: $0) == own }
                 try app.waitWritten()
 
-                try app.press(.redo)
+                // ⇧⌘Z, as the driver reaches a ⌘ key with ⇧: its menu item carrying it.
+                try app.expectKeyBinding(.redo)
+                try app.choose(.redo)
                 try app.wait("⇧⌘Z: the rating again") { rating(of: open, in: $0) == stars }
                 try app.waitWritten()
                 try app.press(.editTool)
                 try app.wait("D: Develop") { $0.module == .develop }
-                try app.press(.redo)
+                try app.choose(.redo)
                 try app.wait("⇧⌘Z in Develop: the exposure again") { $0.sliderValue(.exposure) > exposure }
                 try app.press(.undo)
                 try app.wait("⌘Z: the exposure back") { abs($0.sliderValue(.exposure) - exposure) < 1e-6 }
@@ -175,7 +177,7 @@
             claims: [.action(.importFromLightroom), .action(.undo)],
         ) { app in
             let scratch = try SourcesScratch(
-                app, photos: ["Shoot/LU_0001.jpg", "Shoot/LU_0002.jpg", "Shoot/LU_0003.jpg"],
+                app, photos: ["Shoot/LR_0001.jpg", "Shoot/LR_0002.jpg", "Shoot/LR_0003.jpg"],
             )
             let tag = String(scratch.folder.lastPathComponent.suffix(8))
             let catalog = try LightroomScratchCatalog.make(of: scratch.folder, tag: tag)
