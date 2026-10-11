@@ -245,6 +245,34 @@ class Retries(unittest.TestCase):
         self.assertIn("so they don't count against the run", text)
 
 
+class RunLock(unittest.TestCase):
+    """One run of the suite at a time, from any checkout: they share the test app's defaults."""
+
+    def setUp(self):
+        self.lock = Path(tempfile.mkdtemp(prefix="e2e-supervisor-")) / "locks/run.lock"
+        self.addCleanup(shutil.rmtree, self.lock.parent.parent, ignore_errors=True)
+        patcher = mock.patch.object(e2e, "log", lambda message: self.logged.append(message))
+        self.logged = []
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_run_holds_the_lock_and_names_itself_in_it(self):
+        held = e2e.hold_run_lock(self.lock)
+        self.addCleanup(held.close)
+        self.assertIn(f"pid {e2e.os.getpid()}", self.lock.read_text())
+        with self.lock.open("a+") as other, self.assertRaises(BlockingIOError):
+            e2e.fcntl.flock(other, e2e.fcntl.LOCK_EX | e2e.fcntl.LOCK_NB)
+
+    def test_a_second_run_waits_until_the_first_ends(self):
+        first = e2e.hold_run_lock(self.lock)
+        threading = __import__("threading")
+        threading.Timer(0.3, first.close).start()
+        second = e2e.hold_run_lock(self.lock)
+        self.addCleanup(second.close)
+        self.assertEqual(len(self.logged), 1)
+        self.assertIn("waiting for it to end", self.logged[0])
+
+
 class PassingReport(unittest.TestCase):
     """The release takes a passing release-tier report for its commit, made before approval with focus allowed."""
 

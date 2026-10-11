@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import http.server
 import json
 import os
@@ -276,6 +277,28 @@ def storage_check(home: Path, compiles_before: set[str], free_before: int, earli
         problems.append(f"compiled models left in the temporary folder: {', '.join(compiles[:5])}")
     return {"problems": problems, "sizes": {relative: tree_size(home / relative) for relative in STORAGE_LIMITS},
             "home": tree_size(home), "temporaryFreeChange": free_bytes(Path(tempfile.gettempdir())) - free_before}
+
+
+# Every run, from any checkout, shares the test app's bundle ID, and with it its defaults (which each run
+# deletes when it ends) and the temporary folder its storage check reads: two at once break each other.
+RUN_LOCK = HOME / "Library/Caches/app.redlamp.e2e/run.lock"
+
+
+def hold_run_lock(lock: Path = RUN_LOCK):
+    """Waits for any other run to end, then holds the lock until this process does; returns the open lock."""
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock.open("a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.seek(0)
+        log(f"Another run of the suite holds the test app ({handle.read().strip() or 'unknown'}); waiting for it to end")
+        fcntl.flock(handle, fcntl.LOCK_EX)
+    handle.seek(0)
+    handle.truncate()
+    handle.write(f"pid {os.getpid()} in {ROOT}")
+    handle.flush()
+    return handle
 
 
 def prune_runs(keep: int = RUNS_KEPT) -> None:
@@ -936,6 +959,7 @@ def main() -> int:
     if args.focus and screen_locked():
         sys.exit("The screen is locked, and the app can't come to the front until it's unlocked: unlock it, "
                  "then leave the Mac alone while the run takes focus")
+    run_lock = hold_run_lock()  # noqa: F841: held until main returns
 
     sha, dirty = commit()
     started = dt.datetime.now().astimezone()
