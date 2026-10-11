@@ -33,21 +33,11 @@ public extension EditorModel {
     func acceptProposals() -> Bool {
         let softFrames = librarySoftFrames
         guard module == .library, !softFrames.verdicts.isEmpty else { return false }
-        let selected = selectedIDs
-        let photos: [Int64] = selected.count > 1 ? selected : Array(library.photoIDs)
-        var flags: [Int64: PhotoFlag] = [:]
-        var accepted: [Int64] = []
-        for photo in photos {
-            guard let url = library.url(ofPhoto: photo) else { continue }
-            switch softFrames.entry(listed: photo, url: url)?.verdict ?? SoftFrames.Verdict.none {
-            case .proposed: flags[photo] = .pick
-            case .soft: flags[photo] = .reject
-            case .none, .changed: continue
-            }
-            accepted.append(photo)
-        }
-        guard !accepted.isEmpty else { return false }
-        cull(.flags(flags), photos: accepted)
+        let selection = photoSelection
+        let proposals = softFrames.proposals { selection.count < 2 || selection.contains($0) }
+        guard !proposals.isEmpty else { return false }
+        let flags = Dictionary(proposals.map { ($0.photo, $0.flag) }) { $1 }
+        cull(.flags(flags), photos: proposals.map(\.photo))
         activity.record(.action, CullingChange.flags(flags).title)
         return true
     }

@@ -62,6 +62,36 @@ public final class LibrarySoftFrames {
         return indexID.flatMap(verdicts.entry(of:))
     }
 
+    /// The photos listed that something is proposed for, by their IDs in the list and in its order, with the flag
+    /// accepting it gives: a pick for a frame proposed, a reject for a soft one. Found from the verdicts, so a large
+    /// source's photos whose rows aren't read are among them.
+    func proposals(where included: (Int64) -> Bool = { _ in true }) -> [(photo: Int64, flag: PhotoFlag)] {
+        guard let library = model?.library else { return [] }
+        let list = library.photoList
+        var found: [(place: Int, photo: Int64, flag: PhotoFlag)] = []
+        func add(_ listed: Int64?, _ verdict: SoftFrames.Verdict) {
+            guard let listed, let place = list.index(of: listed), included(listed) else { return }
+            switch verdict {
+            case .proposed: found.append((place, listed, .pick))
+            case .soft: found.append((place, listed, .reject))
+            case .none, .changed: break
+            }
+        }
+        if library.showsIndexIDs {
+            for verdict in [SoftFrames.Verdict.proposed, .soft] {
+                for photo in verdicts.photos(verdict) {
+                    add(photo, verdict)
+                }
+            }
+        } else {
+            for (url, photo) in shownIDs {
+                add(library.photoID(of: url), verdicts.verdict(of: photo))
+            }
+        }
+        found.sort { $0.place < $1.place }
+        return found.map { ($0.photo, $0.flag) }
+    }
+
     /// Calls `handler` whenever the verdicts shown change.
     func observe(_ handler: @escaping @MainActor () -> Void) -> LibraryObservation {
         let id = UUID()

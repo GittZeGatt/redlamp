@@ -123,6 +123,44 @@ struct LibrarySoftFramesTests {
         #expect(model.items.allSatisfy { $0.metadata.flag == nil }, "one Undo takes every flag back")
     }
 
+    @Test func `Accept reaches a large source's proposals whose rows aren't read, and reads none of them`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        _ = try Self.shoot(sandbox)
+        let model = try await sandbox.open()
+        let library = model.library
+        library.largestRead = 4
+        library.firstRead = 2
+        #expect(model.librarySources.show(.allPhotographs))
+        try await sandbox.eventually(seconds: 20) { !model.librarySources.isListing && model.items.count == 7 }
+        try #require(model.items.readsOnRequest, "its rows read as they're asked for")
+        let softFrames = model.librarySoftFrames
+        model.showProposals(.runsOnly)
+        try await sandbox.eventually(seconds: 60) {
+            softFrames.verdicts.photos(.soft).count == 2 && softFrames.verdicts.photos(.proposed).count == 2
+        }
+        let read = library.items.rowsRead.count
+        #expect(read < 7, "rows not read: \(7 - read)")
+
+        #expect(model.acceptProposals())
+        try await sandbox.eventually { model.cullingUndoCount == 1 }
+        #expect(model.cullingUndo.last?.photos.count == 4, "a pick for each frame proposed, a reject for each soft one")
+        #expect(library.items.rowsRead.count == read, "no row was read for it")
+        await model.cullingTail?.value
+        let engine = try #require(sandbox.service?.engine)
+        func found(_ query: String) async throws -> Int {
+            try await engine.list(.allPhotographs, matching: LibraryQuery(parsing: query)).count
+        }
+        try await SourcesSandbox.eventually {
+            let picks = try await found("flag:pick")
+            let rejects = try await found("flag:reject")
+            return picks == 2 && rejects == 2
+        }
+        #expect(try await found("flag:pick") == 2)
+        #expect(try await found("flag:reject") == 2)
+    }
+
     @Test func `a folder listed from the disk before the library took it over is judged by its photos' index IDs`(
     ) async throws {
         let sandbox = SourcesSandbox()
