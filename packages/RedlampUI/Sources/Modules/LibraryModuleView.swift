@@ -45,9 +45,7 @@ final class LibraryModuleView: NSView {
         let hosting = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme).focusEffectDisabled())
         hosting.sizingOptions = []
         filmstrip = hosting
-        let strip = NSHostingView(rootView: CullingProblemStrip(model: model).focusEffectDisabled())
-        strip.sizingOptions = [.intrinsicContentSize]
-        problem = strip
+        problem = CullingProblemStrip(model: model)
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
         wantsLayer = true
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
