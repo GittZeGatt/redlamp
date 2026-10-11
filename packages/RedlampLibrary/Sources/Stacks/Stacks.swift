@@ -114,6 +114,12 @@ public struct Stacks: Sendable, RandomAccessCollection {
         pairIndex(of: photo)
     }
 
+    /// Whether the burst or manual stack holding `photo` or its pair is a burst or a manual stack, without making the
+    /// stack; nil when it's in neither.
+    public func kind(ofStackHolding photo: Int64) -> Stack.Kind? {
+        groupIndex(of: photo).map { kinds[$0] }
+    }
+
     /// A focus suggestion holding `photo`.
     public func suggestion(containing photo: Int64) -> Stack? {
         guard photo >= 0, photo < suggestionOf.count, suggestionOf[Int(photo)] >= 0 else { return nil }

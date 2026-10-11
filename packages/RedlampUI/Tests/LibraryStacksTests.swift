@@ -133,8 +133,10 @@ struct LibraryStacksTests {
         content.addSubview(strip)
         window.contentView = content
         content.layoutSubtreeIfNeeded()
-        try await eventually { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
-        try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
+        try await eventually { model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true }
+        try #require(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true, "the burst open, the pair closed")
+        model.gridStacks.closeAll()
+        try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair closed")
         try await Task.sleep(for: .milliseconds(50))
         return Shown(model: model, grid: grid, filmstrip: strip, window: window)
     }
@@ -524,9 +526,10 @@ extension LibraryStacksTests {
         _ = model.librarySources.show(.allPhotographs)
         try await eventually {
             model.library.showsIndexIDs && !model.librarySources.isListing && model.items.count == Self.photos.count
-                && model.gridStacks.list.map { $0.list.source == .allPhotographs && $0.stacksShown == (0, 2) } == true
+                && model.gridStacks.list.map { $0.list.source == .allPhotographs && $0.stacksShown == (1, 1) } == true
         }
         try #require(model.library.showsIndexIDs && model.items.count == Self.photos.count, "All Photographs shown")
+        model.gridStacks.closeAll()
         #expect(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
         #expect(grid.shownCount == 6)
         let (first, second) = try (id(model, "S01.JPG"), id(model, "S02.JPG"))

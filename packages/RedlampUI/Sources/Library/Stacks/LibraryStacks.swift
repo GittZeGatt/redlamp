@@ -4,7 +4,8 @@ import RedlampDesign
 import RedlampLibrary
 
 /// The Library's stacks (LIB-28), for the grid and the filmstrip: the source's photos with each raw and its
-/// JPEG, each burst and each stack made by hand shown as one cell with its count until it's opened
+/// JPEG and each stack made by hand shown as one cell with its count until it's opened, and each burst the library
+/// finds by itself open, every frame with its cell and the burst marked as one, until it's closed (DEC-64)
 /// (`StackedList`), as the library finds them in its index (`LibraryStackFinder`), over the app's own photo
 /// IDs (`FolderLibrary.photoIDs`), so the grid's selection is `EditorModel.photoSelection`.
 ///
@@ -13,6 +14,9 @@ import RedlampLibrary
 /// microseconds, with a diff of the cells, in the grid's groups too (`LibraryGroups`). A closed stack's cell
 /// selects all of its photos (`EditorModel.coverClosedStacks`), so culling, keywords, drags and moves reach
 /// every photo it stands for and nothing out of sight is selected alone.
+///
+/// How a source's stacks start (`Openness.Start`) is the source's own: as found, unless Open All or Close All
+/// Stacks was the last asked for it, as its view keeps it; a source without a view starts as found.
 @MainActor
 @Observable
 @_spi(Harness) public final class LibraryStacks {
@@ -25,17 +29,47 @@ import RedlampLibrary
         case items(PhotoListDiff)
     }
 
-    /// Which stacks are open, as each source's view keeps them (`LibraryViewState`): whether the stacks found come
-    /// open, after Open All Stacks, and the stacks that don't follow that, by their top photo's path.
+    /// Which stacks are open, as each source's view keeps them (`LibraryViewState`): how its stacks start, and the
+    /// stacks that aren't as they'd start, by their top photo's path.
     struct Openness: Codable, Equatable, Sendable {
+        /// How a source's stacks start.
+        enum Start: String, Codable, Sendable {
+            /// As the library finds them: bursts open (DEC-64), pairs and stacks made by hand closed.
+            case found
+            /// Every one open: Open All Stacks was the last asked for.
+            case open
+            /// Every one closed: Close All Stacks was the last asked for.
+            case closed
+        }
+
         struct Stack: Codable, Hashable, Sendable {
             var path: String
             /// A raw and its JPEG, rather than a burst or a manual stack with the same top photo.
             var pair: Bool
         }
 
+        /// Open All was the last asked for: `start` for a build that doesn't read it.
         var all: Bool
         var others: [Stack]
+        /// Nil in a view kept before found bursts started open, whose stacks started closed but after Open All.
+        var start: Start?
+
+        init(start: Start, others: [Stack]) {
+            all = start == .open
+            self.others = others
+            self.start = start
+        }
+
+        /// How the stacks it keeps started, which `others` aren't as.
+        var kept: Start {
+            start ?? (all ? .open : .closed)
+        }
+
+        /// How the stacks the source gains start from now on: as found in a view kept before they did, but after
+        /// Open All.
+        var gained: Start {
+            start ?? (all ? .open : .found)
+        }
     }
 
     /// The stacks as the menus and the palette follow them, the list itself not being observed. Nothing here changes
@@ -55,8 +89,15 @@ import RedlampLibrary
     /// Counts the stacks opened and closed, for what follows which are open (Remove from Stack, Split Stack, moving in
     /// a stack); the outline doesn't change as they do.
     @_spi(Harness) public private(set) var toggles = 0
+    /// How the source's stacks start, and the stacks it gains: as found until Open All or Close All Stacks.
+    @ObservationIgnored private(set) var start = Openness.Start.found
+    /// The source `start` is of: another source starts as found, unless its view says otherwise.
+    @ObservationIgnored private var startSource: PhotoSource?
     /// Whether the stacks a list gains come open: after Open All Stacks, until Close All Stacks.
-    @ObservationIgnored private(set) var opensNew = false
+    var opensNew: Bool {
+        start == .open
+    }
+
     /// The source shown and its stacks as its view kept them, until they've been found and opened so.
     @ObservationIgnored private var restoring: (source: PhotoSource, openness: Openness)?
     /// Counts the list's changes, for a grouping made meanwhile to open its stacks as the list has them.
@@ -145,9 +186,13 @@ import RedlampLibrary
         }
         stacking = true
         pending = false
+        if startSource != library.photoList.source {
+            startSource = library.photoList.source
+            start = .found
+        }
         let request = Request(
             items: library.showsIndexIDs ? nil : library.items.allRows, ids: library.photoIDs, list: library.photoList,
-            previous: list, opensNew: opensNew, opening: self.opening, finder: finder,
+            previous: list, start: start, opening: self.opening, finder: finder,
             photoIDs: model.libraryPanels.photoIDs, forgetting: self.forgetting,
         )
         self.forgetting = (false, false)
@@ -166,7 +211,7 @@ import RedlampLibrary
         var ids: ContiguousArray<Int64>
         var list: PhotoList
         var previous: StackedList?
-        var opensNew: Bool
+        var start: Openness.Start
         var opening: Set<Int64>
         var finder: LibraryStackFinder
         var photoIDs: PanelPhotoIDs
@@ -180,6 +225,8 @@ import RedlampLibrary
         /// shows a stack.
         var changed: Bool
         var indexIDs: [Int64: Int64]
+        /// How its stacks started.
+        var start: Openness.Start
     }
 
     /// The request's photos with the library's stacks, relabelled with the IDs here, the stacks open in the list
@@ -210,16 +257,19 @@ import RedlampLibrary
         }
         var stacked: StackedList
         var changed: Bool
+        let bursts = request.start == .found
         if let previous = request.previous {
             var selection = StackSelection()
-            let (updated, diff) = previous.updated(list: request.list, stacks: stacks, selection: &selection)
+            let (updated, diff) = previous.updated(
+                list: request.list, stacks: stacks, opensBursts: bursts, selection: &selection,
+            )
             (stacked, changed) = (updated, !diff.isEmpty)
         } else {
-            stacked = StackedList(request.list, stacks: stacks)
+            stacked = StackedList(request.list, stacks: stacks, opensBursts: bursts)
             let shown = stacked.stacksShown
             changed = shown.open + shown.closed > 0
         }
-        if request.opensNew, stacked.stacksShown.closed > 0 {
+        if request.start == .open, stacked.stacksShown.closed > 0 {
             stacked.openAll()
             changed = true
         }
@@ -229,7 +279,10 @@ import RedlampLibrary
             changed = true
         }
         let shown = stacked.stacksShown
-        return Result(list: shown.open + shown.closed > 0 ? stacked : nil, changed: changed, indexIDs: byOwn)
+        return Result(
+            list: shown.open + shown.closed > 0 ? stacked : nil, changed: changed, indexIDs: byOwn,
+            start: request.start,
+        )
     }
 
     private func stacked(_ result: Result?, for source: PhotoSource, since started: ContinuousClock.Instant) {
@@ -243,11 +296,18 @@ import RedlampLibrary
             }
             var made = result.list
             var changed = result.changed
-            // Open All asked for while the stacks were being found, which the request didn't know of.
-            if opensNew, restoring == nil, var stacked = made, stacked.stacksShown.closed > 0 {
-                stacked.openAll()
-                made = stacked
-                changed = true
+            // Open All or Close All asked for while the stacks were being found, which the request didn't know of.
+            if restoring == nil, var stacked = made {
+                let shown = stacked.stacksShown
+                if start == .open, shown.closed > 0 {
+                    stacked.openAll()
+                } else if start == .closed, result.start != .closed, shown.open > 0 {
+                    stacked.closeAll()
+                }
+                if stacked.stacksShown != shown {
+                    made = stacked
+                    changed = true
+                }
             }
             show(made, changed: changed || (list == nil) != (made == nil))
             followRestored()
@@ -259,22 +319,36 @@ import RedlampLibrary
 
     // MARK: - Each source's
 
-    /// Which stacks are open now, for the source's view to keep: those that don't follow Open All, by their top photo's
-    /// path.
+    /// Whether the stack whose top photo is `top`, a raw and its JPEG with `pair`, starts open as `start` says.
+    nonisolated static func startsOpen(top: Int64, pair: Bool, in stacks: Stacks, start: Openness.Start) -> Bool {
+        switch start {
+        case .found: !pair && stacks.kind(ofStackHolding: top) == .burst
+        case .open: true
+        case .closed: false
+        }
+    }
+
+    /// Which stacks are open now, for the source's view to keep: how they start, and those that aren't as they'd
+    /// start, by their top photo's path.
     var openness: Openness {
         var others: [Openness.Stack] = []
-        for stack in list?.openness ?? [] where stack.isOpen != opensNew && others.count < Self.keptStacks {
-            guard let url = model?.library.url(ofPhoto: stack.top) else { continue }
-            others.append(Openness.Stack(path: url.path, pair: stack.pair))
+        if let list {
+            for stack in list.openness where others.count < Self.keptStacks {
+                guard stack.isOpen != Self.startsOpen(top: stack.top, pair: stack.pair, in: list.stacks, start: start),
+                      let url = model?.library.url(ofPhoto: stack.top)
+                else { continue }
+                others.append(Openness.Stack(path: url.path, pair: stack.pair))
+            }
         }
-        return Openness(all: opensNew, others: others)
+        return Openness(start: start, others: others)
     }
 
     /// The source just listed's stacks open as its view kept them: at once when they've been found, else once they
-    /// are. Stacks found since come open after Open All, as they would have.
+    /// are. Stacks found since start as they would have.
     func restore(_ openness: Openness) {
         guard let model else { return }
-        opensNew = openness.all
+        start = openness.gained
+        startSource = model.library.photoList.source
         restoring = (model.library.photoList.source, openness)
         followRestored()
     }
@@ -285,8 +359,6 @@ import RedlampLibrary
               model.library.photoList.source == source
         else { return }
         restoring = nil
-        let shown = stacked.stacksShown
-        guard !openness.others.isEmpty || (openness.all ? shown.closed : shown.open) > 0 else { return }
         var kept = (pairs: Set<Int64>(), others: Set<Int64>())
         for stack in openness.others {
             guard let id = model.library.photoID(of: URL(fileURLWithPath: stack.path)) else { continue }
@@ -297,8 +369,10 @@ import RedlampLibrary
             }
         }
         var selection = StackSelection()
+        let (stacks, start) = (stacked.stacks, openness.kept)
         let diff = stacked.reopen(selection: &selection) { top, pair in
-            openness.all != (pair ? kept.pairs : kept.others).contains(top)
+            Self.startsOpen(top: top, pair: pair, in: stacks, start: start)
+                != (pair ? kept.pairs : kept.others).contains(top)
         }
         guard !diff.isEmpty else { return }
         list = stacked
@@ -381,9 +455,10 @@ import RedlampLibrary
         model.libraryViews.groups?.closeStack(cell, as: stacked)
     }
 
-    /// Opens every stack; the stacks the list gains come open until every one is closed again.
+    /// Opens every stack; the stacks the source's list gains come open until every one is closed again.
     @_spi(Harness) public func openAll() {
-        opensNew = true
+        start = .open
+        startSource = model?.library.photoList.source
         guard var stacked = list, stacked.stacksShown.closed > 0 else { return }
         let diff = stacked.openAll()
         list = stacked
@@ -391,9 +466,11 @@ import RedlampLibrary
         model?.libraryViews.groups?.openAllStacks()
     }
 
-    /// Closes every stack, each selected whole when any of its photos was.
+    /// Closes every stack, each selected whole when any of its photos was; the stacks the source's list gains come
+    /// closed, bursts too, until every one is opened again.
     @_spi(Harness) public func closeAll() {
-        opensNew = false
+        start = .closed
+        startSource = model?.library.photoList.source
         guard var stacked = list, let model, stacked.stacksShown.open > 0 else { return }
         let diff = stacked.closeAll()
         list = stacked
