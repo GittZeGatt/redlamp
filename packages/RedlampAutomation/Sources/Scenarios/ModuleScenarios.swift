@@ -137,7 +137,7 @@
 
     enum ModuleScenarios {
         static let all: [Scenario] = [switching, picker, grid, palette] + GridScenarios.all + FilterScenarios.all
-            + CullingScenarios.all + CompareScenarios.all + CullingFollowUpScenarios.all
+            + CullingScenarios.all + CompareScenarios.all + CullingFollowUpScenarios.all + ModulesCarryScenarios.all
 
         static let switching = Scenario(
             "modules.switching",

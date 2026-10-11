@@ -1,6 +1,5 @@
 #if DEBUG || REDLAMP_PROFILING
     import AppKit
-    import Carbon.HIToolbox
     import RedlampEngineAPI
     @_spi(Harness) import RedlampUI
 
@@ -20,10 +19,6 @@
             Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } ?? ""
         }
 
-        private static func arrow(_ key: Int) -> String {
-            UnicodeScalar(key).map(String.init) ?? ""
-        }
-
         static let compare = Scenario(
             "library.compare",
             "C shows the active photo beside the next as the select and the candidate: ← and → change the candidate, ↓ "
@@ -31,7 +26,7 @@
                 + "reaches it alone; Z zooms the two together until the lock unlinks them; E and G go back",
             claims: [
                 .action(.compareView), .action(.nextPhoto), .action(.previousPhoto), .action(.toggleZoom),
-                .feature("library.ratings"),
+                .action(.swapCompared), .action(.makeSelect), .feature("library.ratings"),
             ],
         ) { app in
             try app.withCulling { _ in
@@ -60,11 +55,11 @@
                 try app.wait("→: \(third) the candidate") { compared($0) == [first, third] }
                 try app.press(.previousPhoto)
                 try app.wait("←: \(second) the candidate again") { compared($0) == [first, second] }
-                try app.pressGridKey(kVK_DownArrow, characters: arrow(NSDownArrowFunctionKey))
+                try app.press(.swapCompared)
                 try app.wait("↓: the two swapped") { compared($0) == [second, first] }
-                try app.pressGridKey(kVK_DownArrow, characters: arrow(NSDownArrowFunctionKey))
+                try app.press(.swapCompared)
                 try app.wait("↓ again: back") { compared($0) == [first, second] }
-                try app.pressGridKey(kVK_UpArrow, characters: arrow(NSUpArrowFunctionKey))
+                try app.press(.makeSelect)
                 try app.wait("↑: \(second) the select, \(third) the candidate") { compared($0) == [second, third] }
                 try app.expect(try app.main { $0.selection?.lastPathComponent } == second, "The select isn't active")
 

@@ -7,9 +7,9 @@ import RedlampDesign
 /// sight, and the notice names that module.
 @MainActor
 @Observable
-final class UndoNotice {
+@_spi(Harness) public final class UndoNotice {
     /// What's said now; nil once it's gone.
-    private(set) var text: String?
+    public private(set) var text: String?
     @ObservationIgnored private var hiding: Task<Void, Never>?
 
     /// How long a notice stays.
@@ -27,7 +27,7 @@ final class UndoNotice {
 }
 
 extension EditorModel {
-    var undoNotice: UndoNotice {
+    @_spi(Harness) public var undoNotice: UndoNotice {
         if let notice = Self.undoNotices.object(forKey: self) {
             return notice
         }
