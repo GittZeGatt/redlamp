@@ -80,8 +80,8 @@ public struct ImportOutcome: Sendable, Hashable {
 /// the choices made while browsing and the metadata preset. Photos in place are put on the targets'
 /// drives a batch at a time (`ImportFlush`), and only then logged done and counted verified; the index
 /// and live lists hear of their folders in batches. A forced quit leaves the journal, which `recover`
-/// finishes at the next launch, keeping every copy in place whose hash is the one logged. One import
-/// runs at a time.
+/// finishes at the next launch, keeping every copy in place whose hash is the one logged; or `rollBack`
+/// takes the import back. One import or rollback runs at a time.
 public final class Importer: Sendable {
     public let library: ImportLibrary
     /// The sources' file system.
@@ -106,6 +106,8 @@ public final class Importer: Sendable {
         case afterPhotos(Int)
         /// A photo's files verified and logged, but not yet renamed into place.
         case beforePlacing(Int)
+        /// A rollback, once this many photos' files are in the Trash, before they're logged taken back.
+        case afterTakingBack(Int)
     }
 
     struct ForcedQuit: Error {}
@@ -133,22 +135,23 @@ public final class Importer: Sendable {
             if let unfinished = try await unfinishedEntries().first {
                 throw ImportError.unfinished(unfinished.id)
             }
-            let journal = journal
+            let (journal, fileSystem) = (journal, destinationFileSystem)
             try await LibraryIndex.offCaller {
                 journal.prune()
-                try journal.write(plan)
+                try journal.write(plan, newFolders: Self.newFolders(of: plan, fileSystem: fileSystem))
             }
             return try await perform(plan, logged: ImportJournal.Progress(), progress: progress)
         }
     }
 
-    /// Finishes every import a forced quit left unfinished: photos verified and placed are kept, the
-    /// rest copied from their sources, which have to be there as they were.
+    /// Finishes every import a forced quit cut short while it copied: photos verified and placed are kept,
+    /// the rest copied from their sources, which have to be there as they were. A rollback a forced quit
+    /// cut short is finished by `rollBack`.
     @discardableResult
     public func recover(progress: (@Sendable (ImportProgress) -> Void)? = nil) async throws -> [ImportOutcome] {
         try await serially { [self] in
             var outcomes: [ImportOutcome] = []
-            for entry in try await unfinishedEntries() {
+            for entry in try await unfinishedEntries() where entry.state != .rollingBack {
                 let journal = journal
                 let (plan, logged) = try await LibraryIndex.offCaller { try journal.load(entry.id) }
                 var outcome = try await perform(plan, logged: logged, progress: progress)
@@ -167,6 +170,41 @@ public final class Importer: Sendable {
 
     public func unfinishedEntries() async throws -> [ImportJournal.Entry] {
         try await entries().filter(\.state.isUnfinished)
+    }
+
+    /// The plan of import `id`, as the journal keeps it.
+    public func plan(of id: UUID) async throws -> ImportPlan {
+        let journal = journal
+        return try await LibraryIndex.offCaller { try journal.load(id).plan }
+    }
+
+    /// Stops the next run once `photos` photos are done, as a forced quit would: the regression suite's
+    /// way to leave an import to be resumed or rolled back.
+    @_spi(Harness) public func simulateForcedQuit(afterPhotos photos: Int) {
+        interruption.withLock { $0 = .afterPhotos(photos) }
+    }
+
+    /// The folders `plan` would make on `fileSystem`, parents first: the destination and the backup, the
+    /// folders above them, and the plan's folders below them, that aren't there.
+    static func newFolders(of plan: ImportPlan, fileSystem: any LibraryFileSystem) -> [String] {
+        var found: [String] = []
+        for root in plan.roots {
+            let path = LibraryIndexer.path(root)
+            var missing: [String] = []
+            var above = path
+            while above != "/", !fileSystem.exists(URL(fileURLWithPath: above, isDirectory: true)) {
+                missing.append(above)
+                above = (above as NSString).deletingLastPathComponent
+            }
+            found += missing.reversed()
+            for folder in plan.folders {
+                let below = ImportPlanner.join(path, folder)
+                if !missing.isEmpty || !fileSystem.exists(URL(fileURLWithPath: below, isDirectory: true)) {
+                    found.append(below)
+                }
+            }
+        }
+        return found
     }
 
     // MARK: - Photos
@@ -571,7 +609,7 @@ extension Importer {
     }
 
     /// The locator that places sidecars as the library's roots keep them.
-    private func locator() async throws -> SidecarLocator {
+    func locator() async throws -> SidecarLocator {
         guard let index = library.index else { return .besidePhotos }
         let roots = try await index.read { reader in try LibrarySidecars.locatorRoots(reader) }
         return SidecarLocator(folder: library.paths.sidecars, roots: roots)
@@ -624,8 +662,8 @@ extension Importer {
         )
     }
 
-    /// Runs `body` after the imports asked for before it.
-    private func serially<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) async throws -> T {
+    /// Runs `body` after the imports and rollbacks asked for before it.
+    func serially<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) async throws -> T {
         let task = serial.withLock { last -> Task<T, any Error> in
             let previous = last
             let task = Task {

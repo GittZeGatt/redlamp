@@ -157,9 +157,14 @@ public struct ImportPlan: Sendable, Hashable {
         items.count { $0.numbered != nil }
     }
 
+    /// The destination, then the backup.
+    public var roots: [URL] {
+        [settings.destination] + (settings.backup.map { [$0] } ?? [])
+    }
+
     /// Where `copy` goes at the destination, then at the backup.
     public func targets(of copy: Copy) -> [URL] {
-        ([settings.destination] + (settings.backup.map { [$0] } ?? [])).map { root in
+        roots.map { root in
             URL(fileURLWithPath: LibraryIndexer.path(root) + "/" + copy.path, isDirectory: copy.isDirectory)
         }
     }

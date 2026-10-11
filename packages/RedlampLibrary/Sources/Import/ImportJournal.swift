@@ -2,11 +2,12 @@ import Foundation
 import Synchronization
 
 /// The imports' journal, in `LibraryPaths.root/Imports` on the Mac's own disk, kept as the file
-/// operations' is (`FileJournal`): each import a file of JSON lines, its header (its settings and
-/// sources) and then a photo a line, written to a hidden name, synced and renamed into place before
-/// anything is copied. Beside it, its log gets a line as each file is verified at each destination,
-/// as each photo is placed, done or failed, and at each change of state, written straight to the file,
-/// so a forced quit loses none; `Importer.recover` finishes the import from there.
+/// operations' is (`FileJournal`): each import a file of JSON lines, its header (its settings, sources
+/// and the folders it would make) and then a photo a line, written to a hidden name, synced and renamed
+/// into place before anything is copied. Beside it, its log gets a line as each file is verified at each
+/// destination, as each photo is placed, done or failed, as a rollback moves each file to the Trash and
+/// takes each photo back, and at each change of state, written straight to the file, so a forced quit
+/// loses none; `Importer.recover` finishes the import from there, and `Importer.rollBack` the rollback.
 public struct ImportJournal: Sendable {
     public let folder: URL
     /// Imports kept; older ones that are over are removed.
@@ -26,9 +27,16 @@ public struct ImportJournal: Sendable {
         case finished
         /// Cancelled: the photos done so far are in place, the others weren't copied.
         case stopped
+        /// Rolling back: its copies going to the Trash and its photos out of the library, or stopped by a
+        /// forced quit or Cancel before the end, for `Importer.rollBack` to finish.
+        case rollingBack
+        /// Rolled back: the copies it made moved to the Trash, its photos taken out of the library and the
+        /// folders it made and left empty removed, but for the photos `ImportRollback.left` names.
+        case rolledBack
 
+        /// Whether it has to be finished, or rolled back, before another import runs.
         public var isUnfinished: Bool {
-            self == .planned || self == .running
+            self == .planned || self == .running || self == .rollingBack
         }
     }
 
@@ -39,8 +47,11 @@ public struct ImportJournal: Sendable {
         public var created: Date
         public var photos: Int
         public var state: State
+        /// Photos done and still in place: a rollback takes back those it moves to the Trash.
         public var done: Int
         public var failed: Int
+        /// Photos a rollback took back.
+        public var rolledBack: Int
     }
 
     struct Header: Codable {
@@ -53,6 +64,10 @@ public struct ImportJournal: Sendable {
         var photos: Int
         var folders: [String]
         var counters: NamingCounters
+        /// The folders the import would make: those of the destination, the backup, the folders above them
+        /// and the plan's folders below them that weren't there when it was written. A rollback removes those
+        /// left empty. Nil in an import written before rollbacks.
+        var newFolders: [String]?
     }
 
     /// A line of an import's log.
@@ -66,6 +81,12 @@ public struct ImportJournal: Sendable {
         var failed: Int?
         var message: String?
         var state: State?
+        /// A file of photo `trashed` a rollback moved to the Trash, from `from` to `to`.
+        var trashed: Int?
+        var from: String?
+        var to: String?
+        /// A photo a rollback took back: nothing of it the import made is left at the targets, nor in the index.
+        var rolledBack: Int?
     }
 
     /// What an import's log says.
@@ -74,8 +95,12 @@ public struct ImportJournal: Sendable {
         /// Each copy's SHA-256 once verified at a target, by photo, copy and target.
         var verified: [Int: [Int: [Int: String]]] = [:]
         var placed = Set<Int>()
+        /// Photos done and still in place: those a rollback took back aren't.
         var done = Set<Int>()
         var failed: [Int: String] = [:]
+        /// The files a rollback moved to the Trash, by photo.
+        var trashed: [Int: [ImportRollback.Trashed]] = [:]
+        var rolledBack = Set<Int>()
     }
 
     /// "Import 120 photos from EOS_DIGITAL".
@@ -87,13 +112,14 @@ public struct ImportJournal: Sendable {
 
     // MARK: - Writing
 
-    func write(_ plan: ImportPlan) throws {
+    /// Writes `plan`, with `newFolders`, the folders it would make (`Header.newFolders`).
+    func write(_ plan: ImportPlan, newFolders: [String] = []) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let name = Self.fileName(created: plan.created, id: plan.id)
         let header = Header(
             version: Self.version, id: plan.id, title: Self.title(of: plan),
             created: plan.created.timeIntervalSince1970, settings: plan.settings, sources: plan.sources,
-            photos: plan.items.count, folders: plan.folders, counters: plan.counters,
+            photos: plan.items.count, folders: plan.folders, counters: plan.counters, newFolders: newFolders,
         )
         let encoder = Self.encoder
         var data = try encoder.encode(header)
@@ -150,6 +176,14 @@ public struct ImportJournal: Sendable {
             try append(Record(failed: item, message: message))
         }
 
+        func trashed(_ item: Int, from: URL, to: URL) throws {
+            try append(Record(trashed: item, from: from.path, to: to.path))
+        }
+
+        func rolledBack(_ item: Int) throws {
+            try append(Record(rolledBack: item))
+        }
+
         /// Records a change of state, and syncs the log.
         func state(_ state: State) throws {
             try append(Record(state: state))
@@ -186,9 +220,16 @@ public struct ImportJournal: Sendable {
             let progress = progress(name: name)
             return Entry(
                 id: header.id, title: header.title, created: Date(timeIntervalSince1970: header.created),
-                photos: header.photos, state: progress.state, done: progress.done.count, failed: progress.failed.count,
+                photos: header.photos, state: progress.state, done: progress.done.count,
+                failed: progress.failed.count, rolledBack: progress.rolledBack.count,
             )
         }
+    }
+
+    /// The folders the import would make, as its header keeps them (`Header.newFolders`).
+    func newFolders(_ id: UUID) throws -> [String]? {
+        guard let name = try fileNames()[id] else { throw ImportError.noSuchImport(id) }
+        return try Self.header(of: folder.appending(path: name + ".import")).newFolders
     }
 
     /// The destinations and backups of every import it keeps, from their headers alone.
@@ -238,12 +279,19 @@ public struct ImportJournal: Sendable {
             if let item = record.failed {
                 progress.failed[item] = record.message ?? ""
             }
+            if let item = record.trashed, let from = record.from, let to = record.to {
+                progress.trashed[item, default: []].append(ImportRollback.Trashed(from: from, to: to))
+            }
+            if let item = record.rolledBack {
+                progress.rolledBack.insert(item)
+            }
             if let state = record.state {
                 progress.state = state
             } else if progress.state == .planned {
                 progress.state = .running
             }
         }
+        progress.done.subtract(progress.rolledBack)
         return progress
     }
 
@@ -310,8 +358,11 @@ public enum ImportError: Error, Sendable, Hashable, CustomStringConvertible {
     case damagedJournal(UUID)
     /// The import was written by a newer Redlamp.
     case newerJournal(UUID)
-    /// An import a forced quit interrupted waits to be finished (`Importer.recover`).
+    /// An import a forced quit interrupted waits to be finished (`Importer.recover`) or rolled back
+    /// (`Importer.rollBack`), or a rollback waits to be finished.
     case unfinished(UUID)
+    /// The destination or the backup holding copies the import made isn't there, so it can't be rolled back.
+    case missingTarget(UUID, path: String)
 
     public var description: String {
         switch self {
@@ -319,6 +370,7 @@ public enum ImportError: Error, Sendable, Hashable, CustomStringConvertible {
         case let .damagedJournal(id): "import \(id.uuidString) can't be read from the journal"
         case let .newerJournal(id): "import \(id.uuidString) was written by a newer Redlamp"
         case let .unfinished(id): "import \(id.uuidString) was interrupted and has to be finished first"
+        case let .missingTarget(_, path): "\(path) isn't there: connect it to roll the import back"
         }
     }
 }
