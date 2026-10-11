@@ -9,6 +9,8 @@ struct SliderScrollTests {
     final class Editor: ParameterEditing {
         var values: [ParameterID: Double] = [:]
         var edits = 0
+        var ends = 0
+        var openEdit: Int?
         var focusedParameter: ParameterID?
         var revealedParameter: ParameterID?
         var optionKeyHeld: Bool {
@@ -37,9 +39,14 @@ struct SliderScrollTests {
 
         func beginEdit(_: ParameterID?) {
             edits += 1
+            openEdit = edits
         }
 
-        func endEdit(name _: String?) {}
+        func endEdit(name _: String?) {
+            ends += 1
+            openEdit = nil
+        }
+
         func setTemporaryClipping(_: Bool) {}
     }
 
@@ -67,5 +74,29 @@ struct SliderScrollTests {
         let row = SliderRowView(parameter: .contrast, editor: editor)
         try row.scrollWheel(with: scroll(lines: 3, flags: []))
         #expect(editor.values.isEmpty)
+    }
+
+    @Test func `the scroll's edit ends once scrolling pauses`() async throws {
+        let editor = Editor()
+        let row = SliderRowView(parameter: .contrast, editor: editor)
+        try row.scrollWheel(with: scroll(lines: 3, flags: .maskCommand))
+        let deadline = Date().addingTimeInterval(5)
+        while editor.ends == 0, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(editor.ends == 1)
+        #expect(editor.openEdit == nil)
+    }
+
+    /// A drag of another slider begun before the scroll pauses is one History step of its own.
+    @Test func `the scroll's pause leaves a drag begun since to end its own edit`() async throws {
+        let editor = Editor()
+        let row = SliderRowView(parameter: .highlights, editor: editor)
+        try row.scrollWheel(with: scroll(lines: 3, flags: .maskCommand))
+        editor.beginEdit(.shadows)
+        let drag = editor.openEdit
+        try await Task.sleep(for: .seconds(1))
+        #expect(editor.ends == 0)
+        #expect(editor.openEdit == drag)
     }
 }

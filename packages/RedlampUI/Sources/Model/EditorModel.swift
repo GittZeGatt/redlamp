@@ -778,6 +778,8 @@ public final class EditorModel {
     @ObservationIgnored var pendingDrawingKind: MaskKind?
     @ObservationIgnored var editStart: EditRecipe?
     @ObservationIgnored var editParameter: ParameterID?
+    /// How many continuous edits have begun, which numbers the one open (`openEdit`).
+    @ObservationIgnored private var editsBegun = 0
     /// The `=` / `-` presses on one slider since their last pause (EditorModel+Shortcuts).
     @ObservationIgnored var nudgeRun: NudgeRun?
     @ObservationIgnored private var session = (id: UUID(), started: Date())
@@ -1586,9 +1588,14 @@ public final class EditorModel {
     public func beginEdit(_ parameter: ParameterID? = nil) {
         editStart = recipe
         editParameter = parameter
+        editsBegun += 1
         if isAdjustingMask, activeTool == .masking, showMaskOverlay {
             requestRender()
         }
+    }
+
+    public var openEdit: Int? {
+        editStart == nil ? nil : editsBegun
     }
 
     public func setValue(_ parameter: ParameterID, _ value: Double) {

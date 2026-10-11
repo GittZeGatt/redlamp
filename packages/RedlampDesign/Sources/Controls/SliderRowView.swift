@@ -26,9 +26,10 @@ public final class SliderRowView: NSView {
     private let focusMarker = FocusMarkerView()
     private var trackers: [Tracker] = []
     private var hoverArea: NSTrackingArea?
-    /// Scroll distance not yet turned into steps, and the pending end of the scroll's edit.
+    /// Scroll distance not yet turned into steps, the pending end of the scroll's edit, and that edit.
     private var scrollRemainder: CGFloat = 0
     private var scrollEnd: Task<Void, Never>?
+    private var scrollEdit: Int?
 
     private static let clippingParameters: Set<ParameterID> = [
         .exposure, .highlights, .shadows, .whites, .blacks,
@@ -211,6 +212,7 @@ public final class SliderRowView: NSView {
         if scrollEnd == nil {
             editor.focusedParameter = parameter
             editor.beginEdit(parameter)
+            scrollEdit = editor.openEdit
         }
         let flags = event.modifierFlags
         let multiplier = flags.contains(.shift) ? 10.0 : flags.contains(.option) ? 0.1 : 1.0
@@ -223,7 +225,10 @@ public final class SliderRowView: NSView {
             guard !Task.isCancelled, let self else { return }
             scrollEnd = nil
             scrollRemainder = 0
-            editor.endEdit(name: nil)
+            // An edit begun since (a slider drag) has taken the scroll's place.
+            if editor.openEdit == scrollEdit {
+                editor.endEdit(name: nil)
+            }
         }
     }
 

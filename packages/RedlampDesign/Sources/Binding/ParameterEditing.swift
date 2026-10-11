@@ -15,6 +15,10 @@ public protocol ParameterEditing: AnyObject {
     /// A continuous edit (a drag) records one history step when it ends.
     func beginEdit(_ parameter: ParameterID?)
     func endEdit(name: String?)
+    /// Which continuous edit is open, or nil: each `beginEdit` opens another, so a gesture that ends
+    /// its edit later (⌘-scroll, once scrolling pauses) can tell that a drag begun since has taken
+    /// its place.
+    var openEdit: Int? { get }
 
     /// Option-dragging a tone slider previews clipping, as in Lightroom.
     func setTemporaryClipping(_ on: Bool)
