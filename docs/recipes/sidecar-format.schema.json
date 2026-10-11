@@ -854,6 +854,10 @@
           "type": "string",
           "description": "A label named otherwise than the five colors, as Urgent. Never in label, which older builds can't read with another value; where both are there, label is the photo's label."
         },
+        "customLabelColor": {
+          "type": "string",
+          "description": "The color customLabel is shown in: red, orange, yellow, green, teal, blue, purple, pink, brown or gray. Written only with customLabel. Another value, as a newer build may write, is kept as written and shown as none."
+        },
         "mark": { "const": true, "description": "In the quick collection. Written only when true." },
         "originalName": {
           "type": "string",

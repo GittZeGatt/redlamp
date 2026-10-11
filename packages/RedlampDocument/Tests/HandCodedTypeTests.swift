@@ -55,6 +55,7 @@ struct HandCodedTypeTests {
         metadata.originalName = "IMG_0001.ARW"
         metadata.keywords = ["Places/Portugal/Lisbon", "Music/AC%2FDC"]
         metadata.customLabel = "Second Look"
+        metadata.customLabelColor = .teal
         metadata.mark = true
         metadata.title = "Tram 28"
         metadata.caption = "The tram climbing to Graça."

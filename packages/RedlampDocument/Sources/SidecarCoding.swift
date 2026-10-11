@@ -29,8 +29,8 @@ extension Snapshot: Codable {
 
 extension PhotoMetadata: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case rating, flag, label, customLabel, mark, originalName, keywords, title, caption, creator, copyright
-        case location, collections, stack, captureShift, captureOffset
+        case rating, flag, label, customLabel, customLabelColor, mark, originalName, keywords, title, caption, creator
+        case copyright, location, collections, stack, captureShift, captureOffset
     }
 
     public init(from decoder: Decoder) throws {
@@ -39,6 +39,7 @@ extension PhotoMetadata: Codable {
         flag = try container.decodeIfPresent(PhotoFlag.self, forKey: .flag)
         label = try container.decodeIfPresent(ColorLabel.self, forKey: .label)
         customLabel = try container.decodeIfPresent(String.self, forKey: .customLabel)
+        customLabelColor = try container.decodeIfPresent(LabelColor.self, forKey: .customLabelColor)
         mark = try container.decodeIfPresent(Bool.self, forKey: .mark) ?? false
         originalName = try container.decodeIfPresent(String.self, forKey: .originalName)
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords)
@@ -56,8 +57,8 @@ extension PhotoMetadata: Codable {
     }
 
     /// Writes each field only when it's set: `mark` only when true, `collections` only when there are
-    /// some and `captureShift` only when it isn't 0, so metadata older builds wrote is written back as
-    /// it was.
+    /// some, `captureShift` only when it isn't 0 and `customLabelColor` only with `customLabel`, so
+    /// metadata older builds wrote is written back as it was.
     public func encode(to encoder: Encoder) throws {
         var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
         try unknown.encode(unknownFields)
@@ -66,6 +67,9 @@ extension PhotoMetadata: Codable {
         try container.encodeIfPresent(flag, forKey: .flag)
         try container.encodeIfPresent(label, forKey: .label)
         try container.encodeIfPresent(customLabel, forKey: .customLabel)
+        if customLabel != nil {
+            try container.encodeIfPresent(customLabelColor, forKey: .customLabelColor)
+        }
         if mark {
             try container.encode(true, forKey: .mark)
         }

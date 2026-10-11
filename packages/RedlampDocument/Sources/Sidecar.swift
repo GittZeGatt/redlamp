@@ -26,6 +26,60 @@ public enum ColorLabel: String, Codable, Sendable, Hashable, CaseIterable {
     case red, yellow, green, blue, purple
 }
 
+/// The colour a custom label is shown in (LIB-15), one of `palette` by its name. A name this build doesn't know, a
+/// newer one's, is kept as it's written and shown as none.
+public struct LabelColor: RawRepresentable, Codable, Sendable, Hashable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public static let red = LabelColor(rawValue: "red")
+    public static let orange = LabelColor(rawValue: "orange")
+    public static let yellow = LabelColor(rawValue: "yellow")
+    public static let green = LabelColor(rawValue: "green")
+    public static let teal = LabelColor(rawValue: "teal")
+    public static let blue = LabelColor(rawValue: "blue")
+    public static let purple = LabelColor(rawValue: "purple")
+    public static let pink = LabelColor(rawValue: "pink")
+    public static let brown = LabelColor(rawValue: "brown")
+    public static let gray = LabelColor(rawValue: "gray")
+
+    /// The colours Redlamp offers, in the order it shows them.
+    public static let palette: [LabelColor] = [
+        .red,
+        .orange,
+        .yellow,
+        .green,
+        .teal,
+        .blue,
+        .purple,
+        .pink,
+        .brown,
+        .gray,
+    ]
+
+    /// The palette's colour a label is named after, ignoring case, as Capture One names its Orange and Pink; nil for
+    /// any other name.
+    public init?(named name: String) {
+        let folded = name.trimmingCharacters(in: .whitespaces).lowercased()
+        let color = LabelColor(rawValue: folded == "grey" ? "gray" : folded)
+        guard color.isKnown else { return nil }
+        self = color
+    }
+
+    /// One of the palette's.
+    public var isKnown: Bool {
+        Self.palette.contains(self)
+    }
+
+    /// Its name as menus show it: "Orange".
+    public var name: String {
+        rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+    }
+}
+
 /// Where a photo was taken, in IPTC Core's fields (LIB-22).
 public struct PhotoLocation: Sendable, Hashable {
     public var country: String?
@@ -91,6 +145,9 @@ public struct PhotoMetadata: Sendable, Hashable {
     /// make a sidecar unreadable to older builds; Redlamp gives a photo one or the other, and `label`
     /// is its label where both are there.
     public var customLabel: String?
+    /// The colour `customLabel` is shown in, written with it (LIB-15): the photos of a custom label carry its
+    /// colour, so the library can always tell it from them.
+    public var customLabelColor: LabelColor?
     /// In the quick collection.
     public var mark: Bool
     /// The photo's file name before Redlamp first renamed it, `IMG_1234.CR3`, kept through every
@@ -128,11 +185,13 @@ public struct PhotoMetadata: Sendable, Hashable {
         keywords: [String]? = nil, customLabel: String? = nil, mark: Bool = false, title: String? = nil,
         caption: String? = nil, creator: String? = nil, copyright: String? = nil, location: PhotoLocation? = nil,
         collections: [String] = [], stack: PhotoStack? = nil, captureShift: Int = 0, captureOffset: Int? = nil,
+        customLabelColor: LabelColor? = nil,
     ) {
         self.rating = min(max(rating, 0), 5)
         self.flag = flag
         self.label = label
         self.customLabel = customLabel
+        self.customLabelColor = customLabelColor
         self.mark = mark
         self.originalName = originalName
         self.keywords = keywords

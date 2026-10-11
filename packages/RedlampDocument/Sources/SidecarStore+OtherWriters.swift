@@ -198,6 +198,7 @@ extension PhotoMetadata {
             caption: pick(\.caption), creator: pick(\.creator), copyright: pick(\.copyright),
             location: pick(\.location), collections: pick(\.collections), stack: pick(\.stack),
             captureShift: pick(\.captureShift), captureOffset: pick(\.captureOffset),
+            customLabelColor: pick(\.customLabelColor),
         )
         for key in Set(ours.unknownFields.keys).union(theirs.unknownFields.keys) {
             merged.unknownFields[key] = pick { $0.unknownFields[key] }

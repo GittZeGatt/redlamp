@@ -183,6 +183,7 @@ struct SidecarMetadataTests {
             customLabel: "Urgent", mark: true, title: "Tram 28", caption: "Graça", creator: "Ana Sousa",
             copyright: "© 2026 Ana Sousa", location: PhotoLocation(city: "Lisbon"), collections: ["Clients/Acme"],
             stack: PhotoStack(id: Self.stackID, top: true), captureShift: 3600, captureOffset: -18000,
+            customLabelColor: .teal,
         )
         let unset = Dictionary(uniqueKeysWithValues: Mirror(reflecting: PhotoMetadata()).children.map {
             ($0.label ?? "", String(describing: $0.value))
