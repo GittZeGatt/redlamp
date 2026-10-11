@@ -258,12 +258,13 @@ extension ImportWindowModel {
                         }
                     }
                 }
+                interrupted = await (try? importer.unfinishedEntries()) ?? []
                 rolledBack(rollback)
             } catch {
+                interrupted = await (try? importer.unfinishedEntries()) ?? []
                 phase = .finished
                 failure = "The import couldn't be rolled back: \(String(describing: error))"
             }
-            interrupted = await (try? importer.unfinishedEntries()) ?? []
             notify(.status)
             notify(.sources)
             notify(.photos(ids: nil))
