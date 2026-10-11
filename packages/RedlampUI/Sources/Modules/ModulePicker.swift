@@ -1,17 +1,18 @@
 import AppKit
 import RedlampDesign
 
-/// The module picker in the toolbar, as Lightroom Classic has it: the modules by name, the one shown
-/// brighter, each a click away. A click switches at once: the picker takes the press itself rather than
-/// tracking the mouse as a button would.
+/// The module picker in the toolbar, the modules by name as Lightroom Classic has them, drawn as a segmented control:
+/// the module shown in a capsule, each a click away. A click switches at once: the picker takes the press itself
+/// rather than tracking the mouse as a button would.
 final class ModulePickerView: NSView {
     private let model: EditorModel
     private let buttons: [AppModule: NSButton]
+    private let chosen = CALayer()
     private var tracker: Tracker?
 
     private static let spacing: CGFloat = 14
     private static let padding: CGFloat = 10
-    private static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    private static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
 
     init(model: EditorModel) {
         self.model = model
@@ -27,6 +28,10 @@ final class ModulePickerView: NSView {
         }
         self.buttons = buttons
         super.init(frame: .zero)
+        wantsLayer = true
+        chosen.backgroundColor = ToolbarLook.chosen
+        chosen.actions = LibraryGridCell.noActions
+        layer?.addSublayer(chosen)
         for module in AppModule.allCases {
             guard let button = buttons[module] else { continue }
             button.target = self
@@ -62,6 +67,21 @@ final class ModulePickerView: NSView {
             button.frame = CGRect(x: x, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
             x += size.width + Self.spacing
         }
+        placeChosen()
+    }
+
+    /// The capsule behind the module shown.
+    private func placeChosen() {
+        guard let button = buttons[model.module] else { return }
+        let height = min(bounds.height - 2, 24)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chosen.frame = CGRect(
+            x: button.frame.minX - Self.spacing / 2 + 1, y: (bounds.height - height) / 2,
+            width: button.frame.width + Self.spacing - 2, height: height,
+        )
+        chosen.cornerRadius = height / 2
+        CATransaction.commit()
     }
 
     override func viewDidMoveToWindow() {
@@ -72,8 +92,9 @@ final class ModulePickerView: NSView {
         tracker = Tracker { [weak self] in
             guard let self else { return }
             let shown = model.module
+            placeChosen()
             for (module, button) in buttons {
-                let color = (module == shown ? Palette.label : Palette.tertiaryLabel).nsColor
+                let color = (module == shown ? Palette.value : Palette.secondaryLabel).nsColor
                 button.attributedTitle = NSAttributedString(
                     string: module.title, attributes: [.foregroundColor: color, .font: Self.font],
                 )

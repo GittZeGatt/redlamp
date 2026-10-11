@@ -2,8 +2,8 @@ import AppKit
 import RedlampDesign
 import RedlampLibrary
 
-/// The Library module's toolbar, under the grid or the loupe, as Lightroom Classic's: the grid and the
-/// loupe, the cell style and the thumbnail size in the grid or the zoom in the loupe, and the photo in
+/// The Library module's toolbar, under the grid or the loupe, as Lightroom Classic's: the grid, the loupe, Compare
+/// and Survey, the cell style and the thumbnail size in the grid or the zoom in the loupe, and the photo in
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
 /// (LIB-41) and, grouped by moment, the Tighter–Looser slider and the moments without a pick are AppKit's
@@ -16,6 +16,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     private let model: EditorModel
     private let grid = ToolbarButton(symbol: "square.grid.2x2", identifier: "library.toolbar.grid")
     private let loupe = ToolbarButton(symbol: "photo", identifier: "library.toolbar.loupe")
+    private let compare = ToolbarButton(symbol: "rectangle.split.2x1", identifier: "library.toolbar.compare")
+    private let survey = ToolbarButton(symbol: "rectangle.split.2x2", identifier: "library.toolbar.survey")
     private let styles: [GridCellStyle: ToolbarButton]
     private let size = ToolbarSlider(identifier: "library.toolbar.size")
     private let fit = ToolbarButton(title: LoupeZoom.fit.title, identifier: "library.toolbar.fit")
@@ -44,6 +46,10 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     /// What the toolbar was last laid out for: the grid or the loupe, and which of Group By's controls show.
     private var laidOut: [CGFloat]?
     private var trackers: [Tracker] = []
+    /// The bezels behind the views' buttons, the cell styles' and the zoom's, each group as one segmented control.
+    private let viewGroup = CALayer()
+    private let styleGroup = CALayer()
+    private let zoomGroup = CALayer()
 
     init(model: EditorModel) {
         self.model = model
@@ -58,6 +64,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         super.init(frame: CGRect(x: 0, y: 0, width: 800, height: Self.height))
         grid.toolTip = Self.tip(.gridView)
         loupe.toolTip = Self.tip(.loupeView)
+        compare.toolTip = Self.tip(.compareView)
+        survey.toolTip = Self.tip(.surveyView)
         develop.toolTip = "Open in Develop (\(ShortcutAction.editTool.combos.first?.display ?? ""))"
         finder.toolTip = Self.tip(.showInFinder)
         fit.toolTip = "Fit (\(ShortcutAction.toggleZoom.combos.first?.display ?? "") or a click)"
@@ -66,6 +74,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
             + "\(ShortcutAction.largerThumbnails.combos.first?.display ?? ""))"
         grid.onPress = { model.perform(.gridView) }
         loupe.onPress = { model.perform(.loupeView) }
+        compare.onPress = { model.perform(.compareView) }
+        survey.onPress = { model.perform(.surveyView) }
         develop.onPress = { model.perform(.editTool) }
         finder.onPress = { model.perform(.showInFinder) }
         fit.onPress = { model.setLoupeZoom(.fit) }
@@ -99,6 +109,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         for view in [
             grid,
             loupe,
+            compare,
+            survey,
             fit,
             actual,
             develop,
@@ -114,6 +126,9 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
             addSubview(view)
         }
         setUpGroups()
+        for bezel in [viewGroup, styleGroup, zoomGroup] {
+            ToolbarLook.install(bezel, in: self)
+        }
         setAccessibilityElement(true)
         setAccessibilityRole(.toolbar)
         setAccessibilityLabel("Library Toolbar")
@@ -231,7 +246,9 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
                 let state = model.libraryViews
                 let inGrid = model.libraryView == .grid
                 grid.isOn = inGrid
-                loupe.isOn = !inGrid
+                loupe.isOn = model.libraryView == .loupe
+                compare.isOn = model.libraryView == .compare
+                survey.isOn = model.libraryView == .survey
                 for (style, button) in styles {
                     button.isOn = state.cellStyle == style
                     Self.set(button, hidden: !inGrid)
@@ -260,6 +277,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
                 develop.isEnabled = hasPhoto
                 finder.isEnabled = hasPhoto
                 loupe.isEnabled = hasPhoto
+                compare.isEnabled = hasPhoto
+                survey.isEnabled = hasPhoto
             },
             // And a move's progress, which changes ten times a second.
             Tracker { [weak self] in
@@ -332,8 +351,9 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
             view.frame = CGRect(x: x, y: (bounds.height - 22) / 2, width: width, height: 22)
             x += width + 2
         }
-        place(grid, width: 28)
-        place(loupe, width: 28)
+        for button in [grid, loupe, compare, survey] {
+            place(button, width: 28)
+        }
         x += 14
         if model.libraryView == .grid {
             for style in GridCellStyle.allCases {
@@ -374,7 +394,10 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         let right = bounds.width - 12
         finder.frame = CGRect(x: right - 28, y: (bounds.height - 22) / 2, width: 28, height: 22)
         develop.frame = CGRect(x: right - 58, y: (bounds.height - 22) / 2, width: 28, height: 22)
-        let sliderWidth = min(160, max(develop.frame.minX - x - 24, 60))
+        ToolbarLook.place(viewGroup, behind: [grid, loupe, compare, survey])
+        ToolbarLook.place(styleGroup, behind: GridCellStyle.allCases.compactMap { styles[$0] })
+        ToolbarLook.place(zoomGroup, behind: [fit, actual])
+        let sliderWidth = min(200, max(develop.frame.minX - x - 24, 90))
         size.frame = CGRect(
             x: develop.frame.minX - 16 - sliderWidth,
             y: (bounds.height - 22) / 2,
@@ -384,7 +407,8 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     }
 }
 
-/// A toolbar button: a symbol or a title, lit while it's on, acting as it's pressed.
+/// A toolbar button: a symbol or a title, acting as it's pressed. On, it's lit as a segmented control's chosen
+/// segment is; bordered, it has a push button's bezel at rest too, for an action that ends something (Done).
 final class ToolbarButton: NSView {
     var onPress: (() -> Void)?
     var isOn = false {
@@ -403,21 +427,37 @@ final class ToolbarButton: NSView {
         }
     }
 
+    var isBordered = false {
+        didSet {
+            if isBordered != oldValue {
+                update()
+            }
+        }
+    }
+
     private let image = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    /// The symbol's own colours, which the button's state doesn't tint (Survey's ×).
+    private let keepsColors: Bool
 
-    init(symbol: String? = nil, title: String? = nil, identifier: String) {
+    /// `palette` draws the symbol in its own colours; `small` sets a title in the system's small size.
+    init(
+        symbol: String? = nil, title: String? = nil, identifier: String, palette: [NSColor]? = nil,
+        small: Bool = false,
+    ) {
+        keepsColors = palette != nil
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 5
+        layer?.cornerRadius = 6
         if let symbol {
             image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+            let size = NSImage.SymbolConfiguration(pointSize: palette == nil ? 13 : 15, weight: .regular)
+            image.symbolConfiguration = palette.map { size.applying(.init(paletteColors: $0)) } ?? size
             addSubview(image)
         }
         if let title {
             label.stringValue = title
-            label.font = Typography.caption.nsFont
+            label.font = .systemFont(ofSize: small ? NSFont.smallSystemFontSize : NSFont.systemFontSize)
             label.alignment = .center
             addSubview(label)
         }
@@ -437,10 +477,13 @@ final class ToolbarButton: NSView {
     }
 
     private func update() {
-        let color = (isEnabled ? (isOn ? Palette.label : Palette.secondaryLabel) : Palette.tertiaryLabel).nsColor
-        image.contentTintColor = color
+        let color = (isEnabled ? (isOn ? Palette.value : Palette.label) : Palette.tertiaryLabel).nsColor
+        if !keepsColors {
+            image.contentTintColor = color
+        }
+        image.alphaValue = isEnabled ? 1 : 0.4
         label.textColor = color
-        layer?.backgroundColor = isOn ? NSColor(white: 1, alpha: 0.12).cgColor : nil
+        layer?.backgroundColor = isOn ? ToolbarLook.chosen : isBordered ? ToolbarLook.bezel : nil
         setAccessibilityValue(isOn ? "on" : nil)
         setAccessibilityEnabled(isEnabled)
     }
@@ -473,7 +516,9 @@ final class ToolbarButton: NSView {
     }
 }
 
-/// The thumbnail size's slider: a track and a knob, following the pointer from the press to the release.
+/// The thumbnail size's slider, drawn as the system's: a track filled in the accent up to a round knob, which follows
+/// the pointer from the press to the release, between a small photo and a large one, as Finder's icon size slider
+/// has them.
 final class ToolbarSlider: NSView {
     var onChange: ((Double) -> Void)?
     var range: ClosedRange<Double> = 0 ... 1
@@ -487,18 +532,35 @@ final class ToolbarSlider: NSView {
     }
 
     private let track = CALayer()
+    private let filled = CALayer()
     private let knob = CALayer()
+    private let small = NSImageView()
+    private let large = NSImageView()
 
     init(identifier: String) {
         super.init(frame: .zero)
         wantsLayer = true
-        track.backgroundColor = NSColor(white: 1, alpha: 0.25).cgColor
-        track.cornerRadius = 1.5
-        knob.backgroundColor = NSColor(white: 0.85, alpha: 1).cgColor
-        knob.cornerRadius = 6
-        for layer in [track, knob] {
+        track.backgroundColor = NSColor(white: 1, alpha: 0.2).cgColor
+        track.cornerRadius = 2
+        filled.cornerRadius = 2
+        knob.backgroundColor = NSColor(white: 0.95, alpha: 1).cgColor
+        knob.cornerRadius = 7
+        knob.borderWidth = 0.5
+        knob.borderColor = NSColor(white: 0, alpha: 0.25).cgColor
+        knob.shadowOpacity = 0.35
+        knob.shadowRadius = 1.5
+        knob.shadowOffset = CGSize(width: 0, height: -0.5)
+        knob.shadowPath = CGPath(ellipseIn: CGRect(x: 0, y: 0, width: 14, height: 14), transform: nil)
+        for layer in [track, filled, knob] {
             layer.actions = LibraryGridCell.noActions
             self.layer?.addSublayer(layer)
+        }
+        for (view, size) in [(small, 9.0), (large, 13.0)] {
+            view.image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
+            view.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
+            view.contentTintColor = Palette.secondaryLabel.nsColor
+            view.setAccessibilityElement(false)
+            addSubview(view)
         }
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
@@ -516,15 +578,22 @@ final class ToolbarSlider: NSView {
     }
 
     private var span: (left: CGFloat, width: CGFloat) {
-        (6, max(bounds.width - 12, 1))
+        (25, max(bounds.width - 54, 1))
     }
 
     override func layout() {
         super.layout()
         let (left, width) = span
         let fraction = (value - range.lowerBound) / max(range.upperBound - range.lowerBound, 1)
-        track.frame = CGRect(x: left, y: bounds.midY - 1.5, width: width, height: 3)
-        knob.frame = CGRect(x: left + width * fraction - 6, y: bounds.midY - 6, width: 12, height: 12)
+        filled.backgroundColor = GridCellLook.ring
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        track.frame = CGRect(x: left, y: bounds.midY - 2, width: width, height: 4)
+        filled.frame = CGRect(x: left, y: bounds.midY - 2, width: width * fraction, height: 4)
+        knob.frame = CGRect(x: left + width * fraction - 7, y: bounds.midY - 7, width: 14, height: 14)
+        CATransaction.commit()
+        small.frame = CGRect(x: 2, y: bounds.midY - 7, width: 16, height: 14)
+        large.frame = CGRect(x: bounds.width - 22, y: bounds.midY - 8, width: 20, height: 16)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -558,5 +627,38 @@ final class ToolbarSlider: NSView {
     override func accessibilityPerformDecrement() -> Bool {
         onChange?(GridSize.smaller(than: value))
         return true
+    }
+}
+
+/// The bezels of the toolbars' buttons, as the system draws a segmented control's on a dark window.
+@MainActor
+enum ToolbarLook {
+    /// Behind a group of buttons that go together, as a segmented control's segments do.
+    static let group = NSColor(white: 1, alpha: 0.06).cgColor
+    /// A bordered button at rest.
+    static let bezel = NSColor(white: 1, alpha: 0.1).cgColor
+    /// The chosen segment, or a button that's on.
+    static let chosen = NSColor(white: 1, alpha: 0.2).cgColor
+
+    /// A group's bezel, behind `views`, the union of their frames a little larger; hidden when none is shown.
+    static func place(_ bezel: CALayer, behind views: [NSView]) {
+        let shown = views.filter { !$0.isHidden }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bezel.isHidden = shown.isEmpty
+        if let first = shown.first {
+            bezel.frame = shown.dropFirst().reduce(first.frame) { $0.union($1.frame) }.insetBy(dx: -2, dy: -2)
+        }
+        CATransaction.commit()
+    }
+
+    /// Puts a group's bezel in `view`, below the buttons it's to go behind.
+    static func install(_ bezel: CALayer, in view: NSView) {
+        bezel.backgroundColor = group
+        bezel.cornerRadius = 8
+        bezel.actions = LibraryGridCell.noActions
+        bezel.isHidden = true
+        view.wantsLayer = true
+        view.layer?.insertSublayer(bezel, at: 0)
     }
 }
