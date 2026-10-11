@@ -529,7 +529,7 @@ public extension EditorModel {
         let unindexed = Set(written.unindexed)
         step.saved = step.photos.indices.filter { unindexed.contains(step.photos[$0]) }
         let held = step.held
-        await save(step.saved.map { place in
+        await save((redoing ? ownSaves(of: step) : step.saved).map { place in
             let (url, before, after) = (step.photos[place], step.before[place], step.after[place])
             return (url, { @Sendable (metadata: inout PhotoMetadata) in
                 let current = CullingValues(metadata)
@@ -555,7 +555,7 @@ public extension EditorModel {
         step.undos = written.batches
         step.batches = []
         let held = step.held
-        await save(step.saved.map { place in
+        await save(ownSaves(of: step).map { place in
             let (url, before, after) = (step.photos[place], step.before[place], step.after[place])
             return (url, { @Sendable (metadata: inout PhotoMetadata) in
                 if CullingValues(metadata).matches(after, in: field) {
@@ -564,6 +564,16 @@ public extension EditorModel {
             })
         })
         await finish(written, of: step, title: "Undo \(step.title)", undoing: true, sequence: sequence)
+    }
+
+    /// The places in `step` of the photos its own saves write, and of the photo Develop has open: a save of
+    /// Develop's can write the step's values before the library's batch reads the sidecar, and the batch, finding
+    /// them there, logs nothing to take back, so Undo and Redo put the open photo's field right through its own save
+    /// as well, each field that still holds what the step gave it, or had before it.
+    private func ownSaves(of step: CullingStep) -> [Int] {
+        guard let selection, info != nil, let open = step.photos.firstIndex(of: selection), !step.saved.contains(open)
+        else { return step.saved }
+        return step.saved + [open]
     }
 
     /// Returns once the saves asked for any of `photos` before the call are on disk, so a batch reads their
@@ -754,6 +764,18 @@ public extension EditorModel {
             for field in shown.fields where !current.matches(shown.values, in: field) {
                 shown.values.apply(field, to: &library.items[row].metadata)
             }
+        }
+    }
+
+    /// `metadata`, the open photo's as a save merged it with another writer's: the culling changes the library
+    /// hasn't caught up with stand over it, as they stand over the photos' rows, so a save read before a batch
+    /// wrote doesn't show Develop the photo as it was.
+    internal func keepCullingShown(in metadata: inout PhotoMetadata) {
+        guard !cullingOverlay.isEmpty, let id = selection.flatMap(library.photoID(of:)) else { return }
+        cullingOverlay.expire()
+        guard let shown = cullingOverlay.latest()[id] else { return }
+        for field in shown.fields {
+            shown.values.apply(field, to: &metadata)
         }
     }
 

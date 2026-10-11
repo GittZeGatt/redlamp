@@ -1328,7 +1328,9 @@ public final class EditorModel {
         let previous = recipe
         recipe = Self.asShot(theirs.recipe, info)
         snapshots = theirs.snapshots
-        photoMetadata = theirs.metadata ?? PhotoMetadata()
+        var metadata = theirs.metadata ?? PhotoMetadata()
+        keepCullingShown(in: &metadata)
+        photoMetadata = metadata
         cropIntent = recipe.crop
         if recipe != previous {
             // As a paste, Auto Sync doesn't send it on to the rest of the selection.
