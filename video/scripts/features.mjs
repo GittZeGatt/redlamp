@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Renders a feature video (docs/plans/2026-10-10-feature-videos.md) into its package,
-// ~/src/redlamp-social/reels/<episode>/, named by its post's file in docs/social/posts.json (e01-a.mp4), as
-// H.264 at 1080 × 1920: the opener, then the episode with its score, and the cover each post uses (its
-// coverMs) as a JPEG beside it; then room.py package writes the package's caption, alt text and posting
-// note. Drafts and variations go to ~/src/redlamp-social/work/reels/<episode>/, outside the package.
+// Renders a feature video (plans/2026-10-10-feature-videos.md in the private redlamp-social repository,
+// at $REDLAMP_SOCIAL or ~/src/redlamp-social) into its package, reels/<episode>/ there, named by its
+// post's file in that repository's posts.json (e01-a.mp4), as H.264 at 1080 × 1920: the opener, then the
+// episode with its score, and the cover each post uses (its coverMs) as a JPEG beside it; then the social
+// room's room.py package writes the package's caption, alt text and posting note. Drafts and variations
+// go to work/reels/<episode>/ in that repository, outside the package.
 // Draws the frames and writes the scores first if any is missing.
 //   npm run features -- --episode=e01            every hook the episode posts with
 //   npm run features -- --episode=e01 --hook=b   one hook
@@ -20,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { renderUntilPainted } from "./blank.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const social = path.join(os.homedir(), "src/redlamp-social");
+const social = process.env.REDLAMP_SOCIAL ?? path.join(os.homedir(), "src/redlamp-social");
 const ID = "FeatureVideo";
 const FPS = 30;
 
@@ -30,7 +31,7 @@ const episode = option("episode")?.toLowerCase();
 const draft = args.includes("--draft");
 const fresh = args.includes("--fresh");
 const score = option("score") ?? "score";
-const schedule = JSON.parse(readFileSync(path.join(root, "../docs/social/posts.json"), "utf8"));
+const schedule = JSON.parse(readFileSync(path.join(social, "posts.json"), "utf8"));
 const known = schedule.episodes.map((e) => e.id);
 // A variation of an episode is the episode's id and a name (e01-ui), with a board of its own.
 const [base, ...variation] = (episode ?? "").split("-");
@@ -90,5 +91,5 @@ for (const post of chosen) {
   console.log(path.relative(process.cwd(), video));
 }
 if (packaged) {
-  execFileSync("python3", [path.join(root, "../.cursor/skills/redlamp-social/room.py"), "package", base], { stdio: "inherit" });
+  execFileSync("python3", [path.join(social, "skill/room.py"), "package", base], { stdio: "inherit" });
 }

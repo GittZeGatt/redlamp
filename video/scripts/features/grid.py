@@ -2,7 +2,8 @@
 """
 The test frames that settled the feature videos' grid: the same frame drawn on 216 × 384 at ×5 and on
 180 × 320 at ×6, with the zones TikTok and Instagram cover hatched and outlined. Each carries the
-header, the widest two-line hook in posts.json and the editor, so what fits shows at a glance.
+header, the widest two-line hook in the social repository's posts.json and the editor, so what fits
+shows at a glance.
 
     python3 scripts/features/grid.py      # out/features/grid/216x384.png, 180x320.png and both.png
 """

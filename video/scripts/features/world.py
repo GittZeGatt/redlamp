@@ -1,9 +1,10 @@
 """
-The shared pieces of Redlamp's feature videos (docs/plans/2026-10-10-feature-videos.md): ten 19.2-second
-vertical videos, each a pixel-art Redlamp editor doing one feature step by step, then the real photo
-edited in Redlamp, then the end card. Every frame is drawn with pixelkit, the pixel-art kit in
-github.com/pdcgomes/pixelartvisuals (at $PIXELKIT, or ~/src/pixelartvisuals), on a 216 × 384 grid shown
-five times the size, so 1080 × 1920 holds every logical pixel as a 5 × 5 block.
+The shared pieces of Redlamp's feature videos (plans/2026-10-10-feature-videos.md in the private
+redlamp-social repository): ten 19.2-second vertical videos, each a pixel-art Redlamp editor doing one
+feature step by step, then the real photo edited in Redlamp, then the end card. Every frame is drawn with
+pixelkit, the pixel-art kit in github.com/pdcgomes/pixelartvisuals (at $PIXELKIT, or
+~/src/pixelartvisuals), on a 216 × 384 grid shown five times the size, so 1080 × 1920 holds every logical
+pixel as a 5 × 5 block.
 
 TikTok and Instagram draw their own controls over the top 52 rows, the bottom 96, and the right 32
 columns between rows 140 and 320, so nothing to read goes there. Words that must be read are in the
@@ -32,7 +33,9 @@ sys.path.insert(0, str(KIT / "skill/scripts"))
 from pixelkit import FONTS, Canvas, Rect, ease_in_out, ease_out, load_theme, lock  # noqa: E402
 
 THEME = load_theme()
-POSTS = json.loads((REPO / "docs/social/posts.json").read_text())
+# The schedule and captions, in the private redlamp-social repository.
+SOCIAL = Path(os.environ.get("REDLAMP_SOCIAL", Path.home() / "src/redlamp-social")).expanduser()
+POSTS = json.loads((SOCIAL / "posts.json").read_text())
 
 # The large font's comma hangs a row under the line, which at a caption's size reads as sitting below
 # it; this one sits on the line over the bottom three rows, as a 5 × 7 comma does.
@@ -859,7 +862,7 @@ def wrapped(text, chars=LINE_CHARS):
 
 
 def subtitle(c, episode):
-    """The episode's subtitle, where the caption stands: its title from docs/social/posts.json."""
+    """The episode's subtitle, where the caption stands: its title from posts.json."""
     caption(c, wrapped(episode["title"].upper()))
 
 

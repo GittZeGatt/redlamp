@@ -3,7 +3,7 @@
 
 Every picture on the slides is Redlamp's own render of the raw, made here with the `redlamp` CLI, and
 the settings slide is drawn from the recipe's values, so what a slide says is what made the picture.
-The plan is docs/plans/2026-10-11-edit-showcases.md.
+The plan is plans/2026-10-11-edit-showcases.md in the private redlamp-social repository.
 
     video/scripts/showcase.py ~/src/redlamp-social/work/showcases/s01
 
@@ -443,7 +443,8 @@ def caption(recipe, spec, best_name):
 
 # Only what's posted goes in a showcase's package, which the owner sends to his phone; the renders,
 # recipes and contact sheet stay in its work folder.
-PACKAGES = Path.home() / "src" / "redlamp-social" / "showcases"
+SOCIAL = Path(os.environ.get("REDLAMP_SOCIAL", Path.home() / "src" / "redlamp-social")).expanduser()
+PACKAGES = SOCIAL / "showcases"
 
 
 def main():

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-The feature videos' storyboard sheets (docs/plans/2026-10-10-feature-videos.md). Each episode's board,
-scripts/features/boards/<episode>.py, defines its eight panels, one a bar, drawn with the shared pieces
-in scripts/features/world.py. This lays them out in two rows of four at twice their size, with the bar,
-time, words and sound under each and the claim's source from docs/social/posts.json in the footer, and
-writes the cover (the opener's frame its first post names, the hook over the lit lamp) and the result
-at their own size for the social room.
+The feature videos' storyboard sheets (plans/2026-10-10-feature-videos.md in the private redlamp-social
+repository). Each episode's board, scripts/features/boards/<episode>.py, defines its eight panels, one a
+bar, drawn with the shared pieces in scripts/features/world.py. This lays them out in two rows of four at
+twice their size, with the bar, time, words and sound under each and the claim's source from the social
+repository's posts.json in the footer, and writes the cover (the opener's frame its first post names, the
+hook over the lit lamp) and the result at their own size for the social room.
 
     python3 scripts/features-boards.py --episode e01   # out/features/boards/e01.png, e01-hook.png, e01-result.png
     python3 scripts/features-boards.py --all

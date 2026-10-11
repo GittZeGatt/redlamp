@@ -4,8 +4,9 @@ import { SafeZones } from "../kit/SafeZones";
 import cueSheet from "./cues.json";
 
 /**
- * The feature videos (docs/plans/2026-10-10-feature-videos.md): Redlamp's opener in pixel art, then
- * one Redlamp feature shown in a pixel-art editor and its result, every picture drawn by pixelkit.
+ * The feature videos (plans/2026-10-10-feature-videos.md in the private redlamp-social repository):
+ * Redlamp's opener in pixel art, then one Redlamp feature shown in a pixel-art editor and its result,
+ * every picture drawn by pixelkit.
  * scripts/features-frames.py draws an episode's frames, the opener's first, into
  * public/features/<episode>/frames/ and lists each frame's file in frames.json: the 216 × 384 canvas,
  * shown five times the size with nearest-neighbour scaling, or the whole 1080 × 1920 frame while a
@@ -37,7 +38,7 @@ export type FeatureFrames = {
 };
 
 export type FeatureVideoProps = {
-  /** An episode in docs/social/posts.json, such as e01. */
+  /** An episode in the social repository's posts.json, such as e01. */
   episode: string;
   hook: FeatureHook;
   /**

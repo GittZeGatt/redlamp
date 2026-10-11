@@ -9,14 +9,14 @@ on the series' cue sheet as it times the picture.
     python3 scripts/features-score.py --episode e01                     # public/features/e01/score.wav
     python3 scripts/features-score.py --episode e01 --arrangement pulse
 
-It writes every arrangement as score-<arrangement>.wav, so they can be compared against the picture
-(the composition's `score` prop), and the chosen one as score.wav, which the cut plays: synthwave, the
-series' (docs/plans/2026-10-10-feature-videos.md, Sound). Beside them it writes score.json,
-the chosen score's level at every frame for the storyboard sheet, and cues.json, the cue sheet with
-every sound on screen added as a cue, for scripts/score-report.py. Each arrangement is written from
-the bar before the episode's first frame, its lead-in, which goes over the end of the opener's sound:
-opener.wav beside score.wav, and opener-<arrangement>.wav beside each of the others. Needs numpy,
-Pillow and pixelkit (the boards draw with it).
+It writes every arrangement as score-<arrangement>.wav, so they can be compared against the picture (the
+composition's `score` prop), and the chosen one as score.wav, which the cut plays: synthwave, the series'
+(plans/2026-10-10-feature-videos.md in the private redlamp-social repository, Sound). Beside them it
+writes score.json, the chosen score's level at every frame for the storyboard sheet, and cues.json, the
+cue sheet with every sound on screen added as a cue, for scripts/score-report.py. Each arrangement is
+written from the bar before the episode's first frame, its lead-in, which goes over the end of the
+opener's sound: opener.wav beside score.wav, and opener-<arrangement>.wav beside each of the others. Needs
+numpy, Pillow and pixelkit (the boards draw with it).
 """
 
 import argparse

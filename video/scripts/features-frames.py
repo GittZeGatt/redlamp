@@ -88,7 +88,7 @@ def framed(image, spread):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", required=True, help="an episode with a frame() in its board, such as e01")
-    parser.add_argument("--hook", help="one hook (default: every hook in docs/social/posts.json)")
+    parser.add_argument("--hook", help="one hook (default: every hook in the social repository's posts.json)")
     parser.add_argument("--only", help="comma-separated frames, written at 1080 × 1920 to /tmp/features-frames/")
     args = parser.parse_args()
     key = args.episode.lower()
