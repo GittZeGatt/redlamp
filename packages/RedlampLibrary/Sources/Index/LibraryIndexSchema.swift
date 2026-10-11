@@ -9,7 +9,7 @@ extension LibraryIndex {
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
         migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9, migrateToVersion10,
-        migrateToVersion11, migrateToVersion12, migrateToVersion13,
+        migrateToVersion11, migrateToVersion12, migrateToVersion13, migrateToVersion14,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -88,6 +88,10 @@ extension LibraryIndex {
         if try column.first({ _ in true }) == nil {
             try database.execute(schemaVersion13)
         }
+    }
+
+    static func migrateToVersion14(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion14)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -326,6 +330,16 @@ extension LibraryIndex {
     /// colour shows its label without one until its sidecar changes.
     static let schemaVersion13 = """
     ALTER TABLE photos ADD COLUMN custom_label_color TEXT;       -- a LabelColor's name
+    """
+
+    /// What the soft-frame measure found in photos' largest embedded previews (LIB-42), by content key, so a photo
+    /// renamed, moved or copied keeps it, with the measure's version, so another measures again: where it was measured
+    /// (`PhotoSharpness.Focus`), the score at the AF point, and where the camera gives none the grid's cells as 32-bit
+    /// floats, little-endian. It's derived from the photos alone and never from sidecars; a table rather than columns
+    /// of `photos` so that adding it rewrites no row, and so photos sharing a content key share one measurement.
+    static let schemaVersion14 = """
+    CREATE TABLE IF NOT EXISTS photo_sharpness (content_key BLOB PRIMARY KEY, version INTEGER NOT NULL,
+      focus INTEGER NOT NULL, score REAL NOT NULL DEFAULT 0, cells BLOB) WITHOUT ROWID;
     """
 }
 
