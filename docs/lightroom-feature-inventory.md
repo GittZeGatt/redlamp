@@ -221,6 +221,7 @@ Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the
 - Catalog format upgrades in 14.0, 15.0 and 15.4 that keep the old catalog aside [P4, as migrations of an index that can always be rebuilt]
 - Missing photos and folders: thumbnail badges, greyed folders, Find Missing Folder, files renamed outside Lightroom relinked one at a time, and since 14.4 a badge that offers to locate a missing folder [P4, followed by file identity without asking]
 - Synchronize Folder: imports files other apps added, rescans metadata, and can remove missing photos with their edits [P4, as change detection]
+- Remove Photo… on Delete, which asks whether to take the photo out of the catalog, keeping its file, or to delete it from the disk to the Trash; Remove Photo from Catalog, Remove and Trash Photo and Delete Rejected Photos in the Photo menu; in a collection, Delete takes the photo out of the collection [P4: to the Trash (LIB-46), out of a collection (LIB-23); keeping the file is the owner's call, since the folders are the library (DEC-42)]
 - Photos on a network volume with the catalog on a local disk; several computers by moving the catalog, or the catalog and photos on one external drive [P4: photos on SMB and NFS, an index on each Mac, folders shared through sidecars]
 - Several catalogs, and merging them [Skip, proposed in the findings]
 - **Beyond Lightroom:** renames and moves made in Finder followed by file identity, with missing and offline photos shown [P4]. Classic relinks a renamed file by hand, one at a time.
