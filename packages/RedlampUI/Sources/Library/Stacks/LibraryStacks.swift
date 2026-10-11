@@ -296,8 +296,17 @@ import RedlampLibrary
             }
             var made = result.list
             var changed = result.changed
-            // Open All or Close All asked for while the stacks were being found, which the request didn't know of.
-            if restoring == nil, var stacked = made {
+            let restored = restoring != nil && made != nil
+            // As the view kept them before `show` covers the closed stacks, which would move the active photo and the
+            // selection out of a stack that was open to its top.
+            if let (_, openness) = restoring, var stacked = made {
+                restoring = nil
+                if !reopen(&stacked, as: openness).isEmpty {
+                    made = stacked
+                    changed = true
+                }
+            } else if restoring == nil, var stacked = made {
+                // Open All or Close All asked for while the stacks were being found, which the request didn't know of.
                 let shown = stacked.stacksShown
                 if start == .open, shown.closed > 0 {
                     stacked.openAll()
@@ -309,7 +318,7 @@ import RedlampLibrary
                     changed = true
                 }
             }
-            show(made, changed: changed || (list == nil) != (made == nil))
+            show(made, changed: changed || (list == nil) != (made == nil), anyPhotoSelecting: restored)
             followRestored()
         }
         if pending || model.map({ $0.library.photoList.source != source }) == true {
@@ -353,12 +362,23 @@ import RedlampLibrary
         followRestored()
     }
 
-    /// Opens and closes the stacks of the source shown as its view kept them, once they've been found.
+    /// Opens and closes the stacks of the source shown as its view kept them, when they were found before it was shown.
     private func followRestored() {
         guard let model, let (source, openness) = restoring, var stacked = list, stacked.list.source == source,
               model.library.photoList.source == source
         else { return }
         restoring = nil
+        let diff = reopen(&stacked, as: openness)
+        guard !diff.isEmpty else { return }
+        list = stacked
+        model.coverClosedStacks(anyPhotoSelecting: true)
+        changed(.items(diff))
+        model.libraryViews.groups?.restacked()
+    }
+
+    /// Opens and closes `stacked`'s stacks as `openness` keeps them, by their top photos.
+    private func reopen(_ stacked: inout StackedList, as openness: Openness) -> PhotoListDiff {
+        guard let model else { return PhotoListDiff() }
         var kept = (pairs: Set<Int64>(), others: Set<Int64>())
         for stack in openness.others {
             guard let id = model.library.photoID(of: URL(fileURLWithPath: stack.path)) else { continue }
@@ -370,22 +390,19 @@ import RedlampLibrary
         }
         var selection = StackSelection()
         let (stacks, start) = (stacked.stacks, openness.kept)
-        let diff = stacked.reopen(selection: &selection) { top, pair in
+        return stacked.reopen(selection: &selection) { top, pair in
             Self.startsOpen(top: top, pair: pair, in: stacks, start: start)
                 != (pair ? kept.pairs : kept.others).contains(top)
         }
-        guard !diff.isEmpty else { return }
-        list = stacked
-        model.coverClosedStacks(anyPhotoSelecting: true)
-        changed(.items(diff))
-        model.libraryViews.groups?.restacked()
     }
 
-    private func show(_ made: StackedList?, changed: Bool) {
+    /// Shows `made`; with `anyPhotoSelecting`, a closed stack any of whose photos is selected is selected whole, as
+    /// for stacks a view kept, whose selection was made with them as they were then.
+    private func show(_ made: StackedList?, changed: Bool, anyPhotoSelecting: Bool = false) {
         list = made
         guard changed else { return }
         self.changed(.restacked)
-        model?.coverClosedStacks()
+        model?.coverClosedStacks(anyPhotoSelecting: anyPhotoSelecting)
         model?.libraryViews.groups?.restacked()
     }
 
