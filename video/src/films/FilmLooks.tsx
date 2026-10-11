@@ -32,6 +32,8 @@ export type FilmLooksProps = {
   musicSrc: string | null;
   /** The 9:16 safe zones over the frame, for review. */
   guides: boolean;
+  /** The cover still: the hook a little higher, inside the middle 3:4 that the apps' profile grids show. */
+  cover?: boolean;
 };
 
 export const filmLooksDefaults: FilmLooksProps = { hook: DEFAULT_HOOK, musicSrc: "films/score.wav", guides: false };
@@ -44,6 +46,7 @@ const TEXT_WIDTH = 920 - LEFT;
 const LABEL_TOP = 880;
 /** The hook and the mark sit low in the frame, under the opening photo's collarbone, as the owner placed them. */
 const HOOK_BOTTOM = 1710;
+const COVER_HOOK_BOTTOM = 1650;
 /** The mark spans the hook's two lines. */
 const MARK_LINES = 2 * 1.04;
 const ICON = 280;
@@ -161,7 +164,7 @@ function ContactSheet({ frame }: { frame: number }) {
   );
 }
 
-export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
+export function FilmLooks({ hook, musicSrc, guides, cover = false }: FilmLooksProps) {
   const frame = useCurrentFrame();
   const { width, height, durationInFrames } = useVideoConfig();
   const music = musicSrc && getStaticFiles().some((file) => file.name === musicSrc) ? musicSrc : null;
@@ -221,7 +224,7 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
         }}
       />
 
-      <div style={{ position: "absolute", left: LEFT, bottom: H - HOOK_BOTTOM, display: "flex", alignItems: "center", gap: markSize * 0.25 }}>
+      <div style={{ position: "absolute", left: LEFT, bottom: H - (cover ? COVER_HOOK_BOTTOM : HOOK_BOTTOM), display: "flex", alignItems: "center", gap: markSize * 0.25 }}>
         <HookMark frame={frame} out={b(sheet.looks[0]) - 6} size={markSize} />
         <div>
           <Words text={hookLines[0]} start={-18} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 6} style={{ textShadow: text.textShadow }} />

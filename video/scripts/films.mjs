@@ -64,7 +64,8 @@ for (const hook of hooks) {
   copyFileSync(video, path.join(target, `${name}.mp4`));
   if (!draft) {
     const cover = path.join(out, `${name}-cover.jpg`);
-    await renderUntilPainted(cover, () => remotion("still", ID, cover, `--props=${props}`, `--frame=${COVER}`, "--image-format=jpeg", "--jpeg-quality=92"));
+    const coverProps = JSON.stringify({ ...JSON.parse(props), cover: true });
+    await renderUntilPainted(cover, () => remotion("still", ID, cover, `--props=${coverProps}`, `--frame=${COVER}`, "--image-format=jpeg", "--jpeg-quality=92"));
     copyFileSync(cover, path.join(target, `${name}-cover.jpg`));
   }
   console.log(`==> ${path.join(target, `${name}.mp4`)}`);
