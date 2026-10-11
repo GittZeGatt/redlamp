@@ -133,9 +133,11 @@ private let releaseSettings: SettingsDictionary = [
 ]
 
 /// A function body or expression this slow to type-check fails the Debug build. The two
-/// diagnostics have no warning group, so warnings-as-errors makes them errors.
+/// diagnostics have no warning group, so warnings-as-errors makes them errors. CI's runner, three
+/// cores under load, sets `REDLAMP_EXPRESSION_TYPE_CHECK_LIMIT` to 3000 (DEC-65).
 private let typeCheckGuard: SettingsDictionary = [
-    "OTHER_SWIFT_FLAGS": "$(inherited) -Xfrontend -warn-long-function-bodies=1500 -Xfrontend -warn-long-expression-type-checking=1000",
+    "REDLAMP_EXPRESSION_TYPE_CHECK_LIMIT": "1000",
+    "OTHER_SWIFT_FLAGS": "$(inherited) -Xfrontend -warn-long-function-bodies=1500 -Xfrontend -warn-long-expression-type-checking=$(REDLAMP_EXPRESSION_TYPE_CHECK_LIMIT)",
 ]
 
 // MARK: - Target factories

@@ -77,6 +77,8 @@ jobs:
         run: mise exec -- swiftformat --lint .
 
       # GPU-dependent engine tests skip themselves when the runner has no Metal device.
+      # The runner's three cores under load take up to 3,000 ms on a trivial expression, against the
+      # 1,000 ms this Mac and the push gate allow (DEC-65).
       - name: Test
         run: |
           set -o pipefail
@@ -87,6 +89,7 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
+            REDLAMP_EXPRESSION_TYPE_CHECK_LIMIT=3000 \
             | tee build/test.log | grep -E "error:|✔ Test|✘|TEST (SUCCEEDED|FAILED)"
 
       - name: Build app (Release)

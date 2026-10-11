@@ -108,6 +108,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | DEC-62 | What does B do in the Library? | It adds the selection to the target collection when one is set, and otherwise marks it, as Lightroom Classic's Quick Collection works | LIB-23, LIB-15 | Accepted (2026-10-10) | The library board (2026-10-10); the Library's wireframes |
 | DEC-63 | A photo whose edits end up both beside it and in Redlamp on this Mac, after a move that failed partway: which copy wins? | The copy saved last, where the folder's setting says; the other set aside in a folder of Redlamp's that the Move Edits sheet opens, so nothing is lost | LIB-11, LIB-26 | Accepted (2026-10-10) | The library board (2026-10-10) |
 | DEC-64 | Bursts the library finds by itself: closed or open when a folder opens? | Open: every frame shows, the burst marked as one and closed when wanted, as Lightroom Classic and Photo Mechanic leave frames visible | LIB-28 | Accepted (2026-10-10) | The library board (2026-10-10) |
+| DEC-65 | CI fails any expression that takes over 1,000 ms to type-check, and trivial lines miss it on its three-core runner under load (1,189 and 1,234 ms): what changes? | Raise the limit to 3,000 ms on CI only, keeping 1,000 ms on this Mac and in the push gate, so genuinely slow expressions are still caught | CI | Accepted (2026-10-11) | The library board (2026-10-11) |
 
 ---
 
