@@ -9,6 +9,8 @@ public enum ImportEvent: Sendable, Hashable {
     case listed(source: String, photos: [String])
     /// Photos whose first bytes are read: their content keys, metadata and the ratings they carry.
     case read([String])
+    /// Photos shown from the small thumbnail their first bytes hold until their grid thumbnails are made.
+    case provisional([String])
     /// Photos whose grid thumbnails are in the store.
     case previewed([String])
     /// Photos the library has already, every photo file of them, so their previews aren't read.
@@ -27,6 +29,11 @@ public enum ImportEvent: Sendable, Hashable {
 ///   (`prioritise`) before the rest: each photo's first bytes once, for its content keys, metadata and
 ///   the rating and label it carries, then its embedded preview, made into a grid thumbnail in the
 ///   store under its content key. Nothing is copied, and nothing written beside the photos.
+/// - **JPEGs:** a camera JPEG holds no preview of a grid's size in its first bytes, so one larger than
+///   `provisionalSize` is shown from what it offers there: a Multi-Picture Format large thumbnail, read
+///   alone, makes its grid thumbnail; else the thumbnail in its EXIF is kept in memory as a provisional
+///   preview (`provisionalPreview`), never stored, and the photo is read whole and decoded at a fraction
+///   of its size for its grid thumbnail later, those on screen first, once no head on screen waits.
 /// - **Already imported:** a photo's content keys are looked up among the library's, loaded once, as
 ///   soon as its head is read and before its preview is: a photo the library has is marked, and its
 ///   preview isn't read.
@@ -48,6 +55,16 @@ public final class ImportSession: Sendable {
     static let wholeFileLimit = 128 << 20
     /// Photos read whole with their heads, at most, when their previews are made from all of them.
     static let wholeFileRead = 16 << 20
+    /// JPEGs read whole with their heads, at most: a larger one is first shown from what its head offers.
+    static let provisionalSize = 1 << 20
+    /// A Multi-Picture Format large thumbnail read for a grid thumbnail, at most.
+    static let largeThumbnailLimit = 4 << 20
+
+    /// A provisional preview: the JPEG of the thumbnail in a photo's EXIF, and the photo's orientation.
+    struct Provisional: Sendable {
+        var jpeg: Data
+        var orientation: Int?
+    }
 
     private struct State {
         var photos: [String: ImportPhoto] = [:]
@@ -55,9 +72,20 @@ public final class ImportSession: Sendable {
         var bySource: [String: [String]] = [:]
         /// Each source's files that aren't photos or sidecars of them, by path.
         var others: [String: [String]] = [:]
+        /// The photos on screen whose heads aren't claimed yet, first first.
         var prioritised: [String] = []
+        /// The photos on screen, first first.
+        var onScreen: [String] = []
         /// Each source's place in its photos, newest first, for its readers.
         var cursors: [String: Int] = [:]
+        /// The provisional previews of photos waiting for their grid thumbnails.
+        var provisional: [String: Provisional] = [:]
+        /// Each source's photos waiting for their grid thumbnails, in the order their provisional previews
+        /// were made, and the place its readers have got to.
+        var refining: [String: [String]] = [:]
+        var refiningCursors: [String: Int] = [:]
+        /// Photos waiting for their grid thumbnails that no reader has claimed.
+        var unrefined: Set<String> = []
         /// Photos being read, or read.
         var claimed: Set<String> = []
         /// Sources listed, by ID.
@@ -105,7 +133,17 @@ public final class ImportSession: Sendable {
 
     /// Reads these photos before the others: the cells on screen, first first.
     public func prioritise(_ ids: [String]) {
-        state.withLock { $0.prioritised = ids }
+        state.withLock { state in
+            state.prioritised = ids
+            state.onScreen = ids
+        }
+    }
+
+    /// Photo `id`'s provisional preview, upright and at most `edge` on its long side: the thumbnail in its
+    /// EXIF, while its grid thumbnail isn't made yet; nil once it is, and for a photo that has none.
+    public func provisionalPreview(_ id: String, edge: Int) -> CGImage? {
+        guard let small = state.withLock({ $0.provisional[id] }) else { return nil }
+        return EmbeddedPreviews.thumbnail(ofJPEG: small.jpeg, edge: edge, orientation: small.orientation)
     }
 
     public func choose(_ ids: [String], _ chosen: Bool) {
@@ -195,8 +233,13 @@ public final class ImportSession: Sendable {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< Self.readers(io) {
                 group.addTask {
-                    while !Task.isCancelled, let id = self.claimNext(on: source.id) {
-                        await self.read(id, io: io, keys: keys, previewing: self.makesPreviews, events: events)
+                    while !Task.isCancelled, let work = self.claimNext(on: source.id) {
+                        switch work {
+                        case let .head(id):
+                            await self.read(id, io: io, keys: keys, previewing: self.makesPreviews, events: events)
+                        case let .refine(id, onScreen):
+                            await self.refine(id, io: io, priority: onScreen ? .high : .normal, events: events)
+                        }
                     }
                 }
             }
@@ -259,15 +302,30 @@ extension ImportSession {
         return await task.value
     }
 
-    /// The next photo of `source` to read: one asked for first, else the newest not yet read.
-    private func claimNext(on source: String) -> String? {
+    /// What a reader does next.
+    private enum Work: Sendable {
+        /// Reads the photo's head, and makes its preview or provisional preview.
+        case head(String)
+        /// Makes the grid thumbnail of a photo shown from its provisional preview.
+        case refine(String, onScreen: Bool)
+    }
+
+    /// The next work on `source`: the head of a photo on screen, then the grid thumbnail of one on screen
+    /// shown from its provisional preview, then the newest head not yet read, then the next grid thumbnail.
+    private func claimNext(on source: String) -> Work? {
         state.withLock { state in
             if let index = state.prioritised.firstIndex(where: { id in
                 state.photos[id]?.source == source && !state.claimed.contains(id)
             }) {
                 let id = state.prioritised.remove(at: index)
                 state.claimed.insert(id)
-                return id
+                return .head(id)
+            }
+            if let id = state.onScreen.first(where: { id in
+                state.unrefined.contains(id) && state.photos[id]?.source == source
+            }) {
+                state.unrefined.remove(id)
+                return .refine(id, onScreen: true)
             }
             let order = state.bySource[source] ?? []
             var cursor = state.cursors[source] ?? 0
@@ -276,7 +334,17 @@ extension ImportSession {
                 let id = order[cursor]
                 cursor += 1
                 if state.claimed.insert(id).inserted {
-                    return id
+                    return .head(id)
+                }
+            }
+            let waiting = state.refining[source] ?? []
+            var next = state.refiningCursors[source] ?? 0
+            defer { state.refiningCursors[source] = next }
+            while next < waiting.count {
+                let id = waiting[next]
+                next += 1
+                if state.unrefined.remove(id) != nil {
+                    return .refine(id, onScreen: false)
                 }
             }
             return nil
@@ -317,20 +385,49 @@ extension ImportSession {
         events?.yield(updated.isImported ? .imported([id]) : .read([id]))
         guard previewing, !updated.isImported, let store = library.store, let key = read.keys[updated.primary.name]
         else { return }
-        let made: Bool = if store.contains(
+        let made: Preview = if store.contains(
             key,
             tier: .grid,
             size: updated.primary.size,
             modified: updated.primary.modified,
         ) {
-            true
+            .made
         } else {
-            await (try? preview(updated, key: key, head: read.head, io: io, store: store)) ?? false
+            await (try? preview(updated, key: key, head: read.head, io: io, store: store)) ?? .nothing
         }
-        if made {
+        switch made {
+        case .made:
             state.withLock { $0.photos[id]?.state = .previewed }
             events?.yield(.previewed([id]))
+        case let .provisional(small):
+            state.withLock { state in
+                state.photos[id]?.state = .provisional
+                state.provisional[id] = small
+                state.refining[updated.source, default: []].append(id)
+                state.unrefined.insert(id)
+            }
+            events?.yield(.provisional([id]))
+        case .nothing:
+            break
         }
+    }
+
+    /// Makes the grid thumbnail of photo `id`, shown from its provisional preview, from the whole photo read at
+    /// `priority`, and lets the provisional preview go.
+    private func refine(
+        _ id: String, io: VolumeIO, priority: VolumeIO.Priority, events: AsyncStream<ImportEvent>.Continuation?,
+    ) async {
+        guard let photo = state.withLock({ $0.photos[id] }), let store = library.store,
+              let key = photo.primary.contentKey
+        else { return }
+        let made = await (try? wholePreview(photo, key: key, head: Data(), io: io, store: store, priority: priority))
+            ?? false
+        guard made else { return }
+        state.withLock { state in
+            state.provisional[id] = nil
+            state.photos[id]?.state = .previewed
+        }
+        events?.yield(.previewed([id]))
     }
 
     /// Changes photo `id` as its head's reading ended, and lets go of what waited for it.
@@ -432,9 +529,10 @@ extension ImportSession {
                 return ReadHead(head: head, keys: keys)
             }
         }
-        // A preview of a photo that isn't a raw is made from all of it, read at once.
-        let wanted = !photo.primary.isRaw && priority == .high && size <= Self.wholeFileRead
-            ? size : PhotoMetadataReader.headLength
+        // A preview of a photo that isn't a raw is made from all of it, read at once, but for a large JPEG's.
+        let whole = !photo.primary.isRaw && priority == .high && size <= Self.wholeFileRead
+            && (!photo.primary.isJPEG || size <= Self.provisionalSize)
+        let wanted = whole ? size : PhotoMetadataReader.headLength
         if head.count < wanted, head.count < size {
             try await head.append(io.read(url, range: head.count ..< wanted, priority: priority))
         }
@@ -470,18 +568,38 @@ extension ImportSession {
 
     // MARK: - Previews
 
+    /// What making a photo's first preview came to.
+    private enum Preview: Sendable {
+        /// Its grid thumbnail is in the store.
+        case made
+        /// A small preview to show until its grid thumbnail is made.
+        case provisional(Provisional)
+        case nothing
+    }
+
     /// Makes the photo's grid thumbnail from the smallest embedded preview that fills a cell, read alone
-    /// through the volume's readers, or from the whole photo when it has none; and stores it under
-    /// `key`, with the file's size and date.
+    /// through the volume's readers: a raw's, or a large JPEG's Multi-Picture Format large thumbnail. A large
+    /// JPEG without one gives the thumbnail in its EXIF as a provisional preview instead, when it has one.
+    /// Otherwise the thumbnail is made from the whole photo. It's stored under `key`, with the file's size
+    /// and date.
     private func preview(
         _ photo: ImportPhoto, key: ContentKey, head: Data, io: VolumeIO, store: PhotoStore,
-    ) async throws -> Bool {
+    ) async throws -> Preview {
         let url = photo.url
         let primary = photo.primary
         let size = Int(primary.size)
         let edge = PhotoStore.Tier.grid.pixelSize
         let orientation = photo.metadata?.orientation
-        var payload: Data?
+        func stored(_ jpeg: Data, fillingCell: Bool) async throws -> Bool {
+            let payload = try await scheduler.run(.onScreen) {
+                EmbeddedPreviews.thumbnail(ofJPEG: jpeg, edge: edge, orientation: orientation).flatMap { image in
+                    !fillingCell || max(image.width, image.height) >= edge
+                        ? StoreImageEncoder().encode(image, for: .grid) : nil
+                }
+            }
+            guard let payload else { return false }
+            return store.store(payload, for: key, tier: .grid, size: primary.size, modified: primary.modified)
+        }
         if primary.isRaw {
             var bytes = PreviewBytes(head: head, size: size) { range in
                 try await io.read(url, range: range, priority: .high)
@@ -490,24 +608,50 @@ extension ImportSession {
                 let jpeg = embedded.range.upperBound <= head.count
                     ? Data(head.dropFirst(embedded.offset).prefix(embedded.length))
                     : try await io.read(url, range: embedded.range, priority: .high)
-                payload = try await scheduler.run(.onScreen) {
-                    EmbeddedPreviews.thumbnail(ofJPEG: jpeg, edge: edge, orientation: orientation)
-                        .flatMap { StoreImageEncoder().encode($0, for: .grid) }
+                if try await stored(jpeg, fillingCell: false) {
+                    return .made
                 }
             }
+        } else if primary.isJPEG, head.count < size {
+            let found = EmbeddedPreviews.inJPEG(head, size: size)
+            for large in found.large.sorted(by: { $0.length < $1.length })
+                where large.length <= Self.largeThumbnailLimit {
+                if try await stored(io.read(url, range: large.range, priority: .high), fillingCell: true) {
+                    return .made
+                }
+            }
+            if size > Self.provisionalSize, let thumbnail = found.thumbnail, thumbnail.range.upperBound <= head.count {
+                let jpeg =
+                    Data(head[head.startIndex + thumbnail.offset ..< head.startIndex + thumbnail.range.upperBound])
+                return .provisional(Provisional(jpeg: jpeg, orientation: orientation))
+            }
         }
-        if payload == nil, size <= Self.wholeFileLimit {
-            var whole = Data(head.prefix(size))
-            if whole.count < size {
-                try await whole.append(io.read(url, range: whole.count ..< size, priority: .high))
-            }
-            let file = whole
-            let isRaw = primary.isRaw
-            payload = try await scheduler.run(.onScreen) {
-                let image = isRaw
-                    ? EmbeddedPreviews.thumbnail(ofRaw: file, edge: edge) : StoreThumbnailMaker.imageIO(url, file, edge)
-                return image.flatMap { StoreImageEncoder().encode($0, for: .grid) }
-            }
+        return try await wholePreview(photo, key: key, head: head, io: io, store: store, priority: .high)
+            ? .made : .nothing
+    }
+
+    /// Makes the photo's grid thumbnail from all of it, `head` and the rest read at `priority`, and stores it as
+    /// `preview` does: a JPEG is decoded at a fraction of its size, as ImageIO's thumbnails are; whether it's
+    /// stored.
+    private func wholePreview(
+        _ photo: ImportPhoto, key: ContentKey, head: Data, io: VolumeIO, store: PhotoStore,
+        priority: VolumeIO.Priority,
+    ) async throws -> Bool {
+        let url = photo.url
+        let primary = photo.primary
+        let size = Int(primary.size)
+        guard size <= Self.wholeFileLimit else { return false }
+        let edge = PhotoStore.Tier.grid.pixelSize
+        var whole = Data(head.prefix(size))
+        if whole.count < size {
+            try await whole.append(io.read(url, range: whole.count ..< size, priority: priority))
+        }
+        let file = whole
+        let isRaw = primary.isRaw
+        let payload = try await scheduler.run(priority == .high ? .onScreen : .lookAhead) {
+            let image = isRaw
+                ? EmbeddedPreviews.thumbnail(ofRaw: file, edge: edge) : StoreThumbnailMaker.imageIO(url, file, edge)
+            return image.flatMap { StoreImageEncoder().encode($0, for: .grid) }
         }
         guard let payload else { return false }
         return store.store(payload, for: key, tier: .grid, size: primary.size, modified: primary.modified)

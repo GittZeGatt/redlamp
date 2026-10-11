@@ -3,8 +3,9 @@ import RedlampDocument
 import RedlampLibrary
 
 /// The import window's photos (LIB-27): the shown source's, newest first, in a plain collection view
-/// of its own, each cell its preview once browsing has made it, whether it's chosen, its name, and the
-/// rating, flag and label it's given. Click, Shift-click and Command-click select as in Finder, and
+/// of its own, each cell its preview once browsing has made it (a large JPEG's EXIF thumbnail until
+/// then), whether it's chosen, its name, and the rating, flag and label it's given. Click, Shift-click and
+/// Command-click select as in Finder, and
 /// Library's keys act on the selection: 0 to 5 rate, P, X and U flag, 6 to 9 label (again to take the
 /// label off), Space chooses or leaves out, Command-A selects every photo. The cells on screen are read
 /// first.
@@ -108,9 +109,7 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         item.show(photo, leftOut: model.isLeftOut(photo), copied: model.copied.contains(photo.id), image: image)
         let id = photo.id
         item.onToggle = { [weak self] in self?.toggle(id) }
-        if image == nil {
-            thumbnails?.load(photo) { [weak self] id, image in self?.loaded(id, image) }
-        }
+        thumbnails?.load(photo, session: model.shownSession) { [weak self] id, image in self?.loaded(id, image) }
     }
 
     private func loaded(_ id: String, _ image: CGImage) {

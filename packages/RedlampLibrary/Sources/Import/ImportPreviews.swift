@@ -232,6 +232,131 @@ enum EmbeddedPreviews {
         return (0 ..< length).reduce(0) { $0 << 8 | Int(data[offset + $1]) }
     }
 
+    // MARK: - JPEG files
+
+    /// The previews a JPEG file's metadata segments, in its first bytes, say it holds.
+    struct JPEGPreviews: Sendable, Hashable {
+        /// The thumbnail in its EXIF (the first image file directory's JPEG), inside the segments: 160 pixels
+        /// wide from most cameras.
+        var thumbnail: EmbeddedJPEG?
+        /// The large thumbnails its Multi-Picture Format index lists (CIPA DC-007), VGA and full-HD ones, which
+        /// follow the photo's own image.
+        var large: [EmbeddedJPEG] = []
+    }
+
+    /// The previews `head`, the first bytes of a JPEG file of `size` bytes, says the file holds, each inside it.
+    static func inJPEG(_ head: Data, size: Int) -> JPEGPreviews {
+        var found = JPEGPreviews()
+        let bytes = [UInt8](head)
+        guard bytes.count >= 4, bytes[0] == 0xFF, bytes[1] == 0xD8 else { return found }
+        var position = 2
+        while position + 4 <= bytes.count, bytes[position] == 0xFF {
+            let marker = bytes[position + 1]
+            if marker == 0xFF {
+                position += 1
+                continue
+            }
+            if marker == 0x01 || (0xD0 ... 0xD7).contains(marker) {
+                position += 2
+                continue
+            }
+            // The image's own data starts at its scan: the metadata segments come before.
+            guard marker != 0xDA, marker != 0xD9 else { break }
+            let length = Int(bytes[position + 2]) << 8 | Int(bytes[position + 3])
+            guard length >= 2 else { break }
+            let start = position + 4
+            let end = min(position + 2 + length, bytes.count)
+            if marker == 0xE1, end - start > 14, bytes[start ..< start + 6].elementsEqual("Exif\0\0".utf8) {
+                found.thumbnail = found.thumbnail ?? exifThumbnail(bytes, tiff: start + 6, end: end)
+            } else if marker == 0xE2, end - start > 12, bytes[start ..< start + 4].elementsEqual("MPF\0".utf8) {
+                found.large += largeThumbnails(bytes, header: start + 4, end: end, size: size)
+            }
+            position += 2 + length
+        }
+        return found
+    }
+
+    /// A number of `length` bytes at `offset` in `bytes`, nil outside `bounds`.
+    private static func number(
+        _ bytes: [UInt8], _ offset: Int, _ length: Int, littleEndian: Bool, within bounds: Range<Int>,
+    ) -> Int? {
+        guard offset >= bounds.lowerBound, offset + length <= bounds.upperBound else { return nil }
+        return (0 ..< length).reduce(0) { value, index in
+            value << 8 | Int(bytes[offset + (littleEndian ? length - 1 - index : index)])
+        }
+    }
+
+    /// The JPEG the EXIF's second image file directory gives (its offset and length, 0x0201 and 0x0202), in
+    /// the TIFF structure at `tiff` that ends at `end`.
+    private static func exifThumbnail(_ bytes: [UInt8], tiff: Int, end: Int) -> EmbeddedJPEG? {
+        guard tiff + 8 <= end, bytes[tiff] == bytes[tiff + 1], bytes[tiff] == 0x49 || bytes[tiff] == 0x4D else {
+            return nil
+        }
+        let little = bytes[tiff] == 0x49
+        func read(_ offset: Int, _ length: Int) -> Int? {
+            number(bytes, offset, length, littleEndian: little, within: tiff ..< end)
+        }
+        guard let first = read(tiff + 4, 4), let entries = read(tiff + first, 2),
+              let second = read(tiff + first + 2 + entries * 12, 4), second > 0,
+              let count = read(tiff + second, 2), count < 512
+        else { return nil }
+        var offset: Int?
+        var length: Int?
+        var compression: Int?
+        for index in 0 ..< count {
+            let entry = tiff + second + 2 + index * 12
+            guard let tag = read(entry, 2), let type = read(entry + 2, 2) else { return nil }
+            let value = type == 3 ? read(entry + 8, 2) : read(entry + 8, 4)
+            switch tag {
+            case 0x0201: offset = value
+            case 0x0202: length = value
+            case 0x0103: compression = value
+            default: break
+            }
+        }
+        guard let offset, let length, length > 0, compression.map({ jpegCompressions.contains($0) }) ?? true,
+              tiff + offset >= tiff, tiff + offset + length <= end
+        else { return nil }
+        return EmbeddedJPEG(offset: tiff + offset, length: length)
+    }
+
+    /// The large thumbnails, MP types 0x010001 and 0x010002 stored as JPEG, that the Multi-Picture Format index
+    /// at `header` (its endian mark, which the images' offsets count from) lists, in a file of `size` bytes.
+    private static func largeThumbnails(_ bytes: [UInt8], header: Int, end: Int, size: Int) -> [EmbeddedJPEG] {
+        guard header + 8 <= end, bytes[header] == bytes[header + 1], bytes[header] == 0x49 || bytes[header] == 0x4D
+        else { return [] }
+        let little = bytes[header] == 0x49
+        func read(_ offset: Int, _ length: Int) -> Int? {
+            number(bytes, offset, length, littleEndian: little, within: header ..< end)
+        }
+        guard let first = read(header + 4, 4), let count = read(header + first, 2), count < 64 else { return [] }
+        var list: (offset: Int, length: Int)?
+        for index in 0 ..< count {
+            let entry = header + first + 2 + index * 12
+            guard let tag = read(entry, 2), let length = read(entry + 4, 4), let value = read(entry + 8, 4) else {
+                return []
+            }
+            if tag == 0xB002 {
+                list = (value, length)
+            }
+        }
+        guard let list, list.length % 16 == 0 else { return [] }
+        var found: [EmbeddedJPEG] = []
+        for image in 0 ..< list.length / 16 {
+            let at = header + list.offset + image * 16
+            guard let attribute = read(at, 4), let length = read(at + 4, 4), let offset = read(at + 8, 4) else {
+                break
+            }
+            let type = attribute & 0xFFFFFF
+            let format = attribute >> 24 & 0x7
+            guard type == 0x010001 || type == 0x010002, format == 0, offset > 0, length > 0,
+                  header + offset + length <= size
+            else { continue }
+            found.append(EmbeddedJPEG(offset: header + offset, length: length))
+        }
+        return found
+    }
+
     // MARK: - JPEG frames
 
     /// The width and height a JPEG's frame header gives, read from its first bytes; nil when it isn't

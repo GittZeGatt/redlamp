@@ -295,6 +295,11 @@ final class ImportWindowModel {
         sources.first { $0.id == id }
     }
 
+    /// The session browsing the source shown.
+    var shownSession: ImportSession? {
+        shown.flatMap(source)?.session
+    }
+
     private func cardsChanged(_ cards: [ImportSource]) {
         let busy = phase == .copying || phase == .planning
         for card in cards {
@@ -348,7 +353,7 @@ final class ImportWindowModel {
                 sources[index].photos = photos
                 sources[index].isListed = true
                 listed = true
-            case let .read(ids), let .previewed(ids):
+            case let .read(ids), let .provisional(ids), let .previewed(ids):
                 changed.formUnion(ids)
             case let .imported(ids):
                 sources[index].imported += ids.count

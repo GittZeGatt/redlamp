@@ -35,6 +35,10 @@ public struct ImportFile: Sendable, Hashable, Codable {
     public var isRaw: Bool {
         role == .photo && NamingJob.isRaw(NamingJob.split(name).ext)
     }
+
+    public var isJPEG: Bool {
+        role == .photo && ["jpg", "jpeg", "jpe"].contains(NamingJob.split(name).ext.lowercased())
+    }
 }
 
 /// What the user chose for a photo while browsing a source: whether it's imported, and the rating,
@@ -102,6 +106,9 @@ public struct ImportPhoto: Sendable, Hashable, Identifiable {
         case listed
         /// Its first bytes read: content keys and metadata.
         case read
+        /// Read, and shown from the small thumbnail its first bytes hold (`ImportSession.provisionalPreview`)
+        /// until its grid thumbnail is made.
+        case provisional
         /// Read, and its grid thumbnail is in the store.
         case previewed
         /// Every photo file of it is in the library already, so its preview isn't read.
@@ -156,7 +163,7 @@ public struct ImportPhoto: Sendable, Hashable, Identifiable {
     public var isRead: Bool {
         switch state {
         case .listed: false
-        case .read, .previewed, .imported, .failed: true
+        case .read, .provisional, .previewed, .imported, .failed: true
         }
     }
 
