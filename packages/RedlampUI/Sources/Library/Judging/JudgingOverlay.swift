@@ -529,15 +529,22 @@ final class JudgingOverlay {
         (!clipping.isHidden, !clippingRegion.isHidden, !peaking.isHidden, !afPoints.isHidden, !histogram.isHidden)
     }
 
-    /// What's drawn over the photo, for VoiceOver and the regression suite: "sensor clipping marked" or "nothing
-    /// clipped on the sensor", "focus peaking", "AF point" and "loupe at 400%", each once it's on screen. The host
-    /// adds them to its accessibility value.
+    /// What's drawn over the photo, for VoiceOver and the regression suite: "sensor clipping marked", "nothing
+    /// clipped on the sensor", "no sensor data" for a photo that isn't raw or "the raw couldn't be read", then "focus
+    /// peaking", "AF point" and "loupe at 400%", each once it's on screen. The host adds them to its accessibility
+    /// value.
     var spoken: [String] {
         let drawn = drawn
         var parts: [String] = []
-        if isShown, model.showRawClipping, let marks {
-            parts.append(drawn.clipping || drawn.region || marks.image != nil
-                ? "sensor clipping marked" : "nothing clipped on the sensor")
+        if isShown, model.showRawClipping, let url {
+            if !SupportedFormats.isRaw(url) {
+                parts.append("no sensor data")
+            } else if let marks {
+                parts.append(drawn.clipping || drawn.region || marks.image != nil
+                    ? "sensor clipping marked" : "nothing clipped on the sensor")
+            } else if clippingFailed == shownPhoto {
+                parts.append("the raw couldn't be read")
+            }
         }
         if drawn.peaking {
             parts.append("focus peaking")

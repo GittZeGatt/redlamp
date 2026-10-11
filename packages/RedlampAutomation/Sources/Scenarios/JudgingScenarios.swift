@@ -22,10 +22,12 @@
             return view?.accessibilityValue() as? String ?? ""
         }
 
-        /// Whether the sensor clipping of the photo in the view carrying `identifier` has come in.
+        /// Whether the sensor clipping of the photo in the view carrying `identifier` has come in, or the photo has
+        /// no sensor data to read.
         @MainActor private static func clippingRead(_ identifier: String) -> Bool {
             let value = spoken(identifier)
-            return value.contains("sensor clipping marked") || value.contains("nothing clipped on the sensor")
+            return ["sensor clipping marked", "nothing clipped on the sensor", "no sensor data"]
+                .contains { value.contains($0) }
         }
 
         /// Every judging tool off, sensor clipping among them, which Develop's scenarios after this one render with.
@@ -124,8 +126,21 @@
                 try app.press(.compareView)
                 try app.wait("Compare") { $0.libraryView == .compare }
                 let sides = ["library.compare.select", "library.compare.candidate"]
-                try app.wait("each tool over both photos", timeout: 60) { _ in
-                    sides.allSatisfy { clippingRead($0) && spoken($0).contains("focus peaking") }
+                do {
+                    try app.wait("each tool over both photos", timeout: 60) { _ in
+                        sides.allSatisfy { clippingRead($0) && spoken($0).contains("focus peaking") }
+                    }
+                } catch {
+                    let state = try app.main { model -> String in
+                        let compare = model.libraryCompare
+                        let names = [compare.select, compare.candidate].map { $0?.lastPathComponent ?? "-" }
+                        var parts: [String] = []
+                        for (name, side) in zip(names, sides) {
+                            parts.append("\(name): \"\(spoken(side))\"")
+                        }
+                        return parts.joined(separator: ", ")
+                    }
+                    throw ScenarioFailure("\(error); \(state)")
                 }
                 try app.expect(
                     try app.main { _ in spoken("library.compare.select").contains("AF point") },

@@ -105,11 +105,7 @@ public extension EditorModel {
     /// Whether `event` is the key Develop's Show Sensor Clipping answers, as the keymap has it: the Library's views
     /// take it themselves, since the key monitor leaves Develop's view keys to Develop.
     internal func isSensorClippingKey(_ event: NSEvent) -> Bool {
-        guard event.type == .keyDown, !event.isARepeat else { return false }
-        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        guard !flags.contains(.command), !flags.contains(.control),
-              let character = event.charactersIgnoringModifiers?.lowercased().first else { return false }
-        let combo = KeyCombo(.character(character), shift: flags.contains(.shift), option: flags.contains(.option))
+        guard event.type == .keyDown, !event.isARepeat, let combo = KeyCombo(event: event) else { return false }
         return ShortcutAction.rawClipping.combos.contains(combo)
     }
 }
