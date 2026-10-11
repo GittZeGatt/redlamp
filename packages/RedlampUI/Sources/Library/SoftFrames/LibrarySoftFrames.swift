@@ -31,6 +31,9 @@ public final class LibrarySoftFrames {
     @ObservationIgnored private var measurer: (engine: ObjectIdentifier, measurer: SharpnessMeasurer)?
     /// The source and setting the measurer was last given the photos of.
     @ObservationIgnored private var measuring: (source: PhotoSource, setting: MomentSetting)?
+    /// How many times the verdicts have been asked for, and the grid told they changed, for the tests.
+    @ObservationIgnored private(set) var refreshes = 0
+    @ObservationIgnored private(set) var notified = 0
 
     static let showsKey = "LibraryShowsProposals"
     static let modeKey = "LibraryProposalMode"
@@ -85,6 +88,7 @@ public final class LibrarySoftFrames {
     /// Asks for the shown photos' verdicts again, once the list has been still for `settle`, and has the measurer
     /// read those it hasn't.
     func refresh() {
+        refreshes += 1
         guard let model, let service = model.library.service, let engine = service.engine,
               let index = service.core?.index, shows || model.libraryFilters?.filter.query?.findsSoftFrames == true
         else {
@@ -145,7 +149,13 @@ public final class LibrarySoftFrames {
         measurer?.measurer.count ?? 0
     }
 
+    /// The verdict of the photo shown at `url`, for the regression suite.
+    @_spi(Harness) public func verdict(ofShown url: URL) -> SoftFrames.Verdict {
+        entry(listed: model?.library.photoID(of: url), url: url)?.verdict ?? .none
+    }
+
     private func notify() {
+        notified += 1
         for handler in observers.values {
             handler()
         }

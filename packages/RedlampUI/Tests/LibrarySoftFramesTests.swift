@@ -149,6 +149,39 @@ struct LibrarySoftFramesTests {
         #expect(rejected == ["A_0003.JPG", "B_0003.JPG"])
     }
 
+    @Test func `with the grid and the filter bar on screen, the proposals settle once the frames are measured`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        _ = try Self.shoot(sandbox)
+        let model = try await sandbox.open()
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { model.items.count == 7 }
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+        let filters = try #require(model.libraryFilters)
+        filters.show(.attribute, adding: true)
+        if !filters.isBarShown {
+            model.perform(.toggleFilterBar)
+        }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let softFrames = model.librarySoftFrames
+        model.showProposals(.runsOnly)
+        try await sandbox.eventually(seconds: 60) { softFrames.verdicts.photos(.soft).count == 2 }
+        let (refreshes, notified) = (softFrames.refreshes, softFrames.notified)
+        try await Task.sleep(for: .seconds(2))
+        print(
+            "SOFT-FRAMES refreshes \(refreshes) then \(softFrames.refreshes), notified \(notified) then \(softFrames.notified)",
+        )
+        #expect(softFrames.refreshes - refreshes < 5 && softFrames.notified - notified < 3, "settled")
+    }
+
     @Test func `a frame the user decided is never proposed against, and overruling one is Changed by You`(
     ) async throws {
         let sandbox = SourcesSandbox()

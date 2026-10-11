@@ -54,15 +54,14 @@
             try app.wait("the bursts' seven frames measured in the background", timeout: 90) { model in
                 model.librarySoftFrames.measuredCount >= 7
             }
-            try app.wait("each burst's sharpest proposed, and its soft frames marked", timeout: 30) {
-                model in
-                let verdicts = model.librarySoftFrames.verdicts
-                return names(model, verdicts.photos(.soft)) == ["A_0003.JPG", "B_0003.JPG"]
-                    && verdicts.photos(.proposed).count == 2
+            try app.wait("each burst's sharpest proposed, and its soft frames marked", timeout: 30) { model in
+                shown(model, .soft) == ["A_0003.JPG", "B_0003.JPG"] && shown(model, .proposed).count == 2
             }
 
-            try app.clickView("library.filter.text")
-            try app.wait("the filter bar's text to take the keyboard") { _ in
+            try app.press(.toggleFilterBar)
+            try app.wait("the filter bar hidden") { $0.libraryFilters?.isBarShown == false }
+            try app.press(.toggleFilterBar)
+            try app.wait("the filter bar's text to take the keyboard again") { _ in
                 (Views.editorWindow?.firstResponder as? NSTextView)?.delegate is NSTextField
             }
             try app.typeQuery("is:sof")
@@ -109,20 +108,29 @@
             try app.wait("the proposals hidden") { !$0.librarySoftFrames.shows }
         }
 
-        /// Chooses `title` in the Attribute section's Proposals menu, as a click on the item does.
+        /// Chooses `title` in the Attribute section's Proposals menu, as a click on the item does: its action sent to
+        /// its target, posted, since the menu's own machinery can start tracking it.
         private static func choose(_ app: RunningApp, _ title: String) throws {
-            try app.main { _ in
-                guard let content = Views.editorWindow?.contentView,
-                      let menu = Views.all(NSPopUpButton.self, in: content)
-                      .first(where: { $0.accessibilityIdentifier() == "library.filter.proposals" })?.menu,
-                      let item = menu.items.first(where: { $0.title == title && $0.isEnabled })
-                else { throw ScenarioFailure("The Proposals menu has no \(title)") }
-                menu.performActionForItem(at: menu.index(of: item))
+            guard try app.main({ _ in item(title) != nil }) else {
+                throw ScenarioFailure("The Proposals menu has no \(title)")
+            }
+            app.post { _ in
+                guard let item = item(title), let action = item.action else { return }
+                NSApp.sendAction(action, to: item.target, from: item)
             }
         }
 
-        @MainActor private static func names(_ model: EditorModel, _ ids: [Int64]) -> [String] {
-            ids.compactMap { model.library.url(ofPhoto: $0)?.lastPathComponent }.sorted()
+        @MainActor private static func item(_ title: String) -> NSMenuItem? {
+            guard let content = Views.editorWindow?.contentView else { return nil }
+            return Views.all(NSPopUpButton.self, in: content)
+                .first { $0.accessibilityIdentifier() == "library.filter.proposals" }?
+                .menu?.items.first { $0.title == title && $0.isEnabled }
+        }
+
+        /// The names of the photos shown that the check gives `verdict`.
+        @MainActor private static func shown(_ model: EditorModel, _ verdict: SoftFrames.Verdict) -> [String] {
+            let softFrames = model.librarySoftFrames
+            return model.items.filter { softFrames.verdict(ofShown: $0.url) == verdict }.map(\.name).sorted()
         }
     }
 #endif
