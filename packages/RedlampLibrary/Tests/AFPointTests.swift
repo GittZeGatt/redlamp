@@ -2,7 +2,8 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import Testing
-@testable import RedlampUI
+import UniformTypeIdentifiers
+@testable import RedlampLibrary
 
 /// The camera's AF point read from the maker notes of the sample raws (LIB-38): where each camera that records one
 /// put it, checked against the photos when the reader was written, and nothing for those that record none.
@@ -154,6 +155,46 @@ struct AFPointTests {
         for length in [16, 1024, 4096] {
             #expect(AFPointReader.read(data.prefix(length), fileExtension: "cr3", imageSize: nil) == nil)
         }
+    }
+
+    /// A grey image `width` by `height` as `type`, its EXIF holding `subjectArea` and its orientation `orientation`.
+    static func image(
+        _ type: UTType, width: Int = 64, height: Int = 48, subjectArea: [Int], orientation: Int = 1,
+    ) throws -> Data {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        ))
+        context.setFillColor(gray: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = try #require(context.makeImage())
+        let data = NSMutableData()
+        let destination = try #require(
+            CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil),
+        )
+        let properties: [CFString: Any] = [
+            kCGImagePropertyOrientation: orientation,
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifSubjectArea: subjectArea],
+        ]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    @Test func `a JPEG's and a HEIC's SubjectArea are read from their EXIF`() throws {
+        let size = CGSize(width: 64, height: 48)
+        let jpeg = try Self.image(.jpeg, subjectArea: [16, 12, 10, 8])
+        let fromJPEG = try #require(AFPointReader.read(jpeg, fileExtension: "JPG", imageSize: size))
+        #expect(fromJPEG.source == .subjectArea && fromJPEG.orientation == 1)
+        expect(fromJPEG.areas[0].rect, near: centred(16 / 64, 12 / 48, 10 / 64, 8 / 48))
+
+        let heic = try Self.image(.heic, subjectArea: [48, 36], orientation: 6)
+        let upright = CGSize(width: 48, height: 64)
+        let fromHEIC = try #require(AFPointReader.read(heic, fileExtension: "heic", imageSize: upright))
+        #expect(fromHEIC.source == .subjectArea && fromHEIC.orientation == 6)
+        expect(fromHEIC.areas[0].rect, near: centred(48 / 64, 36 / 48))
+        #expect(try AFPointReader
+            .read(Self.image(.jpeg, subjectArea: []), fileExtension: "jpg", imageSize: size) == nil)
     }
 
     @Test func `orientation turns a point as the photo turns`() {

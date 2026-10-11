@@ -1,28 +1,40 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 
-/// Where the camera focused, as it recorded it in the file's maker notes or EXIF (LIB-38). Areas are in the photo as
-/// the camera framed it, before its orientation turns it upright, 0 ... 1 across and down; a camera that records a
-/// point without a size gives an area of no size.
-struct AFPoints: Sendable, Equatable {
-    struct Area: Sendable, Equatable {
-        var rect: CGRect
+/// Where the camera focused, as it recorded it in the file's maker notes or EXIF (LIB-38), read for the judging
+/// tools and the soft-frame measure (LIB-42). Areas are in the photo as the camera framed it, before its orientation
+/// turns it upright, 0 ... 1 across and down; a camera that records a point without a size gives an area of no size.
+public struct AFPoints: Sendable, Equatable {
+    public struct Area: Sendable, Equatable {
+        public var rect: CGRect
         /// Whether the camera focused there; false for an area chosen where it didn't (Canon records both).
-        var inFocus: Bool
+        public var inFocus: Bool
+
+        public init(rect: CGRect, inFocus: Bool) {
+            self.rect = rect
+            self.inFocus = inFocus
+        }
     }
 
     /// Which reading found the areas, for the tests and the activity log.
-    enum Source: String, Sendable {
+    public enum Source: String, Sendable {
         case canon, nikon, sony, fujifilm, panasonic, subjectArea
     }
 
-    var areas: [Area]
+    public var areas: [Area]
     /// The file's EXIF orientation, 1 to 8.
-    var orientation: Int
-    var source: Source
+    public var orientation: Int
+    public var source: Source
+
+    public init(areas: [Area], orientation: Int, source: Source) {
+        self.areas = areas
+        self.orientation = orientation
+        self.source = source
+    }
 
     /// The areas in the photo as it's shown upright.
-    var upright: [Area] {
+    public var upright: [Area] {
         areas.map { area in
             let corners = [
                 CGPoint(x: area.rect.minX, y: area.rect.minY), CGPoint(x: area.rect.maxX, y: area.rect.maxY),
@@ -36,7 +48,7 @@ struct AFPoints: Sendable, Equatable {
     }
 
     /// Where a point of the stored photo lands once EXIF orientation `orientation` turns it, both 0 ... 1.
-    static func oriented(_ point: CGPoint, _ orientation: Int) -> CGPoint {
+    public static func oriented(_ point: CGPoint, _ orientation: Int) -> CGPoint {
         let (x, y) = (point.x, point.y)
         switch orientation {
         case 2: return CGPoint(x: 1 - x, y: y)
@@ -51,13 +63,14 @@ struct AFPoints: Sendable, Equatable {
     }
 
     /// Whether orientation `orientation` turns the photo a quarter, so its width becomes its height.
-    static func swapsAxes(_ orientation: Int) -> Bool {
+    public static func swapsAxes(_ orientation: Int) -> Bool {
         (5 ... 8).contains(orientation)
     }
 }
 
 /// Reads the AF point a raw file records (LIB-38), from the maker notes of the cameras whose layout is known and
-/// checked on a sample, else from EXIF's SubjectArea:
+/// checked on a sample, else from EXIF's SubjectArea; a camera's JPEG carries the same maker notes in its EXIF, and a
+/// HEIC's SubjectArea is read through ImageIO:
 ///
 /// - **Canon** (CR2, CR3): AFInfo2 (tag 0x26), the areas centred on the frame's middle, Y up, in the frame it states;
 ///   the areas in focus, or those chosen when none was.
@@ -70,21 +83,23 @@ struct AFPoints: Sendable, Equatable {
 ///
 /// Nikon's DSLRs, Pentax (a point's number), Olympus and OM System, Leica, Sigma, Ricoh, Hasselblad, Phase One, DJI
 /// and Samsung aren't read.
-enum AFPointReader {
+public enum AFPointReader {
     /// How far into a file maker notes are looked for: CR3's boxes, RAF's preview and RW2's embedded JPEG start there.
     static let searchLimit = 4 << 20
 
     /// The AF point `url`'s file records, read from the file mapped, so only the pages read are loaded; `imageSize`
     /// is the photo's size upright, which Fujifilm's and SubjectArea's pixels are counted in.
-    static func read(_ url: URL, imageSize: CGSize?) -> AFPoints? {
+    public static func read(_ url: URL, imageSize: CGSize?) -> AFPoints? {
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return nil }
         return read(data, fileExtension: url.pathExtension, imageSize: imageSize)
     }
 
-    static func read(_ data: Data, fileExtension: String, imageSize: CGSize?) -> AFPoints? {
+    public static func read(_ data: Data, fileExtension: String, imageSize: CGSize?) -> AFPoints? {
         switch fileExtension.lowercased() {
         case "cr3": canonCR3(data)
         case "raf": fujifilm(data, imageSize: imageSize)
+        case "jpg", "jpeg": jpegExif(data, at: 0, length: data.count, orientation: 1, imageSize: imageSize)
+        case "heic", "heif", "hif": imageIOSubjectArea(data, imageSize: imageSize)
         default: tiff(data, imageSize: imageSize)
         }
     }
@@ -315,8 +330,25 @@ enum AFPointReader {
     private static func subjectArea(
         _ file: TIFFBytes, _ exif: [UInt16: TIFFBytes.Entry], orientation: Int, imageSize: CGSize?,
     ) -> AFPoints? {
-        guard let entry = exif[0x9214], let imageSize else { return nil }
-        let values = file.integers(entry).map(Double.init)
+        guard let entry = exif[0x9214] else { return nil }
+        return subjectArea(file.integers(entry).map(Double.init), orientation: orientation, imageSize: imageSize)
+    }
+
+    /// A HEIC's SubjectArea and orientation, as ImageIO reads them from its metadata.
+    private static func imageIOSubjectArea(_ data: Data, imageSize: CGSize?) -> AFPoints? {
+        guard let source = CGImageSourceCreateWithData(
+            data as CFData,
+            [kCGImageSourceShouldCache: false] as CFDictionary,
+        ),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any],
+            let values = exif[kCGImagePropertyExifSubjectArea] as? [NSNumber] else { return nil }
+        let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+        return subjectArea(values.map(\.doubleValue), orientation: orientation, imageSize: imageSize)
+    }
+
+    private static func subjectArea(_ values: [Double], orientation: Int, imageSize: CGSize?) -> AFPoints? {
+        guard let imageSize else { return nil }
         let stored = AFPoints.swapsAxes(orientation)
             ? CGSize(width: imageSize.height, height: imageSize.width) : imageSize
         guard (2 ... 4).contains(values.count), stored.width > 0, stored.height > 0 else { return nil }
@@ -334,7 +366,7 @@ enum AFPointReader {
     }
 }
 
-extension AFPoints.Area {
+public extension AFPoints.Area {
     static func point(_ point: CGPoint) -> Self {
         Self(rect: CGRect(origin: point, size: .zero), inFocus: true)
     }
