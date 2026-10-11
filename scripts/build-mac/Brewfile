@@ -1,0 +1,16 @@
+# What the build Mac (ARC-15) installs from Homebrew and the App Store; scripts/build-mac/setup.sh
+# runs it with `brew bundle`. Tuist, SwiftFormat, SwiftLint and Node come from mise.toml, through mise.
+
+brew "mise"
+brew "git"
+# As on the main Mac: macOS's own python3 is 3.9, and the repository's tools use newer Python
+# (tools/rl needs 3.11's tomllib).
+brew "python@3.14"
+brew "mas"
+# Xcode from Apple's developer downloads, when the App Store's isn't the version the main Mac has;
+# it downloads with aria2 when that's installed.
+brew "xcodes"
+brew "aria2"
+
+# The setup installs this only when the App Store's Xcode is the main Mac's version.
+mas "Xcode", id: 497799835
