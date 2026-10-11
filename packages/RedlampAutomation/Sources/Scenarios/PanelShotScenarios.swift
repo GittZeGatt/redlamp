@@ -46,7 +46,7 @@
                     NSGraphicsContext.saveGraphicsState()
                     NSGraphicsContext.current = context
                     window.effectiveAppearance.performAsCurrentDrawingAppearance {
-                        NSColor.windowBackgroundColor.setFill()
+                        Palette.panelBackground.nsColor.setFill()
                         NSRect(origin: .zero, size: picture.size).fill()
                     }
                     drawn.draw(in: NSRect(origin: .zero, size: picture.size))
@@ -55,10 +55,11 @@
                 }
                 try app.expect(written, "\(name) captured")
             }
+            /// Library's right column: Develop's inspector stays in the window, out of sight, while Library is shown.
             @MainActor func rightColumn() -> PanelColumnScrollView? {
                 guard let root = Views.editorWindow?.contentView else { return nil }
-                return Views.all(PanelColumnScrollView.self, in: root).filter { !$0.isHiddenOrHasHiddenAncestor }
-                    .max { $0.convert($0.bounds, to: nil).maxX < $1.convert($1.bounds, to: nil).maxX }
+                return Views.all(PanelColumnScrollView.self, in: root)
+                    .first { String(describing: type(of: $0)) == "LibraryInfoColumn" }
             }
             // The windows at one size, whatever they were left at.
             try app.main { _ in
