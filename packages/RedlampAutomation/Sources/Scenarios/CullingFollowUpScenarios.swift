@@ -187,21 +187,26 @@
             let picks = "Picks \(scratch.folder.lastPathComponent.suffix(8))"
             let row = "collections.\(picks)"
 
+            // While Marked is the target, B marks A, which shows Marked in the Library panel.
             try app.click(.identifier("grid.A.jpg"))
+            try app.press(.toggleMark)
+            try app.wait("A marked") { $0.library.item(for: a)?.metadata.mark == true }
             try app.press(.newCollection)
             try app.waitForSheet("New Collection")
             try app.replaceInSheet("collections.name", with: picks)
             try app.pressInSheet("collections.target")
             try app.confirmCollectionSheet("New Collection")
-            try app.waitForRow(row, "\(picks), 0 photos, target collection", "the target")
+            // The sheet includes the photo selected when it can be added, as it chooses then.
+            try app.wait("the target", timeout: 30) { _ in
+                app.sourceRowLabel(row)?.hasSuffix("target collection") == true
+            }
 
             try app.press(.selectAllPhotos)
             try app.wait("both selected") { $0.selectedPhotos.count == 2 }
             try app.press(.toggleMark)
             try app.waitForRow(row, "\(picks), 2 photos, target collection", "B putting both in the target")
-            let marked = try app
-                .main { model in [a, b].contains { model.library.item(for: $0)?.metadata.mark == true } }
-            try app.expect(!marked, "B marked them")
+            let marked = try app.main { $0.library.item(for: b)?.metadata.mark == true }
+            try app.expect(!marked, "B marked B rather than putting it in the target")
             try app.press(.toggleMark)
             try app.waitForRow(row, "\(picks), 0 photos, target collection", "B again taking them out")
             try app.press(.undo)
@@ -210,11 +215,11 @@
             try app.rightClickSourceRow("sources.marked", choosing: "Set as Target Collection")
             try app.wait("Marked the target", timeout: 30) { $0.librarySources.target == nil }
             try app.press(.toggleMark)
-            try app.wait("both marked") { model in
+            try app.wait("both marked, A already") { model in
                 [a, b].allSatisfy { model.library.item(for: $0)?.metadata.mark == true }
             }
             try app.waitWritten()
-            app.covered(.action(.toggleMark), via: .key)
+            app.covered([.action(.toggleMark), .feature("library.collections")], via: .key)
         }
 
         static let xmpUndo = Scenario(
