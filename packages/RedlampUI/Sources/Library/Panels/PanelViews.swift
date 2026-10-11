@@ -213,6 +213,8 @@ final class PanelSheet: NSObject, NSWindowDelegate {
     private let grid = NSGridView()
     private let model: EditorModel
     private var done: (@MainActor () -> Bool)?
+    /// Buttons at the leading edge of the sheet's bottom row, such as Delete Preset.
+    var leadingButtons: [NSView] = []
     private static var shown: [PanelSheet] = []
 
     init(title: String, model: EditorModel) {
@@ -259,10 +261,13 @@ final class PanelSheet: NSObject, NSWindowDelegate {
             ok.keyEquivalentModifierMask = [.command]
         }
         ok.setAccessibilityIdentifier("panelSheet.ok")
-        let buttons = PanelSheet.buttons(cancel: cancel, ok: ok)
+        let buttons = PanelSheet.buttons(cancel: cancel, ok: ok, leading: leadingButtons)
         buttons.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(grid)
         content.addSubview(buttons)
+        if !leadingButtons.isEmpty {
+            buttons.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20).isActive = true
+        }
         NSLayoutConstraint.activate([
             grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),

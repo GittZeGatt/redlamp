@@ -18,6 +18,8 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         presets: NamingPreset.builtIn.map { ($0.name, $0.template) }, store: model.presets,
     )
     private let texts = NSStackView()
+    /// The form's row of the texts the template uses, hidden while it uses none.
+    private var textsRow: NSGridRow?
     private var textFields: [String: NSTextField] = [:]
     private let start = NSTextField()
     private let extensions = NSPopUpButton()
@@ -85,6 +87,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
 
         start.stringValue = String(model.options.sequenceStart)
         start.delegate = self
+        start.alignment = .right
         start.setAccessibilityIdentifier("rename.start")
         start.widthAnchor.constraint(equalToConstant: 64).isActive = true
         extensions.addItems(withTitles: [
@@ -95,9 +98,23 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         extensions.target = self
         extensions.action = #selector(extensionsChosen)
         extensions.setAccessibilityIdentifier("rename.extensions")
-        let options = NSStackView(views: [NSTextField(labelWithString: "Start Numbers at"), start, extensions])
-        options.orientation = .horizontal
-        options.spacing = 8
+        let (presets, field, error) = (template.rows[0], template.rows[1], template.rows[2])
+        let form = NSGridView(views: [
+            [Self.label("Preset"), presets],
+            [Self.label("Template"), field],
+            [NSGridCell.emptyContentView, error],
+            [NSGridCell.emptyContentView, texts],
+            [Self.label("Start Numbers At"), start],
+            [Self.label("Extensions"), extensions],
+        ])
+        form.rowSpacing = 8
+        form.columnSpacing = 8
+        form.rowAlignment = .firstBaseline
+        form.column(at: 0).xPlacement = .trailing
+        form.cell(for: field)?.xPlacement = .fill
+        form.cell(for: error)?.xPlacement = .fill
+        template.error.preferredMaxLayoutWidth = Self.size.width - 200
+        textsRow = form.row(at: 3)
 
         // Cells drawn in the table's own layer: ten thousand names change at each key.
         for (identifier, title, width) in [
@@ -151,18 +168,27 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         stopButton.action = #selector(stopClicked)
         stopButton.isHidden = true
         stopButton.setAccessibilityIdentifier("rename.stop")
-        let buttons = NSStackView(views: [NSView(), stopButton, cancel, rename])
+        for button in [stopButton, cancel, rename] {
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+        }
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let buttons = NSStackView(views: [spacer, stopButton, cancel, rename])
         buttons.orientation = .horizontal
-        buttons.spacing = 8
+        buttons.spacing = 12
 
-        let stack = NSStackView(views: [heading, note, Self.heading("Template")] as [NSView] + template.rows + [
-            texts, options, Self.heading("New Names"), scroll, summary, progress, status, buttons,
+        let stack = NSStackView(views: [
+            heading, note, form, Self.heading("New Names"), scroll, summary, progress, status, buttons,
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
-        for view in [note, scroll, summary, progress, status, buttons] as [NSView] + template.rows.dropFirst() {
+        stack.setCustomSpacing(4, after: heading)
+        stack.setCustomSpacing(16, after: note)
+        stack.setCustomSpacing(16, after: form)
+        stack.setCustomSpacing(20, after: status)
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        for view in [note, form, scroll, summary, progress, status, buttons] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         }
@@ -176,8 +202,14 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
 
     static func heading(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .secondaryLabelColor
+        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        return label
+    }
+
+    /// A form's label: the name and a colon, its trailing edge against its control.
+    static func label(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text + ":")
+        label.alignment = .right
         return label
     }
 
@@ -239,6 +271,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         else { return }
         texts.arrangedSubviews.forEach { $0.removeFromSuperview() }
         textFields = [:]
+        textsRow?.isHidden = wanted.isEmpty
         for name in wanted {
             let field = NSTextField()
             field.placeholderString = name.isEmpty ? "Custom Text" : name.capitalized + " Name"

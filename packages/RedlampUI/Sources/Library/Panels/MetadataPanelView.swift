@@ -225,7 +225,7 @@ enum PanelSheets {
         sheet.add(nil, editor.summary)
         sheet.add("Try:", editor.trial)
         sheet.add(nil, editor.expansion)
-        sheet.add(nil, importFile)
+        sheet.leadingButtons = [importFile]
         sheet.begin(button: "Save", first: editor.text, lines: true) {
             let text = editor.text.string
             Task { _ = await panels.saveCodeReplacements(text) }
@@ -339,10 +339,16 @@ enum PanelSheets {
         sheet.add("Name:", name)
         var built: [MetadataPreset.Field: PresetRow] = [:]
         for field in MetadataPreset.Field.allCases {
-            let row = PresetRow(field)
-            built[field] = row
-            sheet.add(nil, NSStackView(views: [row.tick, row.text, row.mode]))
+            built[field] = PresetRow(field)
         }
+        // Each field's box, text and mode in a column of their own, so the texts and modes line up.
+        let rows = NSGridView(views: MetadataPreset.Field.allCases.compactMap { built[$0] }.map { row in
+            [row.tick, row.text, row.mode]
+        })
+        rows.rowSpacing = 6
+        rows.columnSpacing = 8
+        rows.rowAlignment = .firstBaseline
+        sheet.add(nil, rows)
         let editor = PresetEditor(
             name: name, rows: built, editing: preset ?? existing.first ?? MetadataPreset(
                 name: "Untitled Preset",
@@ -364,7 +370,7 @@ enum PanelSheets {
             sheet.end()
         }
         delete.isEnabled = existing.contains { $0.name == editor.editing.name }
-        sheet.add(nil, delete)
+        sheet.leadingButtons = [delete]
         sheet.begin(button: "Save", first: name) {
             _ = choose
             guard let saved = editor.preset() else { return false }

@@ -74,11 +74,12 @@ final class MoveEditsSheetController: NSViewController {
         kept.setAccessibilityIdentifier("moveEdits.kept")
         goingTo.setAccessibilityIdentifier("moveEdits.destination")
         let grid = NSGridView(views: [
-            [Self.label("Kept now"), kept],
-            [Self.label("Moving to"), goingTo],
+            [Self.label("Kept Now:"), kept],
+            [Self.label("Moving To:"), goingTo],
         ])
-        grid.rowSpacing = 4
+        grid.rowSpacing = 6
         grid.columnSpacing = 8
+        grid.rowAlignment = .firstBaseline
         grid.column(at: 0).xPlacement = .trailing
         let how = Self.note(MoveEditsModel.how)
 
@@ -102,16 +103,24 @@ final class MoveEditsSheetController: NSViewController {
         showSetAside.action = #selector(showSetAsideClicked)
         showSetAside.isHidden = true
         showSetAside.setAccessibilityIdentifier("moveEdits.showSetAside")
-        let buttons = NSStackView(views: [showSetAside, NSView(), cancel, move])
+        for button in [cancel, move] {
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+        }
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let buttons = NSStackView(views: [showSetAside, spacer, cancel, move])
         buttons.orientation = .horizontal
-        buttons.spacing = 8
+        buttons.spacing = 12
 
         let stack = NSStackView(views: [heading, count, grid, how, what, status, progress, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.setCustomSpacing(4, after: heading)
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
+        stack.setCustomSpacing(14, after: count)
+        stack.setCustomSpacing(14, after: grid)
+        stack.setCustomSpacing(20, after: progress)
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         for view in [heading, count, how, what, status, progress, buttons] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
