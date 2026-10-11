@@ -104,8 +104,11 @@ enum LibraryCommand {
       sidecars prints where <root> keeps its .redlamp sidecars and how many are beside the photos, on this Mac
                and in both places. --move takes them beside the photos or to this Mac: each copied, checked and
                only then removed where it was, never over another, and other apps' .xmp left beside the
-               photos; a sidecar in both places stops the move before it starts. --dry-run says what would
-               move. A move a forced quit interrupted is finished first. Exits 1 when something wasn't moved.
+               photos. A photo with a sidecar in both places is settled as the move runs: the copy saved last
+               is kept where they go, and the other set aside in the library's Set-Aside Edits, in a folder
+               of the move's own, which it names with how many it settled. --dry-run says what would move and
+               be settled. A move a forced quit interrupted is finished first. Exits 1 when something wasn't
+               moved or settled.
       names    prints each photo <query> finds: its path, the name <template> gives it, any number added to
                tell it apart, and tokens that came out empty. --text gives {text} and {text:shoot}. A dry
                run: nothing is renamed.
