@@ -11,6 +11,8 @@ brew "mas"
 # it downloads with aria2 when that's installed.
 brew "xcodes"
 brew "aria2"
+# A virtual screen, so the build Mac has a display with its lid closed (virtual-screen.sh).
+cask "betterdisplay"
 
 # The setup installs this only when the App Store's Xcode is the main Mac's version.
 mas "Xcode", id: 497799835

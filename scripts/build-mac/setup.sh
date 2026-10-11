@@ -19,9 +19,10 @@
 # asks for an Apple Account), with its licence, first launch, Metal toolchain and iOS SDK; PATH for
 # commands run over SSH; mise's tools (mise.toml); the sample raws (2.1 GB); `mise run generate`;
 # and the settings a Mac left on its own needs (--no-settings leaves them out): no sleep on the
-# charger or with the lid closed, no screen lock, automatic login, Remote Login, and no automatic
-# macOS or App Store updates, since macOS and Xcode change on both Macs together. --gate then runs
-# the push gate on origin/main, which builds everything and runs the reference tests (a few minutes).
+# charger or with the lid closed, a virtual screen at each login (virtual-screen.sh), no screen
+# lock, automatic login, Remote Login, and no automatic macOS or App Store updates, since macOS and
+# Xcode change on both Macs together. --gate then runs the push gate on origin/main, which builds
+# everything and runs the reference tests (a few minutes).
 #
 # MACOS_VERSION, XCODE_VERSION and XCODE_BUILD are the main Mac's (`sw_vers -productVersion`,
 # `xcodebuild -version`); set them when it moves on. A build Mac on other versions can build and
@@ -267,6 +268,38 @@ remote_login() {
     nc -z -G 2 127.0.0.1 22 >/dev/null 2>&1
 }
 
+# A display with the lid closed: virtual-screen.sh now, and at each login from a LaunchAgent, which
+# runs in the desktop session where BetterDisplay does.
+virtual_screen() {
+    say "A virtual screen with the lid closed, from BetterDisplay (scripts/build-mac/virtual-screen.sh)"
+    "$CLONE/scripts/build-mac/virtual-screen.sh" \
+        || note "BetterDisplay didn't connect a virtual screen: create one from its menu bar menu, then run $CLONE/scripts/build-mac/virtual-screen.sh"
+    local agent="$HOME/Library/LaunchAgents/app.redlamp.build-mac.screen.plist"
+    mkdir -p "$(dirname "$agent")" "$ROOT/logs"
+    cat >"$agent" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>app.redlamp.build-mac.screen</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$CLONE/scripts/build-mac/virtual-screen.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$ROOT/logs/virtual-screen.log</string>
+    <key>StandardErrorPath</key>
+    <string>$ROOT/logs/virtual-screen.log</string>
+</dict>
+</plist>
+EOF
+    plutil -lint -s "$agent"
+}
+
 settings() {
     # The regression suite drives the app on screen, so the display stays on too.
     say "Power: on the charger, no sleep, the display's included, and wake for network access"
@@ -280,6 +313,8 @@ settings() {
     disabled="$(pmset -g | awk '/SleepDisabled/ { print $2 }')"
     [ "$disabled" = 1 ] \
         || note "pmset didn't take disablesleep, so closing the lid still sleeps this Mac: keep a display or dummy plug connected"
+
+    virtual_screen
 
     say "Screen lock: off, and no screen saver (sysadminctl asks for this account's password)"
     sysadminctl -screenLock off -password - \
