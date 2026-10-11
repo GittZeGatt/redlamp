@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import RedlampDocument
 import RedlampEngineAPI
 
 /// A photo's largest embedded preview (LIB-42), the image soft frames are measured on: for a raw the largest JPEG it
@@ -26,14 +27,17 @@ struct LargestPreview: @unchecked Sendable {
     static let smallestEdge = 1280
 
     /// `url`'s largest preview, decoded at full size when it's drawn; with `longEdge`, decoded at the JPEG scale that
-    /// keeps it at least that long, for the grid. Nil when the file has none of `smallestEdge` or more.
-    static func open(_ url: URL, longEdge: Int? = nil) async -> LargestPreview? {
+    /// keeps it at least that long, for the grid. Nil when the file has none of `smallestEdge` or more. ImageIO's
+    /// preview of a raw, which is decoded as it's found, is decoded on `scheduler`'s background lane when it's given.
+    static func open(_ url: URL, longEdge: Int? = nil, scheduler: WorkScheduler? = nil) async -> LargestPreview? {
         if SupportedFormats.isRaw(url) {
             guard let file = try? NSData(contentsOf: url, options: .alwaysMapped) else { return nil }
             if let jpeg = await largestJPEG(in: file), let preview = open(jpeg, longEdge: longEdge) {
                 return preview
             }
-            return embeddedByImageIO(Data(referencing: file))
+            let data = Data(referencing: file)
+            guard let scheduler else { return embeddedByImageIO(data) }
+            return try? await scheduler.run(.background) { embeddedByImageIO(data) }
         }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary)
         else { return nil }

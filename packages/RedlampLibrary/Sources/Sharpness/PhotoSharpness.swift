@@ -51,14 +51,15 @@ public enum SharpnessReader {
             }
             return AFPointReader.read(url, imageSize: imageSize)
         }
-        if let points, let preview = await LargestPreview.open(url),
+        if let points, let preview = await LargestPreview.open(url, scheduler: scheduler),
            let rect = SharpnessMeasure.region(around: points.areas, width: preview.width, height: preview.height) {
             return try await scheduler.run(.background) {
                 preview.region(rect).map { PhotoSharpness(focus: .afPoint, score: SharpnessMeasure.score($0)) }
                     ?? .unmeasured
             }
         }
-        guard let preview = await LargestPreview.open(url, longEdge: SharpnessMeasure.gridEdge) else {
+        guard let preview = await LargestPreview.open(url, longEdge: SharpnessMeasure.gridEdge, scheduler: scheduler)
+        else {
             return .unmeasured
         }
         return try await scheduler.run(.background) { grid(of: preview) }
