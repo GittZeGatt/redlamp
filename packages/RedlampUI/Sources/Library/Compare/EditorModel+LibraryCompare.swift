@@ -414,9 +414,10 @@ public extension EditorModel {
         }
     }
 
-    /// A culling key in Compare or Survey: the photos the active photo's cell stands for, as one change with Undo;
-    /// `advance` then moves Compare's candidate on, or makes Survey's next photo active.
-    private func cullCompared(_ change: CullingChange, advance: Bool) -> Bool {
+    /// A culling key in Compare or Survey, or a custom label given there: the photos the active photo's cell stands
+    /// for, as one change with Undo; `advance` then moves Compare's candidate on, or makes Survey's next photo active.
+    @discardableResult
+    internal func cullCompared(_ change: CullingChange, advance: Bool) -> Bool {
         let order = gridOrder
         guard let active = selection.flatMap(library.photoID(of:)) else { return false }
         let list = library.photoList

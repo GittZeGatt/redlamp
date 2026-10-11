@@ -143,31 +143,11 @@ public extension EditorModel {
     /// `change`, a custom label, on the photos a culling key would reach.
     private func cullCustomLabel(_ change: CullingChange) {
         if showsCompareOrSurvey, !showsMissingPhotos {
-            cullActiveCell(change, advance: autoAdvance)
+            cullCompared(change, advance: autoAdvance)
         } else {
             cull(change, advance: autoAdvance)
         }
         activity.record(.action, change.title)
-    }
-
-    /// `change` on the photos the active photo's cell stands for (a closed stack's, a raw and its JPEG), as Compare's
-    /// and Survey's culling keys make it; `advance` then moves Compare's candidate on, or makes Survey's next photo
-    /// active.
-    private func cullActiveCell(_ change: CullingChange, advance: Bool) {
-        let order = gridOrder
-        guard let active = selection.flatMap(library.photoID(of:)) else { return }
-        let cell = order.cell(for: active) ?? active
-        let stacked = order.stacks?.photos(of: cell) ?? []
-        let list = library.photoList
-        let rows = (stacked.isEmpty ? [cell] : stacked).compactMap(list.index(of:))
-        guard !rows.isEmpty else { return }
-        cull(change, rows: rows)
-        guard advance else { return }
-        if libraryView == .compare {
-            stepCandidate(by: 1)
-        } else {
-            stepSurvey(by: 1)
-        }
     }
 
     /// The rows of the photos selected, in order; the active photo's alone when nothing else is selected. The
