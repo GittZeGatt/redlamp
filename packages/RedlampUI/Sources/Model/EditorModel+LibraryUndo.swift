@@ -1,26 +1,42 @@
 import Foundation
 
-/// Library's Undo and Redo across its changes (LIB-15): culling's (`EditorModel+Culling`), the panels' (keywords,
-/// metadata, collections and stacks, keywords dragged or painted onto photos, photos dropped on a collection;
-/// `LibraryPanels+Changes`), the renames and moves (Move to Folder, photos dropped on a folder; `EditorModel+Files`),
-/// the Put Backs (`EditorModel+PutBackUndo`) and Library Health's (`EditorModel+HealthUndo`). Each kind keeps its
-/// own steps and makes and takes them back its own way, and every step has a turn in one order, given as it goes on
-/// Undo and again as it goes on Redo: ⌘Z takes back the change whose turn on Undo is the latest, whatever its kind,
-/// ⇧⌘Z makes again the one taken back last, and a new change of any kind ends every Redo. A change takes its turn as
-/// it's asked for, so one whose batch is still running is taken back after it's made. Undo keeps `libraryUndoLimit`
-/// steps of all the kinds together, the oldest going first. Develop keeps its own Undo.
+/// One Undo for the window's two modules (LIB-13), as Lightroom Classic has it: ⌘Z in either takes back the newest
+/// change of either, and ⇧⌘Z makes again the one taken back last.
+///
+/// - **Library's changes** are culling's (`EditorModel+Culling`), the panels' (keywords, metadata, collections and
+///   stacks, keywords dragged or painted onto photos, photos dropped on a collection; `LibraryPanels+Changes`), the
+///   renames and moves (Move to Folder, photos dropped on a folder; `EditorModel+Files`), the Put Backs
+///   (`EditorModel+PutBackUndo`) and Library Health's (`EditorModel+HealthUndo`). Each kind keeps its own steps and
+///   makes and takes them back its own way, whichever module is shown.
+/// - **Develop's changes** are the steps of the open photo's History (`EditorModel+History`). Undo reaches them
+///   while Develop has the photo open, shown or behind Library, where a step taken back is saved and its thumbnail
+///   follows. Once Develop lets the photo go (another photo opened there, or made active in Library), its steps
+///   leave Undo, as they always left Develop's, and stay in its History as an earlier session.
+/// - **One order:** every step has a turn from one clock, given as it goes on Undo and again as it goes on Redo. ⌘Z
+///   takes back the step whose turn on Undo is the latest, whatever its kind, and ⇧⌘Z makes again the one taken back
+///   last. A change of either module ends every Redo: Develop's steps taken back stay in its History, but ⇧⌘Z no
+///   longer makes them again. A change takes its turn as it's asked for, so one whose batch is still running is
+///   taken back after it's made.
+/// - Undo keeps `libraryUndoLimit` of Library's steps, of all its kinds together, the oldest going first; Develop's
+///   History keeps its own. In Recently Trashed, whose photos are in the Trash, Undo and Redo reach a Put Back alone.
 extension EditorModel {
-    /// The kinds of Library's changes, each with an Undo of its own.
-    enum LibraryUndoKind {
-        case culling, panels, files, putBack, health
+    /// The kinds of change Undo takes back, each with an Undo of its own.
+    enum UndoKind {
+        case develop, culling, panels, files, putBack, health
+
+        /// The module whose change it is.
+        var module: AppModule {
+            self == .develop ? .develop : .library
+        }
     }
 
     /// The steps Library's Undo keeps, of every kind together.
     static let libraryUndoLimit = 20
 
-    /// The kind of change ⌘Z takes back now; nil when there's none.
-    var libraryUndoKind: LibraryUndoKind? {
+    /// The kind of change ⌘Z takes back now, of either module; nil when there's none.
+    var libraryUndoKind: UndoKind? {
         Self.latest([
+            (.develop, developUndoTurn),
             (.culling, cullingUndo.last?.turn),
             (.panels, libraryPanels.undoSteps.last?.turn),
             (.files, fileSteps.undo.last?.turn),
@@ -29,9 +45,10 @@ extension EditorModel {
         ])
     }
 
-    /// The kind of change ⇧⌘Z makes again now; nil when there's none.
-    var libraryRedoKind: LibraryUndoKind? {
+    /// The kind of change ⇧⌘Z makes again now, of either module; nil when there's none.
+    var libraryRedoKind: UndoKind? {
         Self.latest([
+            (.develop, developRedoTurn),
             (.culling, cullingRedo.last?.turn),
             (.panels, libraryPanels.redoSteps.last?.turn),
             (.files, fileSteps.redo.last?.turn),
@@ -40,90 +57,228 @@ extension EditorModel {
         ])
     }
 
-    /// The next turn in Library's Undo and Redo, for a step going on either.
+    /// The next turn in Undo and Redo, for a step going on either.
     func nextLibraryTurn() -> Int {
-        libraryUndoClock.turns += 1
-        return libraryUndoClock.turns
+        undoClock.turns += 1
+        return undoClock.turns
     }
 
-    /// A change was asked for, and put on Undo: nothing taken back is made again, whatever its kind, and the oldest
-    /// steps beyond `libraryUndoLimit` go, whatever theirs.
+    /// A change was asked for, and put on Undo: nothing taken back is made again, whatever its kind or module, and
+    /// Library's oldest steps beyond `libraryUndoLimit` go, whatever theirs.
     func endLibraryRedo() {
         dropCullingRedo()
         if !libraryPanels.redoSteps.isEmpty {
             libraryPanels.redoSteps.removeAll()
         }
-        fileSteps.redo.removeAll()
-        putBackSteps.redo.removeAll()
-        healthSteps.redo.removeAll()
+        if !fileSteps.redo.isEmpty {
+            fileSteps.redo.removeAll()
+        }
+        if !putBackSteps.redo.isEmpty {
+            putBackSteps.redo.removeAll()
+        }
+        if !healthSteps.redo.isEmpty {
+            healthSteps.redo.removeAll()
+        }
+        undoClock.redoEnded = undoClock.turns
         limitLibraryUndo()
     }
+
+    // MARK: - ⌘Z and ⇧⌘Z
+
+    /// Undo and Redo, in either module; nil for every other action.
+    func performUndoShortcut(_ action: ShortcutAction) -> Bool? {
+        switch action {
+        case .undo: undoNewest()
+        case .redo: redoNewest()
+        default: nil
+        }
+    }
+
+    /// Whether `performUndoShortcut` would do something now; nil for the actions it leaves alone. A burst of arrow
+    /// presses in the palette, or a run of nudges, is a step not yet recorded, and ⌘Z takes it back.
+    func canPerformUndoShortcut(_ action: ShortcutAction) -> Bool? {
+        switch action {
+        case .undo:
+            if let kind = libraryUndoKind, undoReaches(kind) {
+                return true
+            }
+            return commandPalette?.hasOpenStep == true || hasOpenNudgeRun
+        case .redo:
+            guard let kind = libraryRedoKind else { return false }
+            return undoReaches(kind)
+        default:
+            return nil
+        }
+    }
+
+    /// Whether Undo and Redo reach a change of `kind` now: in Recently Trashed a Put Back alone.
+    private func undoReaches(_ kind: UndoKind) -> Bool {
+        kind == .putBack || !library.showsRecentlyTrashed
+    }
+
+    /// ⌘Z: the newest change of either module taken back, an open step of Develop's recorded first.
+    private func undoNewest() -> Bool {
+        commandPalette?.endBurst()
+        endNudgeRun()
+        guard let kind = libraryUndoKind, undoReaches(kind) else { return false }
+        switch kind {
+        case .develop:
+            let step = historyIndex
+            undo()
+            return historyIndex < step
+        case .culling:
+            return undoCulling()
+        case .panels:
+            let restacks = libraryPanels.undoSteps.last?.changes.contains(where: \.isStacks) == true
+            guard libraryPanels.undoInLibrary() == true else { return false }
+            if restacks {
+                restackAfterPanels()
+            }
+            return true
+        case .files:
+            return undoFiles()
+        case .putBack:
+            return undoPutBack()
+        case .health:
+            return undoHealth()
+        }
+    }
+
+    /// ⇧⌘Z: the change taken back last, of either module, made again.
+    private func redoNewest() -> Bool {
+        commandPalette?.endBurst()
+        endNudgeRun()
+        guard let kind = libraryRedoKind, undoReaches(kind) else { return false }
+        switch kind {
+        case .develop:
+            let step = historyIndex
+            redo()
+            return historyIndex > step
+        case .culling:
+            return redoCulling()
+        case .panels:
+            let restacks = libraryPanels.redoSteps.last?.changes.contains(where: \.isStacks) == true
+            guard libraryPanels.redoInLibrary() == true else { return false }
+            if restacks {
+                restackAfterPanels()
+            }
+            return true
+        case .files:
+            return redoFiles()
+        case .putBack:
+            return redoPutBack()
+        case .health:
+            return redoHealth()
+        }
+    }
+
+    // MARK: - Develop's steps
+
+    /// The turn of the open photo's step ⌘Z takes back, while Develop has the photo open, shown or not.
+    private var developUndoTurn: Int? {
+        guard canUndo, info != nil, opening == nil, history.indices.contains(historyIndex) else { return nil }
+        return undoClock.develop[history[historyIndex].id] ?? 0
+    }
+
+    /// The turn of the open photo's step ⇧⌘Z makes again, while Develop has the photo open and no change has been
+    /// asked for since it was taken back.
+    private var developRedoTurn: Int? {
+        guard canRedo, info != nil, opening == nil,
+              let turn = undoClock.developRedo[history[historyIndex + 1].id], turn > undoClock.redoEnded
+        else { return nil }
+        return turn
+    }
+
+    /// Develop recorded the step at `historyIndex`: it goes on Undo, newest, and ends every Redo.
+    func developStepRecorded() {
+        guard history.indices.contains(historyIndex) else { return }
+        let clock = undoClock
+        if clock.develop.count > history.count + Self.developTurnsKept {
+            let current = Set(history.map(\.id))
+            clock.develop = clock.develop.filter { current.contains($0.key) }
+            clock.developRedo = clock.developRedo.filter { current.contains($0.key) }
+        }
+        clock.develop[history[historyIndex].id] = nextLibraryTurn()
+        endLibraryRedo()
+    }
+
+    /// History went from step `old` to step `new`, by Undo, Redo or a click in History: the steps taken back go on
+    /// Redo, the one after `new` last, so it's the first made again; the steps made again go on Undo, `new` last.
+    func developHistoryMoved(from old: Int, to new: Int) {
+        guard history.indices.contains(old), history.indices.contains(new) else { return }
+        if new < old {
+            for index in stride(from: old, to: new, by: -1) {
+                undoClock.developRedo[history[index].id] = nextLibraryTurn()
+            }
+        } else if new > old {
+            for index in old + 1 ... new {
+                undoClock.develop[history[index].id] = nextLibraryTurn()
+            }
+        }
+    }
+
+    /// The turns of steps of photos Develop has let go that are kept before they're cleared out.
+    private static let developTurnsKept = 64
+
+    // MARK: - The limit
 
     /// Drops Library's oldest steps from Undo, by their turns, until `libraryUndoLimit` are left. Each kind's steps
     /// are in the order of their turns.
     private func limitLibraryUndo() {
-        let (culling, panels, files, putBacks, health) = (
-            cullingUndo, libraryPanels.undoSteps, fileSteps.undo, putBackSteps.undo, healthSteps.undo,
-        )
-        var excess = culling.count + panels.count + files.count + putBacks.count + health.count
-            - Self.libraryUndoLimit
+        let counts = cullingUndo.count + libraryPanels.undoSteps.count + fileSteps.undo.count
+            + putBackSteps.undo.count + healthSteps.undo.count
+        var excess = counts - Self.libraryUndoLimit
         guard excess > 0 else { return }
-        var dropped = (culling: 0, panels: 0, files: 0, putBacks: 0, health: 0)
-        while excess > 0, let oldest = Self.earliest([
-            (.culling, culling.dropFirst(dropped.culling).first?.turn),
-            (.panels, panels.dropFirst(dropped.panels).first?.turn),
-            (.files, files.dropFirst(dropped.files).first?.turn),
-            (.putBack, putBacks.dropFirst(dropped.putBacks).first?.turn),
-            (.health, health.dropFirst(dropped.health).first?.turn),
-        ]) {
-            switch oldest {
-            case .culling: dropped.culling += 1
-            case .panels: dropped.panels += 1
-            case .files: dropped.files += 1
-            case .putBack: dropped.putBacks += 1
-            case .health: dropped.health += 1
-            }
+        let turns: [(UndoKind, [Int])] = [
+            (.culling, cullingUndo.map(\.turn)), (.panels, libraryPanels.undoSteps.map(\.turn)),
+            (.files, fileSteps.undo.map(\.turn)), (.putBack, putBackSteps.undo.map(\.turn)),
+            (.health, healthSteps.undo.map(\.turn)),
+        ]
+        var dropped: [UndoKind: Int] = [:]
+        while excess > 0, let oldest = Self.earliest(turns.map { kind, list in
+            (kind, list.dropFirst(dropped[kind, default: 0]).first)
+        }) {
+            dropped[oldest, default: 0] += 1
             excess -= 1
         }
-        if dropped.culling > 0 {
-            dropOldestCulling(dropped.culling)
-        }
-        if dropped.panels > 0 {
-            libraryPanels.undoSteps.removeFirst(dropped.panels)
-        }
-        if dropped.files > 0 {
-            fileSteps.undo.removeFirst(dropped.files)
-        }
-        if dropped.putBacks > 0 {
-            putBackSteps.undo.removeFirst(dropped.putBacks)
-        }
-        if dropped.health > 0 {
-            healthSteps.undo.removeFirst(dropped.health)
+        for (kind, count) in dropped {
+            switch kind {
+            case .culling: dropOldestCulling(count)
+            case .panels: libraryPanels.undoSteps.removeFirst(count)
+            case .files: fileSteps.undo.removeFirst(count)
+            case .putBack: putBackSteps.undo.removeFirst(count)
+            case .health: healthSteps.undo.removeFirst(count)
+            case .develop: break
+            }
         }
     }
 
-    private static func latest(_ kinds: [(LibraryUndoKind, Int?)]) -> LibraryUndoKind? {
+    private static func latest(_ kinds: [(UndoKind, Int?)]) -> UndoKind? {
         kinds.compactMap { kind, turn in turn.map { (kind, $0) } }.max { $0.1 < $1.1 }?.0
     }
 
-    private static func earliest(_ kinds: [(LibraryUndoKind, Int?)]) -> LibraryUndoKind? {
+    private static func earliest(_ kinds: [(UndoKind, Int?)]) -> UndoKind? {
         kinds.compactMap { kind, turn in turn.map { (kind, $0) } }.min { $0.1 < $1.1 }?.0
     }
 
-    private var libraryUndoClock: LibraryUndoClock {
-        if let clock = Self.libraryUndoClocks.object(forKey: self) {
+    private var undoClock: UndoClock {
+        if let clock = Self.undoClocks.object(forKey: self) {
             return clock
         }
-        let clock = LibraryUndoClock()
-        Self.libraryUndoClocks.setObject(clock, forKey: self)
+        let clock = UndoClock()
+        Self.undoClocks.setObject(clock, forKey: self)
         return clock
     }
 
-    private static let libraryUndoClocks = NSMapTable<EditorModel, LibraryUndoClock>.weakToStrongObjects()
+    private static let undoClocks = NSMapTable<EditorModel, UndoClock>.weakToStrongObjects()
 }
 
-/// The turns given to the steps of Library's Undo and Redo, one editor's.
+/// The turns given to the steps of Undo and Redo, one editor's: the last given, Develop's steps' on each, by their
+/// IDs, and the last turn given when a change ended every Redo.
 @MainActor
-private final class LibraryUndoClock {
+private final class UndoClock {
     var turns = 0
+    var develop: [UUID: Int] = [:]
+    var developRedo: [UUID: Int] = [:]
+    var redoEnded = 0
 }

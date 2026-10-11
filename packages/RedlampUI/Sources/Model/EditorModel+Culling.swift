@@ -9,13 +9,14 @@ import Synchronization
 ///   one change with Undo and Redo. It's shown at once in the grid, the filmstrip and the loupe, then made in
 ///   the background: as one of the library's batches (`LibraryMetadata`) for the photos it has indexed, the
 ///   photo Develop has open among them, each photo given its own values, and through the photos' own saves
-///   for the rest. Redo is the Undo of the Undo where the journal still has it. Undo and Redo take turns with
-///   the library's other changes in the order they were made (`EditorModel+LibraryUndo`). A photo whose
-///   sidecar the library can't read or write is reported in the activity log and shown as the library has it.
+///   for the rest. Redo is the Undo of the Undo where the journal still has it. Undo and Redo, in either module,
+///   take turns with the library's other changes and Develop's edits in the order they were made
+///   (`EditorModel+LibraryUndo`). A photo whose sidecar the library can't read or write is reported in the
+///   activity log and shown as the library has it.
 /// - **A large source's selection** is taken by its IDs, as the list has them. What culling needs of the photos
 ///   whose rows aren't read, their URLs and badges, is read off the main thread (`LargeListRows.badges`), their
 ///   rows left unread, and the change is made from it as from rows read.
-/// - **In Develop** each change reaches the active photo, as it always has, and isn't on Library's Undo.
+/// - **In Develop** each change reaches the active photo, as it always has, and isn't on Undo.
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
 /// - ⇧ with any of them, or Auto Advance for all of them, then makes the photo after them active.
@@ -52,17 +53,13 @@ public extension EditorModel {
         !cullingQueue.isIdle
     }
 
-    /// The rating, flag, label and mark actions in either module, Undo and Redo in Library, and Auto Advance;
-    /// nil for every other, and for `[`, `]` and X where Develop's brushes and crop take them.
+    /// The rating, flag, label and mark actions in either module, and Auto Advance; nil for every other, and for
+    /// `[`, `]` and X where Develop's brushes and crop take them.
     internal func performCullingShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool? {
         switch action {
         case .autoAdvance:
             toggleAutoAdvance()
             return true
-        case .undo where module == .library:
-            return libraryUndoKind == .culling && undoCulling()
-        case .redo where module == .library:
-            return libraryRedoKind == .culling && redoCulling()
         case .decreaseRating where sizedBrush != nil, .increaseRating where sizedBrush != nil:
             return nil
         case .flagReject where module == .develop && activeTool == .crop:
@@ -77,8 +74,6 @@ public extension EditorModel {
     internal func canPerformCullingShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .autoAdvance: true
-        case .undo where module == .library: libraryUndoKind == .culling
-        case .redo where module == .library: libraryRedoKind == .culling
         default: CullingChange(action) == nil ? nil : canCull
         }
     }
@@ -214,10 +209,11 @@ public extension EditorModel {
 
     // MARK: - Undo and Redo
 
-    /// Takes back the Library's last culling change: each photo that still shows what it gave goes back.
+    /// Takes back the Library's last culling change, in either module: each photo that still shows what it gave goes
+    /// back.
     @discardableResult
     func undoCulling() -> Bool {
-        guard module == .library, let step = cullingUndo.popLast() else { return false }
+        guard let step = cullingUndo.popLast() else { return false }
         step.turn = nextLibraryTurn()
         cullingRedo.append(step)
         if cullingProblem?.step == ObjectIdentifier(step) {
@@ -237,7 +233,7 @@ public extension EditorModel {
     /// gets it again.
     @discardableResult
     func redoCulling() -> Bool {
-        guard module == .library, let step = cullingRedo.popLast() else { return false }
+        guard let step = cullingRedo.popLast() else { return false }
         step.turn = nextLibraryTurn()
         cullingUndo.append(step)
         let shown = find(step) { shown, place in

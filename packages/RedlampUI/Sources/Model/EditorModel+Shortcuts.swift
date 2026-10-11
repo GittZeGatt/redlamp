@@ -45,7 +45,7 @@ public extension EditorModel {
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let performed = performCompareShortcut(action, shifted: shifted) {
+        if let performed = performUndoShortcut(action) ?? performCompareShortcut(action, shifted: shifted) {
             return performed
         }
         if let performed = performHealthShortcut(action) ?? performStackShortcut(action)
@@ -96,8 +96,6 @@ public extension EditorModel {
         case .previousPhoto: selectPrevious()
         case .nextPhoto: selectNext()
         // Develop
-        case .undo: undo()
-        case .redo: redo()
         case .copySettings: chooseSettingsToCopy()
         case .copySettingsAgain: copySettings()
         case .syncSettings: chooseSettingsToSync()
@@ -218,7 +216,7 @@ public extension EditorModel {
         }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let available = canPerformCompareShortcut(action) {
+        if let available = canPerformUndoShortcut(action) ?? canPerformCompareShortcut(action) {
             return available
         }
         if let available = canPerformHealthShortcut(action) ?? canPerformStackShortcut(action)
@@ -247,10 +245,6 @@ public extension EditorModel {
         case .previousPhoto, .nextPhoto:
             guard let from = opening ?? selection, let index = library.index(of: from) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
-        // A burst of arrow presses in the palette, or a run of nudges, is a step not yet
-        // recorded, and ⌘Z undoes it.
-        case .undo: return canUndo || commandPalette?.hasOpenStep == true || hasOpenNudgeRun
-        case .redo: return canRedo
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
         case .copySettings, .copySettingsAgain, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,

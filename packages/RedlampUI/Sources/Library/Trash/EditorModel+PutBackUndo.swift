@@ -20,14 +20,14 @@ extension EditorModel {
 
     private static let putBackSteps = NSMapTable<EditorModel, PutBackSteps>.weakToStrongObjects()
 
-    /// Library's Undo takes back the latest Put Back: it's the library's newest change.
+    /// Undo takes back the latest Put Back: it's the newest change.
     var putBackUndoIsNewest: Bool {
-        module == .library && libraryUndoKind == .putBack
+        libraryUndoKind == .putBack
     }
 
-    /// Library's Redo makes again the Put Back taken back last: it's the library's change taken back last.
+    /// Redo makes again the Put Back taken back last: it's the change taken back last.
     var putBackRedoIsNewest: Bool {
-        module == .library && libraryRedoKind == .putBack
+        libraryRedoKind == .putBack
     }
 
     /// Puts a Put Back on Undo, newest, ending every Redo and dropping the library's oldest step beyond its limit,

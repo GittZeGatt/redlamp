@@ -130,7 +130,8 @@ struct CullingTests {
         #expect(edited.metadata?.rating == 4 && edited.recipe[.exposure] == 0.5, "Develop's save keeps the rating")
 
         model.showModule(.library)
-        #expect(model.perform(.undo))
+        #expect(model.perform(.undo) && model.value(.exposure) == 0, "Develop's exposure goes first, the newest")
+        #expect(model.perform(.undo), "then the rating")
         await folder.written()
         model.showModule(.develop)
         model.setValue(.exposure, 0.7)

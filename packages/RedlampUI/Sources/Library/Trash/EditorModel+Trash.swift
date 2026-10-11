@@ -101,8 +101,8 @@ public extension EditorModel {
         .openFolder, .showShortcuts, .commandPalette, .sendFeedback, .testCamera, .filmLooks, .cancel,
     ]
 
-    /// Recently Trashed's actions, Library's Undo and Redo when a Put Back is the newest change, and in Recently
-    /// Trashed every action it leaves off; nil for every other.
+    /// Recently Trashed's actions, and in Recently Trashed every action it leaves off; nil for every other. Undo and
+    /// Redo come first (`EditorModel+LibraryUndo`), and in Recently Trashed reach a Put Back alone.
     internal func performTrashShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .showRecentlyTrashed:
@@ -112,10 +112,6 @@ public extension EditorModel {
             return putBack() != nil
         case .putBackBatch:
             return putBackBatch() != nil
-        case .undo where putBackUndoIsNewest:
-            return undoPutBack()
-        case .redo where putBackRedoIsNewest:
-            return redoPutBack()
         default:
             guard library.showsRecentlyTrashed, !Self.actionsInRecentlyTrashed.contains(action) else { return nil }
             return false
@@ -132,8 +128,6 @@ public extension EditorModel {
             library.showsRecentlyTrashed && !trashedPhotos().isEmpty
         case .putBackBatch:
             library.showsRecentlyTrashed && selection.flatMap(library.trashedPhoto(at:)) != nil
-        case .undo where putBackUndoIsNewest, .redo where putBackRedoIsNewest:
-            true
         default:
             library.showsRecentlyTrashed && !Self.actionsInRecentlyTrashed.contains(action) ? false : nil
         }

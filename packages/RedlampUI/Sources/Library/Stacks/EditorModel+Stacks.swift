@@ -286,9 +286,8 @@ public extension EditorModel {
         photo == selection || library.photoID(of: photo).map(photoSelection.contains) == true
     }
 
-    /// The stacks' actions; ← and → and Deselect Other Photos among cells; and taking a stack's change back or making
-    /// it again, which the panels' Undo does. Nil for every other action: culling moves on in the grid's order itself
-    /// (`cull(_:advance:)`).
+    /// The stacks' actions, and ← and → and Deselect Other Photos among cells. Nil for every other action: culling
+    /// moves on in the grid's order itself (`cull(_:advance:)`), and the panels' Undo takes a stack's change back.
     internal func performStackShortcut(_ action: ShortcutAction) -> Bool? {
         if let made = performStackChange(action) {
             return made
@@ -311,16 +310,6 @@ public extension EditorModel {
             guard canPerformStackShortcut(action) == true else { return false }
             deselectOtherPhotos()
             coverClosedStacks()
-        case .undo where module == .library:
-            if libraryUndoKind == .panels, libraryPanels.undoSteps.last?.changes.contains(where: \.isStacks) == true {
-                restackAfterPanels()
-            }
-            return nil
-        case .redo where module == .library:
-            if libraryRedoKind == .panels, libraryPanels.redoSteps.last?.changes.contains(where: \.isStacks) == true {
-                restackAfterPanels()
-            }
-            return nil
         default:
             return nil
         }
@@ -440,8 +429,9 @@ public extension EditorModel {
         return true
     }
 
-    /// Shows the stacks again once the panels' changes asked for are made, those holding `opening` open.
-    private func restackAfterPanels(opening: [Int64] = []) {
+    /// Shows the stacks again once the panels' changes asked for are made, those holding `opening` open: after a
+    /// stack change, and after Undo or Redo takes one back or makes it again (`EditorModel+LibraryUndo`).
+    func restackAfterPanels(opening: [Int64] = []) {
         let (panels, stacks) = (libraryPanels, gridStacks)
         Task {
             await panels.written()

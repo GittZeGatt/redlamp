@@ -1841,6 +1841,7 @@ public final class EditorModel {
         guard history.indices.contains(index), opening == nil else { return }
         activity.record(.edit, "Went to history step “\(history[index].name)”")
         let back = index < historyIndex
+        developHistoryMoved(from: historyIndex, to: index)
         historyIndex = index
         recipe = history[index].recipe
         requestRender()

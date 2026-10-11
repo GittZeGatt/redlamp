@@ -24,14 +24,14 @@ extension EditorModel {
 
     private static let healthSteps = NSMapTable<EditorModel, HealthSteps>.weakToStrongObjects()
 
-    /// Library's Undo takes back Library Health's latest change: it's the library's newest change.
+    /// Undo takes back Library Health's latest change: it's the newest change.
     var healthUndoIsNewest: Bool {
-        module == .library && libraryUndoKind == .health
+        libraryUndoKind == .health
     }
 
-    /// Library's Redo makes again Library Health's change taken back last: it's the library's change taken back last.
+    /// Redo makes again Library Health's change taken back last: it's the change taken back last.
     var healthRedoIsNewest: Bool {
-        module == .library && libraryRedoKind == .health
+        libraryRedoKind == .health
     }
 
     /// Puts `step` on Undo, newest, ending every Redo.
@@ -192,14 +192,12 @@ extension EditorModel {
 
     // MARK: - Keys, menus and the palette
 
-    /// Library Health's actions, and Library's Undo and Redo when its change is the newest; nil for every other action.
+    /// Library Health's actions; nil for every other action.
     func performHealthShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .acceptHealthProposals: acceptHealthProposals()
         case .keepAnyway: keepAnyway()
         case .listAgain: listAgain()
-        case .undo where healthUndoIsNewest: undoHealth()
-        case .redo where healthRedoIsNewest: redoHealth()
         default: performMissingShortcut(action)
         }
     }
@@ -210,7 +208,6 @@ extension EditorModel {
         case .acceptHealthProposals: canAcceptHealthProposals
         case .keepAnyway: canKeepAnyway
         case .listAgain: canListAgain
-        case .undo where healthUndoIsNewest, .redo where healthRedoIsNewest: true
         default: canPerformMissingShortcut(action)
         }
     }

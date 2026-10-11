@@ -54,15 +54,12 @@ extension EditorModel {
 
     // MARK: - Keys, menus and the palette
 
-    /// Rename Photos, Move to Folder, Copy to Folder, and Library's Undo and Redo when a file step is the library's
-    /// newest change, or the one taken back last; nil for every other action.
+    /// Rename Photos, Move to Folder and Copy to Folder; nil for every other action.
     func performFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos: renamePhotos()
         case .moveToFolder: moveToFolder()
         case .copyToFolder: copyToFolder()
-        case .undo where module == .library && fileUndoIsNewest: undoFiles()
-        case .redo where module == .library && fileRedoIsNewest: redoFiles()
         default: nil
         }
     }
@@ -70,8 +67,6 @@ extension EditorModel {
     func canPerformFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos, .moveToFolder, .copyToFolder: canRenamePhotos
-        case .undo where module == .library && fileUndoIsNewest: true
-        case .redo where module == .library && fileRedoIsNewest: true
         default: nil
         }
     }
@@ -87,16 +82,6 @@ extension EditorModel {
     }
 
     private static let fileSteps = NSMapTable<EditorModel, LibraryFileSteps>.weakToStrongObjects()
-
-    /// Undo's latest file step is the library's newest change.
-    var fileUndoIsNewest: Bool {
-        libraryUndoKind == .files
-    }
-
-    /// Redo's latest file step is the library's change taken back last.
-    var fileRedoIsNewest: Bool {
-        libraryRedoKind == .files
-    }
 
     /// `step` on Undo as it's asked for, newest, ending every Redo.
     func push(_ step: LibraryFileStep) {
@@ -154,12 +139,12 @@ extension EditorModel {
 
     // MARK: - Undo and Redo
 
-    /// Takes back the latest file step: shown, then its batch's Undo in the background, once the steps asked for
-    /// before it are made, its own batch among them, its progress and Stop in the toolbar. Stopped partway, the step
-    /// goes back on Undo, for ⌘Z to take back the rest.
+    /// Takes back the latest file step, in either module: shown, then its batch's Undo in the background, once the
+    /// steps asked for before it are made, its own batch among them, its progress and Stop in Library's toolbar.
+    /// Stopped partway, the step goes back on Undo, for ⌘Z to take back the rest.
     @discardableResult
     func undoFiles() -> Bool {
-        guard module == .library, let service = library.service, let step = fileSteps.undo.popLast() else {
+        guard let service = library.service, let step = fileSteps.undo.popLast() else {
             return false
         }
         let made = step.turn
@@ -196,11 +181,11 @@ extension EditorModel {
         return true
     }
 
-    /// Makes the file step Undo took back last again, with a batch planned anew, its progress and Stop in the
-    /// toolbar; stopped partway, the step is what its batch did.
+    /// Makes the file step Undo took back last again, in either module, with a batch planned anew, its progress and
+    /// Stop in Library's toolbar; stopped partway, the step is what its batch did.
     @discardableResult
     func redoFiles() -> Bool {
-        guard module == .library, let service = library.service, let step = fileSteps.redo.popLast() else {
+        guard let service = library.service, let step = fileSteps.redo.popLast() else {
             return false
         }
         let undone = step.turn

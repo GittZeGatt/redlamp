@@ -12,6 +12,8 @@ public extension EditorModel {
         historyIndex < history.count - 1
     }
 
+    /// Develop's step before this one, on the open photo. ⌘Z and ⇧⌘Z go to the newest change of either module
+    /// (`EditorModel+LibraryUndo`), this among them.
     func undo() {
         commandPalette?.endBurst()
         endNudgeRun()
@@ -78,6 +80,7 @@ extension EditorModel {
             history.removeFirst(history.count - 500)
         }
         historyIndex = history.count - 1
+        developStepRecorded()
         activity.record(.edit, history[historyIndex].name)
     }
 

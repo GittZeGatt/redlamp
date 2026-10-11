@@ -321,8 +321,8 @@ public extension LibraryPanels {
 
     // MARK: - Undo and Redo
 
-    /// Library's Undo: the panels' last change, when it's the newest of the library's changes; nil when another
-    /// kind's goes first.
+    /// Undo, in either module: the panels' last change, when it's the newest change; nil when another kind's goes
+    /// first.
     func undoInLibrary() -> Bool? {
         guard let model, model.libraryUndoKind == .panels, let step = undoSteps.popLast() else { return nil }
         step.turn = model.nextLibraryTurn()
@@ -334,8 +334,8 @@ public extension LibraryPanels {
         return true
     }
 
-    /// Library's Redo: the panels' change Undo took back last, when it's the library's change taken back last;
-    /// nil when another kind's goes first.
+    /// Redo, in either module: the panels' change Undo took back last, when it's the change taken back last; nil
+    /// when another kind's goes first.
     func redoInLibrary() -> Bool? {
         guard let model, model.libraryRedoKind == .panels, let step = redoSteps.popLast() else { return nil }
         step.turn = model.nextLibraryTurn()
@@ -345,15 +345,6 @@ public extension LibraryPanels {
         saveOpenPhoto(of: step)
         enqueue(step, as: .redo)
         return true
-    }
-
-    /// True when Library's Undo would take back one of the panels' changes; nil when another kind's goes first.
-    var canUndoInLibrary: Bool? {
-        model?.libraryUndoKind == .panels ? true : nil
-    }
-
-    var canRedoInLibrary: Bool? {
-        model?.libraryRedoKind == .panels ? true : nil
     }
 
     /// Returns once every change asked for has been made.
@@ -573,12 +564,9 @@ extension LibraryPanels {
 // MARK: - Keys, menus and the palette
 
 extension EditorModel {
-    /// Library's Undo and Redo when the panels' change goes first, the keyword set's keys, Edit Capture Time
-    /// and the keyword-list files; nil for every other action.
+    /// The keyword set's keys, Edit Capture Time and the keyword-list files; nil for every other action.
     func performPanelShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
-        case .undo where module == .library: return libraryPanels.undoInLibrary()
-        case .redo where module == .library: return libraryPanels.redoInLibrary()
         case .editCaptureTime:
             guard module == .library else { return false }
             return PanelSheets.editCaptureTime(model: self)
@@ -594,8 +582,6 @@ extension EditorModel {
     /// Whether `performPanelShortcut` would do something now; nil for the actions it leaves to others.
     func canPerformPanelShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
-        case .undo where module == .library: return libraryPanels.canUndoInLibrary
-        case .redo where module == .library: return libraryPanels.canRedoInLibrary
         case .editCaptureTime: return module == .library && !libraryPanels.selection.ids.isEmpty
         case .importKeywords, .exportKeywords: return library.service?.isReady == true
         default:
