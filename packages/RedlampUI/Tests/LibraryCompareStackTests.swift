@@ -91,8 +91,10 @@ struct LibraryCompareStackTests {
         model.open([root])
         try await eventually { library.isShownFromLibrary && !library.isListing && library.count == Self.photos.count }
         model.showLibrary(.grid)
-        try await eventually { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
-        try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
+        try await eventually { model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true }
+        try #require(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true, "the burst open, the pair closed")
+        model.gridStacks.closeAll()
+        try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair closed")
         return model
     }
 
