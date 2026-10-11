@@ -358,13 +358,13 @@ public extension EditorModel {
     // MARK: - Keys
 
     /// The keys Compare and Survey give their own meaning: ← and → (the candidate, or the active photo among those
-    /// shown), Z and Space in Compare, and the culling keys, which reach the active photo alone. Nil for every other
-    /// action, and outside Compare and Survey.
+    /// shown), Z and Space, ↓ (Swap) and ↑ (Make Select) in Compare, and the culling keys, which reach the active
+    /// photo alone. Nil for every other action, and outside Compare and Survey.
     internal func performCompareShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool? {
         guard showsCompareOrSurvey, !showsMissingPhotos else { return nil }
         let comparing = libraryView == .compare
         let handled = action == .previousPhoto || action == .nextPhoto || CullingChange(action) != nil
-            || (comparing && action == .toggleZoom)
+            || (comparing && Self.compareActions.contains(action))
         guard handled else { return nil }
         if comparing {
             keepCompareInStep()
@@ -382,6 +382,10 @@ public extension EditorModel {
             guard selection != nil else { return false }
             toggleLoupeZoom()
             return true
+        case .swapCompared:
+            return swapCompared()
+        case .makeSelect:
+            return makeCandidateSelect()
         default:
             guard let change = CullingChange(action) else { return nil }
             return cullCompared(change, advance: shifted || autoAdvance)
@@ -408,11 +412,16 @@ public extension EditorModel {
             return photos.indices.contains(place + offset)
         case .toggleZoom:
             return comparing ? selection != nil : nil
+        case .swapCompared, .makeSelect:
+            return comparing ? libraryCompare.select != nil && libraryCompare.candidate != nil : nil
         default:
             guard CullingChange(action) != nil else { return nil }
             return selection.flatMap(library.index(of:)) != nil
         }
     }
+
+    /// The actions only Compare gives a meaning.
+    private static let compareActions: Set<ShortcutAction> = [.toggleZoom, .swapCompared, .makeSelect]
 
     /// A culling key in Compare or Survey, or a custom label given there: the photos the active photo's cell stands
     /// for, as one change with Undo; `advance` then moves Compare's candidate on, or makes Survey's next photo active.

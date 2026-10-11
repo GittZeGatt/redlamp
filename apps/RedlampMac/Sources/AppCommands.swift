@@ -249,7 +249,9 @@ struct AppCommands: Commands {
         item(.developModule)
         item(.previousModule)
         Divider()
-        ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView]) { item($0) }
+        ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView, .swapCompared, .makeSelect]) {
+            item($0)
+        }
         Divider()
         Menu("Grid View Style") {
             Picker("Grid View Style", selection: Binding(

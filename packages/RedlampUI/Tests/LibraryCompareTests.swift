@@ -161,12 +161,14 @@ struct LibraryCompareTests {
         try await fixture.settle()
         let view = modules.content.library.compare
         let compare = model.libraryCompare
-        try press(126, in: view)
+        #expect(ShortcutAction.resolve(KeyCombo(.up), in: .library)?.action == .makeSelect)
+        #expect(model.perform(.makeSelect))
         #expect(names([compare.select, compare.candidate]) == names([photos[2], photos[3]]))
         #expect(model.selection == photos[2] && compare.activeSide == .select, "the select is active")
         #expect(model.selectedPhotos == [photos[2], photos[3]])
         model.activateCompared(.candidate)
-        try press(125, in: view)
+        #expect(ShortcutAction.resolve(KeyCombo(.down), in: .library)?.action == .swapCompared)
+        #expect(model.perform(.swapCompared))
         #expect(names([compare.select, compare.candidate]) == names([photos[3], photos[2]]))
         #expect(model.selection == photos[3] && compare.activeSide == .select, "the active photo stays active")
         #expect(view.swap.accessibilityPerformPress())

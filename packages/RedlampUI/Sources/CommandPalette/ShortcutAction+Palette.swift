@@ -11,6 +11,8 @@ extension ShortcutAction {
         .loupeView: ["loupe", "single", "large", "library"],
         .compareView: ["compare", "side by side", "library"],
         .surveyView: ["survey", "several", "library"],
+        .swapCompared: ["compare", "swap", "switch", "select", "candidate", "exchange", "library"],
+        .makeSelect: ["compare", "make select", "candidate", "promote", "keep", "better", "library"],
         .cycleGridStyle: ["grid", "cell style", "view options", "expanded", "compact", "extras", "library"],
         .largerThumbnails: ["thumbnail size", "bigger", "larger", "zoom", "grid", "library"],
         .smallerThumbnails: ["thumbnail size", "smaller", "grid", "library"],
@@ -208,6 +210,8 @@ extension ShortcutAction {
         case .loupeView: "photo"
         case .compareView: "rectangle.split.2x1"
         case .surveyView: "rectangle.split.3x1"
+        case .swapCompared: "arrow.left.arrow.right"
+        case .makeSelect: "arrow.left.to.line"
         case .cycleGridStyle: "rectangle.grid.1x2"
         case .largerThumbnails: "plus.square.on.square"
         case .smallerThumbnails: "minus.square"

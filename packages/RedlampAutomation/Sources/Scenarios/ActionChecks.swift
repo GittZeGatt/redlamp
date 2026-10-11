@@ -118,6 +118,11 @@
             case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
                 module(action)
             // Library
+            case .swapCompared, .makeSelect:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs Compare's two photos: checked by library.compare-actions",
+                )
             case .cycleGridStyle, .largerThumbnails, .smallerThumbnails: grid(action)
             case .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
                  .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort:

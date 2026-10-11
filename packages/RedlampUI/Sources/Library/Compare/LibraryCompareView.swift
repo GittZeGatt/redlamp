@@ -6,11 +6,10 @@ import RedlampLibrary
 /// Compare (C) in the Library module (LIB-16): the select on the left and the candidate on the right, each under its
 /// role and name, its date and camera settings and its rating, flag, label and mark, the active one outlined; and
 /// under them the lock that links their zoom and pan, Swap, Make Select and Done. A press on a photo makes it active,
-/// a click on the active one zooms it to 1:1 where it lands or fits it again, and a drag pans it. ↑ makes the
-/// candidate the select and ↓ swaps them: keys the key monitor leaves to the view. ← and →, Z and Space and the
-/// culling keys are the model's (`EditorModel+LibraryCompare`). It reads nothing while it isn't shown. The judging
-/// tools' buttons (LIB-38) start the bar, each tool drawing over both photos, and Develop's Show Sensor Clipping key
-/// reaches the view as ↑ and ↓ do.
+/// a click on the active one zooms it to 1:1 where it lands or fits it again, and a drag pans it. ← and →, Z and
+/// Space, Swap (↓), Make Select (↑) and the culling keys are the model's actions (`EditorModel+LibraryCompare`). It
+/// reads nothing while it isn't shown. The judging tools' buttons (LIB-38) start the bar, each tool drawing over both
+/// photos, and Develop's Show Sensor Clipping key reaches the view itself.
 final class LibraryCompareView: NSView {
     static let barHeight: CGFloat = 30
     private static let inset: CGFloat = 20
@@ -51,12 +50,12 @@ final class LibraryCompareView: NSView {
             half.photo.onLens = { [weak self] _, point in self?.halves[side.other]?.photo.showLens(at: point) }
         }
         link.toolTip = "Link Zoom and Pan"
-        swap.toolTip = "Swap (↓)"
-        makeSelect.toolTip = "Make Select (↑)"
+        swap.toolTip = "Swap (\(ShortcutAction.swapCompared.combos.first?.display ?? ""))"
+        makeSelect.toolTip = "Make Select (\(ShortcutAction.makeSelect.combos.first?.display ?? ""))"
         done.toolTip = "Done (\(ShortcutAction.loupeView.combos.first?.display ?? ""))"
         link.onPress = { model.toggleCompareLink() }
-        swap.onPress = { [weak self] in self?.swapPhotos() }
-        makeSelect.onPress = { [weak self] in self?.promoteCandidate() }
+        swap.onPress = { model.perform(.swapCompared) }
+        makeSelect.onPress = { model.perform(.makeSelect) }
         done.onPress = { model.perform(.loupeView) }
         for button in [link, swap, makeSelect, done] {
             addSubview(button)
@@ -179,29 +178,11 @@ final class LibraryCompareView: NSView {
         model.toggleLoupeZoom()
     }
 
-    private func swapPhotos() {
-        if model.swapCompared() {
-            model.activity.record(.action, "Swap")
-        }
-    }
-
-    private func promoteCandidate() {
-        if model.makeCandidateSelect() {
-            model.activity.record(.action, "Make Select")
-        }
-    }
-
     override func keyDown(with event: NSEvent) {
-        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        switch event.keyCode {
-        case 126 where flags.isEmpty: promoteCandidate()
-        case 125 where flags.isEmpty: swapPhotos()
-        default:
-            if model.isSensorClippingKey(event), model.libraryView == .compare, isInShownModule(model) {
-                model.toggleSensorClipping()
-            } else {
-                super.keyDown(with: event)
-            }
+        if model.isSensorClippingKey(event), model.libraryView == .compare, isInShownModule(model) {
+            model.toggleSensorClipping()
+        } else {
+            super.keyDown(with: event)
         }
     }
 

@@ -117,6 +117,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case libraryModule, developModule, previousModule, gridView, loupeView, compareView, surveyView
 
     /// Library
+    case swapCompared, makeSelect
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
     case showRecentlyTrashed, putBack, putBackBatch
     case showAllPhotographs, showPreviousImport, showMarked, showRejected
@@ -185,7 +186,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .libraryModule, .developModule, .previousModule, .gridView, .loupeView, .compareView, .surveyView:
             .modules
-        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
+        case .swapCompared, .makeSelect,
+             .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .showRecentlyTrashed, .putBack, .putBackBatch,
              .showAllPhotographs, .showPreviousImport, .showMarked, .showRejected,
              .newCollection, .newSmartCollection, .newCollectionSet, .addToCollection, .addToTargetCollection,
@@ -247,6 +249,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .loupeView: "Loupe"
         case .compareView: "Compare"
         case .surveyView: "Survey"
+        case .swapCompared: "Swap Select and Candidate"
+        case .makeSelect: "Make Select"
         case .cycleGridStyle: "Cycle Grid View Style"
         case .largerThumbnails: "Increase Thumbnail Size"
         case .smallerThumbnails: "Decrease Thumbnail Size"
@@ -441,6 +445,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .loupeView: [.char("e")]
         case .compareView: [.char("c")]
         case .surveyView: [.char("n")]
+        // Compare's, as Lightroom Classic's ↓ and ↑ there (`isLibraryOnly`).
+        case .swapCompared: [KeyCombo(.down)]
+        case .makeSelect: [KeyCombo(.up)]
         // The Library's own meanings of Develop's J, = and - (`isLibraryOnly`).
         case .cycleGridStyle: [.char("j")]
         case .largerThumbnails: [.char("=")]
