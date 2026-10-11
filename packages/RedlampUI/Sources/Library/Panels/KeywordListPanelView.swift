@@ -16,7 +16,9 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     private let filter = NSSearchField()
     private let outline = KeywordOutlineView()
     private let scroll = NSScrollView()
-    private let empty = PanelControls.label("No keywords yet", secondary: true)
+    private let empty = PanelControls.note("No keywords yet")
+    /// The bar's −: deletes the keyword of the row chosen.
+    private var remove = NSButton()
     /// Each keyword's node, kept by path so the outline keeps its rows open across reloads.
     private var nodes: [KeywordPath: KeywordNode] = [:]
     /// The keywords the outline was given inside each keyword it asked about (nil: the top), in order: a change of
@@ -33,19 +35,24 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     init(model: EditorModel, panels: LibraryPanels) {
         self.model = model
         self.panels = panels
-        super.init(spacing: 6)
+        super.init(spacing: 8)
         setAccessibilityIdentifier("keywordList")
         filter.placeholderString = "Filter Keywords"
-        filter.controlSize = .small
-        filter.font = Typography.label.nsFont
+        filter.controlSize = .regular
+        filter.font = PanelControls.font
         filter.delegate = self
         filter.setAccessibilityIdentifier("keywordList.filter")
         let create = PanelControls.symbolButton("plus", "Create Keyword…", identifier: "keywordList.create") {
             [weak self] in self?.createKeyword(inside: nil)
         }
+        remove = PanelControls.symbolButton("minus", "Delete Keyword", identifier: "keywordList.delete") {
+            [weak self] in self?.deleteSelected()
+        }
+        remove.isEnabled = false
         let more = NSPopUpButton(frame: .zero, pullsDown: true)
         more.isBordered = false
         more.setAccessibilityIdentifier("keywordList.more")
+        more.toolTip = "More"
         more.addItem(withTitle: "")
         more.lastItem?.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "More")
         for (title, action) in [
@@ -53,14 +60,17 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
             ("Delete Keyword", #selector(deleteSelected)), ("Import Keywords…", #selector(importKeywords)),
             ("Export Keywords…", #selector(exportKeywords)), ("Purge Unused Keywords", #selector(purge)),
         ] {
+            if title == "Import Keywords…" {
+                more.menu?.addItem(.separator())
+            }
             more.menu?.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
         }
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("keyword"))
         outline.addTableColumn(column)
         outline.outlineTableColumn = column
         outline.headerView = nil
-        outline.rowHeight = 20
-        outline.indentationPerLevel = 12
+        outline.rowHeight = 22
+        outline.indentationPerLevel = 14
         outline.backgroundColor = .clear
         outline.style = .plain
         outline.dataSource = self
@@ -73,11 +83,19 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         outline.menu = menu
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.heightAnchor.constraint(equalToConstant: Self.height).isActive = true
-        addFullWidth(PanelControls.row([filter, create, more]))
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let bar = NSStackView(views: [create, remove, spacer, more])
+        bar.orientation = .horizontal
+        bar.spacing = 10
+        bar.edgeInsets = NSEdgeInsets(top: 3, left: 8, bottom: 3, right: 4)
+        let box = KeywordListBox(list: scroll, bar: bar)
+        addFullWidth(filter)
         addFullWidth(empty)
-        addFullWidth(scroll)
+        addFullWidth(box)
     }
 
     @available(*, unavailable)
@@ -262,6 +280,10 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         applyFilter()
     }
 
+    func outlineViewSelectionDidChange(_: Notification) {
+        remove.isEnabled = selectedKeyword != nil
+    }
+
     // MARK: - Menus
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -413,6 +435,52 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     }
 }
 
+/// The keyword list's outline in a box, as the system draws a list with its buttons: a hairline edge with rounded
+/// corners on the list's own background, and under the list, past a divider, the bar of its buttons.
+final class KeywordListBox: NSView {
+    init(list: NSScrollView, bar: NSView) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.cornerCurve = .continuous
+        layer?.borderWidth = 1
+        layer?.masksToBounds = true
+        let divider = NSBox()
+        divider.boxType = .separator
+        for view in [list, divider, bar] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            list.topAnchor.constraint(equalTo: topAnchor),
+            list.leadingAnchor.constraint(equalTo: leadingAnchor),
+            list.trailingAnchor.constraint(equalTo: trailingAnchor),
+            divider.topAnchor.constraint(equalTo: list.bottomAnchor),
+            divider.leadingAnchor.constraint(equalTo: leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.bottomAnchor.constraint(equalTo: bottomAnchor),
+            bar.heightAnchor.constraint(equalToConstant: 26),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var wantsUpdateLayer: Bool {
+        true
+    }
+
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        layer?.borderColor = NSColor.separatorColor.cgColor
+    }
+}
+
 /// A keyword's row in the outline, by its path: the outline knows its rows by these, so they stay open.
 final class KeywordNode: NSObject {
     let path: KeywordPath
@@ -429,6 +497,7 @@ final class KeywordRowView: NSTableCellView {
     private let name = KeywordDragLabel.make()
     private let count = PanelControls.label("", secondary: true)
     private let arrow = NSButton()
+    private static let countFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     private var path: KeywordPath?
     var onCheck: @MainActor () -> Void = {}
     var onShow: @MainActor () -> Void = {}
@@ -441,12 +510,17 @@ final class KeywordRowView: NSTableCellView {
         check.action = #selector(checked)
         arrow.image = NSImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: "Show Photos")
         arrow.isBordered = false
+        arrow.contentTintColor = .secondaryLabelColor
         arrow.target = self
         arrow.action = #selector(showPhotos)
         arrow.toolTip = "Show its photos"
         count.alignment = .right
-        let row = PanelControls.row([name, count, arrow], spacing: 4)
-        let all = PanelControls.row([check, row], spacing: 2)
+        count.font = Self.countFont
+        count.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let row = PanelControls.row([name, count, arrow], spacing: 6)
+        let all = PanelControls.row([check, row], spacing: 4)
+        check.setContentHuggingPriority(.required, for: .horizontal)
+        row.setContentHuggingPriority(.defaultLow, for: .horizontal)
         all.translatesAutoresizingMaskIntoConstraints = false
         addSubview(all)
         NSLayoutConstraint.activate([

@@ -78,22 +78,83 @@ class PanelStackView: NSView, HeightProviding {
     }
 }
 
+/// The Library panels' controls as a Mac inspector has them (LIB-45): the system's controls at their regular size,
+/// its fonts and label colours, and forms laid out as the system lays out a form.
 @MainActor
 enum PanelControls {
+    /// The text of the panels' controls and labels.
+    static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    /// A note about a control or the selection.
+    static let noteFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+    /// Between a form's rows, and between a label and its control.
+    static let rowSpacing: CGFloat = 7
+    static let columnSpacing: CGFloat = 8
+
     static func label(_ text: String, secondary: Bool = false) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = Typography.label.nsFont
-        label.textColor = secondary ? Palette.secondaryLabel.nsColor : Palette.value.nsColor
+        label.font = font
+        label.textColor = secondary ? .secondaryLabelColor : .labelColor
         label.lineBreakMode = .byTruncatingMiddle
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
     }
 
+    /// A line about the selection or a control, in the small size and the secondary colour.
+    static func note(_ text: String) -> NSTextField {
+        let note = NSTextField(labelWithString: text)
+        note.font = noteFont
+        note.textColor = .secondaryLabelColor
+        note.lineBreakMode = .byTruncatingTail
+        note.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return note
+    }
+
+    /// A form's label: the name and a colon, its trailing edge against its control.
+    static func formLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text + ":")
+        label.font = font
+        label.textColor = .secondaryLabelColor
+        label.alignment = .right
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        return label
+    }
+
+    /// Labels and their controls, as the system lays out a form: the labels' trailing edges in one column, the
+    /// controls' leading edges in the next, each row's on its first baseline. A row without a label has its control
+    /// in the second column.
+    static func form(_ rows: [(label: String?, control: NSView)]) -> NSGridView {
+        let grid = NSGridView(views: rows.map { row in
+            [row.label.map(formLabel) ?? NSGridCell.emptyContentView, row.control]
+        })
+        grid.rowSpacing = rowSpacing
+        grid.columnSpacing = columnSpacing
+        grid.rowAlignment = .firstBaseline
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 1).xPlacement = .fill
+        for row in rows {
+            row.control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            row.control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        return grid
+    }
+
+    /// A text field as the system draws one at its regular size.
+    static func field(placeholder: String? = nil) -> NSTextField {
+        let field = NSTextField()
+        field.font = font
+        field.controlSize = .regular
+        field.placeholderString = placeholder
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.isScrollable = true
+        return field
+    }
+
     static func button(_ title: String, identifier: String, action: @escaping @MainActor () -> Void) -> NSButton {
         let button = ActionButton(title: title, action: action)
-        button.bezelStyle = .rounded
-        button.controlSize = .small
-        button.font = Typography.label.nsFont
+        button.bezelStyle = .push
+        button.controlSize = .regular
+        button.font = font
         button.setAccessibilityIdentifier(identifier)
         return button
     }
@@ -111,7 +172,7 @@ enum PanelControls {
     }
 
     /// A row of views side by side, the first one taking the room left.
-    static func row(_ views: [NSView], spacing: CGFloat = 6) -> NSStackView {
+    static func row(_ views: [NSView], spacing: CGFloat = 8) -> NSStackView {
         let row = NSStackView(views: views)
         row.orientation = .horizontal
         row.alignment = .centerY
@@ -164,6 +225,7 @@ final class PanelSheet: NSObject, NSWindowDelegate {
         super.init()
         grid.rowSpacing = 8
         grid.columnSpacing = 8
+        grid.rowAlignment = .firstBaseline
         grid.translatesAutoresizingMaskIntoConstraints = false
     }
 
@@ -197,7 +259,7 @@ final class PanelSheet: NSObject, NSWindowDelegate {
             ok.keyEquivalentModifierMask = [.command]
         }
         ok.setAccessibilityIdentifier("panelSheet.ok")
-        let buttons = NSStackView(views: [cancel, ok])
+        let buttons = PanelSheet.buttons(cancel: cancel, ok: ok)
         buttons.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(grid)
         content.addSubview(buttons)
@@ -205,9 +267,9 @@ final class PanelSheet: NSObject, NSWindowDelegate {
             grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
             grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            buttons.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 20),
+            buttons.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 24),
             buttons.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
         ])
         window.contentView = content
         window.setContentSize(content.fittingSize)
@@ -217,6 +279,23 @@ final class PanelSheet: NSObject, NSWindowDelegate {
         parent.beginSheet(window)
         return true
     }
+
+    /// A sheet's buttons as the system's dialogs place them: `leading` at the leading edge, then at the trailing edge
+    /// Cancel and the default button.
+    static func buttons(cancel: NSButton, ok: NSButton, leading: [NSView] = []) -> NSStackView {
+        for button in [cancel, ok] {
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: minimumButtonWidth).isActive = true
+        }
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let stack = NSStackView(views: leading + (leading.isEmpty ? [] : [spacer]) + [cancel, ok])
+        stack.orientation = .horizontal
+        stack.spacing = 12
+        return stack
+    }
+
+    /// A dialog's push buttons are no narrower than this, so a short title doesn't make a small target.
+    static let minimumButtonWidth: CGFloat = 80
 
     @objc private func confirm() {
         guard done?() ?? true else { return }

@@ -6,16 +6,28 @@ import UniformTypeIdentifiers
 
 /// The Metadata panel (LIB-22): IPTC Core's fields of the photos selected, a field they don't all share shown
 /// as mixed, each edited on every one of them as one change with Undo; metadata presets applied, made, edited
-/// and deleted; and the capture time, edited with Edit Capture Time….
+/// and deleted; and the capture time, edited with Edit Capture Time…. The fields are a form as the system lays
+/// one out (LIB-45), in groups: what the photos show, who made them and owns them, where they were taken, and
+/// when; Tab and Shift-Tab go from field to field.
 final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
     private let model: EditorModel
     private let panels: LibraryPanels
-    private let summary = PanelControls.label("", secondary: true)
+    private let summary = PanelControls.note("")
     private let presets = NSPopUpButton(frame: .zero, pullsDown: true)
     private var fields: [MetadataPreset.Field: NSTextField] = [:]
     private let captured = PanelControls.label("—")
     private let editTime: NSButton
     private var trackers: [Tracker] = []
+
+    /// The fields in the panel's order, each group's first set apart from the one before it; a field no group names
+    /// in one of its own at the end.
+    private static let groups: [[MetadataPreset.Field]] = {
+        let named: [[MetadataPreset.Field]] = [
+            [.title, .caption], [.creator, .copyright], [.sublocation, .city, .state, .country, .countryCode],
+        ]
+        let rest = MetadataPreset.Field.allCases.filter { field in !named.contains { $0.contains(field) } }
+        return rest.isEmpty ? named : named + [rest]
+    }()
 
     init(model: EditorModel, panels: LibraryPanels) {
         self.model = model
@@ -23,43 +35,44 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
         editTime = PanelControls.button("Edit…", identifier: "metadata.editCaptureTime") {
             _ = model.perform(.editCaptureTime)
         }
-        super.init(spacing: 5)
+        super.init(spacing: 10)
         setAccessibilityIdentifier("metadata")
-        presets.controlSize = .small
-        presets.font = Typography.label.nsFont
+        presets.controlSize = .regular
+        presets.font = PanelControls.font
         presets.setAccessibilityIdentifier("metadata.presets")
-        addFullWidth(summary)
-        addFullWidth(PanelControls.row([PanelControls.label("Preset", secondary: true), presets]))
-        for field in MetadataPreset.Field.allCases {
-            let text = NSTextField()
-            text.font = Typography.label.nsFont
-            text.controlSize = .small
-            text.delegate = self
-            text.lineBreakMode = .byTruncatingTail
-            text.cell?.isScrollable = true
-            text.setAccessibilityIdentifier("metadata.\(field.rawValue)")
-            fields[field] = text
-            addFullWidth(Self.labelled(Self.title(of: field), text))
+        var rows: [(label: String?, control: NSView)] = [("Preset", presets)]
+        var starts: [Int] = []
+        for group in Self.groups {
+            starts.append(rows.count)
+            for field in group {
+                let text = PanelControls.field()
+                text.delegate = self
+                text.setAccessibilityIdentifier("metadata.\(field.rawValue)")
+                fields[field] = text
+                rows.append((Self.title(of: field), text))
+            }
         }
-        addFullWidth(Self.labelled("Capture Time", PanelControls.row([captured, editTime])))
+        starts.append(rows.count)
+        captured.font = PanelControls.font
+        captured.lineBreakMode = .byTruncatingTail
+        rows.append(("Capture Time", captured))
+        rows.append((nil, editTime))
+        let form = PanelControls.form(rows)
+        for start in starts {
+            form.row(at: start).topPadding = 8
+        }
+        form.cell(for: editTime)?.xPlacement = .leading
+        let ordered = Self.groups.joined().compactMap { fields[$0] }
+        for (field, next) in zip(ordered, ordered.dropFirst() + ordered.prefix(1)) {
+            field.nextKeyView = next
+        }
+        addFullWidth(summary)
+        addFullWidth(form)
     }
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
-    }
-
-    private static func labelled(_ title: String, _ view: NSView) -> NSView {
-        let label = PanelControls.label(title, secondary: true)
-        label.alignment = .right
-        label.widthAnchor.constraint(equalToConstant: 84).isActive = true
-        label.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let row = NSStackView(views: [label, view])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 6
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        return row
     }
 
     static func title(of field: MetadataPreset.Field) -> String {
@@ -121,6 +134,10 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
             editTime.isEnabled = enabled
         }
         Self.set(captured, to: Self.describe(selection.fields))
+        captured.toolTip = selection.fields.captured.map { range in
+            CaptureTimeChange.describe(time: range.lowerBound) + (range.lowerBound == range.upperBound ? ""
+                : " to " + CaptureTimeChange.describe(time: range.upperBound))
+        }
     }
 
     /// Gives `field` `text` unless it has it.
@@ -130,12 +147,15 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
         }
     }
 
-    /// `2007-06-01 15:30:00`, or the first and last when they differ, or None.
+    /// `2007-06-01 15:30:00`, or the first and last when they differ, the last's day left out when it's the first's,
+    /// or None.
     static func describe(_ fields: SelectionFields) -> String {
         guard let range = fields.captured else { return fields.photos == 0 ? "—" : "None" }
         let first = CaptureTimeChange.describe(time: range.lowerBound)
         guard range.lowerBound != range.upperBound else { return first }
-        return "\(first) – \(CaptureTimeChange.describe(time: range.upperBound))"
+        let last = CaptureTimeChange.describe(time: range.upperBound)
+        let day = first.prefix { $0 != " " }
+        return "\(first) – " + (last.hasPrefix(day + " ") ? String(last.dropFirst(day.count + 1)) : last)
     }
 
     private func showPresets(_ all: [MetadataPreset]) {

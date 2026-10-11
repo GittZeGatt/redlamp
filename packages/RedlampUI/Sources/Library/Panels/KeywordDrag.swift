@@ -11,8 +11,8 @@ final class KeywordDragLabel: NSTextField, NSDraggingSource, LibraryDragSource {
 
     static func make() -> KeywordDragLabel {
         let label = KeywordDragLabel(labelWithString: "")
-        label.font = Typography.label.nsFont
-        label.textColor = Palette.value.nsColor
+        label.font = PanelControls.font
+        label.textColor = .labelColor
         label.lineBreakMode = .byTruncatingMiddle
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
