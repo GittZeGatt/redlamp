@@ -10,7 +10,9 @@ import RedlampLibrary
 /// zoom it to 1:1, where the preview shows at the photo's full size until the photo itself is decoded off
 /// the main thread, and a drag pans it; Z or a click fit it again. An edited photo shows its edit once the
 /// library has rendered it, and until then its embedded preview, marked in its corner as a grid cell is
-/// (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and Survey.
+/// (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and Survey. The judging tools (LIB-38)
+/// draw over the photo, their buttons in the caption row; with the following loupe on, the photo itself is decoded
+/// as for 1:1, for the lens to magnify.
 final class LibraryLoupeView: NSView {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
@@ -21,6 +23,8 @@ final class LibraryLoupeView: NSView {
     private let name = NSTextField(labelWithString: "")
     private let caption = NSTextField(labelWithString: "")
     let badges = LoupeBadgesView()
+    let judging: JudgingOverlay
+    let judgingBar: JudgingBar
     private let details: PhotoDetailsCache
     private var trackers: [Tracker] = []
     private var editObservation: LibraryObservation?
@@ -41,6 +45,8 @@ final class LibraryLoupeView: NSView {
     init(model: EditorModel) {
         self.model = model
         details = PhotoDetailsCache(library: model.library)
+        judging = JudgingOverlay(model: model, view: .loupe)
+        judgingBar = JudgingBar(model: model, prefix: "library.loupe.judging")
         super.init(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
@@ -61,6 +67,10 @@ final class LibraryLoupeView: NSView {
             addSubview(label)
         }
         addSubview(badges)
+        addSubview(judgingBar)
+        judging.install(in: self, above: photo)
+        judging.histogram.setAccessibilityIdentifier("library.loupe.histogram")
+        judging.shownImage = { [weak self] in self?.image }
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         setAccessibilityIdentifier("library.loupe")
@@ -107,9 +117,11 @@ final class LibraryLoupeView: NSView {
         trackers = []
         editObservation = nil
         libraryObservation = nil
+        judging.stop()
         guard window != nil else { return }
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         libraryObservation = model.library.observe { [weak self] diff in self?.libraryChanged(diff) }
+        judging.start()
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -122,7 +134,49 @@ final class LibraryLoupeView: NSView {
                 _ = model.libraryViews.loupeZoom
                 zoomChanged()
             },
+            Tracker { [weak self] in
+                guard let self else { return }
+                let magnifies = model.libraryJudging.magnification != nil
+                guard magnifies, model.module == .library, model.libraryView == .loupe, let url = shown,
+                      let item = model.library.item(for: url) else { return }
+                loadFullPhoto(item)
+            },
         ]
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+        ))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        judging.pointerMoved(to: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with _: NSEvent) {
+        judging.pointerExited()
+    }
+
+    /// Develop's Show Sensor Clipping key, which the key monitor leaves to the view in Library.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard model.isSensorClippingKey(event), model.libraryView == .loupe, isInShownModule(model) else {
+            return super.performKeyEquivalent(with: event)
+        }
+        model.toggleSensorClipping()
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard model.isSensorClippingKey(event), model.libraryView == .loupe, isInShownModule(model) else {
+            return super.keyDown(with: event)
+        }
+        model.toggleSensorClipping()
     }
 
     private func show(_ url: URL?) {
@@ -168,7 +222,7 @@ final class LibraryLoupeView: NSView {
             }
             requestPreview(of: item)
         }
-        if zoom == .actual {
+        if zoom == .actual || model.libraryJudging.magnification != nil {
             loadFullPhoto(item)
         }
     }
@@ -211,6 +265,7 @@ final class LibraryLoupeView: NSView {
         photo.contents = image
         shownEdit = image == nil ? nil : edit
         layoutPhoto()
+        judging.imageChanged()
     }
 
     private func updateMark() {
@@ -294,6 +349,8 @@ final class LibraryLoupeView: NSView {
         photo.contentsScale = window?.backingScaleFactor ?? 2
         CATransaction.commit()
         updateMark()
+        judging.show(shown, edit: shownEdit, pixelSize: pixelSize)
+        judging.place(JudgingPlacement(photoFrame: frame, bounds: bounds, scale: window?.backingScaleFactor ?? 2))
     }
 
     /// Where a side `length` long goes in `extent` with the point `focus` along it in the middle: centred
@@ -310,7 +367,12 @@ final class LibraryLoupeView: NSView {
             x: bounds.width - Self.inset - size.width, y: (Self.captionHeight - size.height) / 2, width: size.width,
             height: size.height,
         )
-        let width = max(bounds.width - Self.inset * 3 - size.width, 0)
+        let tools = judgingBar.width
+        judgingBar.frame = CGRect(
+            x: badges.frame.minX - Self.inset - tools, y: (Self.captionHeight - JudgingBar.height) / 2, width: tools,
+            height: JudgingBar.height,
+        )
+        let width = max(judgingBar.frame.minX - Self.inset * 2, 0)
         name.frame = CGRect(x: Self.inset, y: 4, width: width, height: name.intrinsicContentSize.height)
         caption.frame = CGRect(x: Self.inset, y: 18, width: width, height: caption.intrinsicContentSize.height)
         layoutPhoto()
@@ -328,8 +390,9 @@ final class LibraryLoupeView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard var drag, zoom == .actual else { return }
         let point = convert(event.locationInWindow, from: nil)
+        defer { judging.pointerMoved(to: point) }
+        guard var drag, zoom == .actual else { return }
         let moved = CGPoint(x: point.x - drag.start.x, y: point.y - drag.start.y)
         if !drag.moved, hypot(moved.x, moved.y) < 3 {
             return

@@ -8,7 +8,9 @@ import RedlampLibrary
 /// decoded off the main thread in the window's colour space (`GridThumbnails`), and at 1:1 the photo itself with the
 /// point `focus` at the middle. An edited photo shows its edit once the library has rendered it, and its embedded
 /// preview until then, marked in its corner as a grid cell is (LIB-17). The active photo is outlined. Its owner says
-/// which photo it shows and how it's zoomed, and hears of presses, clicks and drags.
+/// which photo it shows and how it's zoomed, and hears of presses, clicks and drags. The judging tools (LIB-38) draw
+/// over it, each over both of Compare's photos at once; with the following loupe on, the photo itself is decoded as
+/// for 1:1, for the lens to magnify.
 final class ComparePhotoView: NSView {
     /// The long edges its images are decoded at: the smallest at least as large as the photo is shown.
     static let edges = [256, 384, 512, 768, 1024, 1536, 2048]
@@ -43,6 +45,9 @@ final class ComparePhotoView: NSView {
     private var thumbnailRequest: UInt64?
     private var loading: Task<Void, Never>?
     private var drag: (start: CGPoint, focus: CGPoint, moved: Bool)?
+    let judging: JudgingOverlay
+    private var magnifier: Tracker?
+    private var hasPointer = false
 
     var isActive = false {
         didSet {
@@ -61,10 +66,14 @@ final class ComparePhotoView: NSView {
     var onPan: ((ComparePhotoView, CGPoint) -> Void)?
     /// An image of another shape came in for a photo whose size in pixels isn't known.
     var onReshape: (() -> Void)?
+    /// The pointer moved over the photo or left it: the point of the photo the following loupe shows, 0 ... 1, nil
+    /// while it shows none.
+    var onLens: ((ComparePhotoView, CGPoint?) -> Void)?
 
     init(model: EditorModel, images: GridThumbnails) {
         self.model = model
         self.images = images
+        judging = JudgingOverlay(model: model, view: .compare)
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
@@ -78,8 +87,65 @@ final class ComparePhotoView: NSView {
             sublayer.actions = LibraryGridCell.noActions
             layer?.addSublayer(sublayer)
         }
+        judging.install(in: self, above: photo)
+        judging.shownImage = { [weak self] in self?.image }
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
+    }
+
+    override func setAccessibilityIdentifier(_ identifier: String?) {
+        super.setAccessibilityIdentifier(identifier)
+        judging.histogram.setAccessibilityIdentifier(identifier.map { "\($0).histogram" })
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        judging.stop()
+        magnifier?.cancel()
+        magnifier = nil
+        guard window != nil else { return }
+        judging.start()
+        magnifier = Tracker { [weak self] in
+            guard let self, model.libraryJudging.magnification != nil, model.module == .library,
+                  model.libraryView == .compare else { return }
+            loadFullPhoto()
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+        ))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        pointerMoved(to: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with _: NSEvent) {
+        hasPointer = false
+        judging.pointerExited()
+        onLens?(self, nil)
+    }
+
+    private func pointerMoved(to point: CGPoint) {
+        hasPointer = true
+        judging.pointerMoved(to: point)
+        onLens?(self, judging.lens.photoPoint)
+    }
+
+    /// Shows the following loupe over `point` of the photo, 0 ... 1, where the other photo's shows it; hides it for
+    /// nil. The pointer, while it's over this photo, moves its loupe instead.
+    func showLens(at point: CGPoint?) {
+        guard !hasPointer else { return }
+        let frame = judging.placement.photoFrame
+        guard let point, frame.width > 0, frame.height > 0 else { return judging.pointerExited() }
+        judging.pointerMoved(to: CGPoint(x: frame.minX + point.x * frame.width, y: frame.minY + point.y * frame.height))
     }
 
     @available(*, unavailable)
@@ -149,7 +215,7 @@ final class ComparePhotoView: NSView {
             }
         }
         requestImage()
-        if zoom == .actual {
+        if zoom == .actual || model.libraryJudging.magnification != nil {
             loadFullPhoto()
         }
     }
@@ -249,6 +315,7 @@ final class ComparePhotoView: NSView {
         shownEdge = image == nil ? 0 : edge
         shownEdit = image == nil ? nil : edit
         layoutPhoto()
+        judging.imageChanged()
         if reshaped {
             onReshape?()
         }
@@ -311,6 +378,8 @@ final class ComparePhotoView: NSView {
         photo.contentsScale = window?.backingScaleFactor ?? 2
         CATransaction.commit()
         updateOverlays()
+        judging.show(url, edit: shownEdit, pixelSize: pixelSize)
+        judging.place(JudgingPlacement(photoFrame: frame, bounds: bounds, scale: window?.backingScaleFactor ?? 2))
     }
 
     /// The active photo's outline, around what's seen of it, and the mark of an unedited preview in its corner.
@@ -348,8 +417,9 @@ final class ComparePhotoView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard var drag, zoom == .actual else { return }
         let point = convert(event.locationInWindow, from: nil)
+        defer { pointerMoved(to: point) }
+        guard var drag, zoom == .actual else { return }
         let moved = CGPoint(x: point.x - drag.start.x, y: point.y - drag.start.y)
         if !drag.moved, hypot(moved.x, moved.y) < 3 {
             return

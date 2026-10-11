@@ -8,7 +8,9 @@ import RedlampLibrary
 /// under them the lock that links their zoom and pan, Swap, Make Select and Done. A press on a photo makes it active,
 /// a click on the active one zooms it to 1:1 where it lands or fits it again, and a drag pans it. ↑ makes the
 /// candidate the select and ↓ swaps them: keys the key monitor leaves to the view. ← and →, Z and Space and the
-/// culling keys are the model's (`EditorModel+LibraryCompare`). It reads nothing while it isn't shown.
+/// culling keys are the model's (`EditorModel+LibraryCompare`). It reads nothing while it isn't shown. The judging
+/// tools' buttons (LIB-38) start the bar, each tool drawing over both photos, and Develop's Show Sensor Clipping key
+/// reaches the view as ↑ and ↓ do.
 final class LibraryCompareView: NSView {
     static let barHeight: CGFloat = 30
     private static let inset: CGFloat = 20
@@ -22,6 +24,7 @@ final class LibraryCompareView: NSView {
     let swap = ToolbarButton(symbol: "arrow.left.arrow.right", identifier: "library.compare.swap")
     let makeSelect = ToolbarButton(title: "Make Select", identifier: "library.compare.makeSelect")
     let done = ToolbarButton(title: "Done", identifier: "library.compare.done")
+    let judgingBar: JudgingBar
     private var trackers: [Tracker] = []
     private var libraryObservation: LibraryObservation?
     private var editObservation: LibraryObservation?
@@ -36,6 +39,7 @@ final class LibraryCompareView: NSView {
             .select: CompareHalfView(side: .select, photo: ComparePhotoView(model: model, images: images)),
             .candidate: CompareHalfView(side: .candidate, photo: ComparePhotoView(model: model, images: images)),
         ]
+        judgingBar = JudgingBar(model: model, prefix: "library.compare.judging")
         super.init(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         wantsLayer = true
         layerContentsRedrawPolicy = .never
@@ -44,6 +48,7 @@ final class LibraryCompareView: NSView {
             half.photo.onPress = { [weak self] _ in self?.pressed(side) }
             half.photo.onClick = { [weak self] _, point, _ in self?.clicked(at: point) }
             half.photo.onPan = { [weak self] _, focus in self?.model.setCompareFocus(focus) }
+            half.photo.onLens = { [weak self] _, point in self?.halves[side.other]?.photo.showLens(at: point) }
         }
         link.toolTip = "Link Zoom and Pan"
         swap.toolTip = "Swap (↓)"
@@ -56,6 +61,7 @@ final class LibraryCompareView: NSView {
         for button in [link, swap, makeSelect, done] {
             addSubview(button)
         }
+        addSubview(judgingBar)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Compare")
@@ -190,8 +196,22 @@ final class LibraryCompareView: NSView {
         switch event.keyCode {
         case 126 where flags.isEmpty: promoteCandidate()
         case 125 where flags.isEmpty: swapPhotos()
-        default: super.keyDown(with: event)
+        default:
+            if model.isSensorClippingKey(event), model.libraryView == .compare, isInShownModule(model) {
+                model.toggleSensorClipping()
+            } else {
+                super.keyDown(with: event)
+            }
         }
+    }
+
+    /// Develop's Show Sensor Clipping key, while another view of Compare has the keyboard.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard model.isSensorClippingKey(event), model.libraryView == .compare, isInShownModule(model) else {
+            return super.performKeyEquivalent(with: event)
+        }
+        model.toggleSensorClipping()
+        return true
     }
 
     override func layout() {
@@ -203,8 +223,12 @@ final class LibraryCompareView: NSView {
                 x: Self.inset + (side == .select ? 0 : width + Self.gap), y: 0, width: width, height: max(barTop, 1),
             )
         }
+        judgingBar.frame = CGRect(
+            x: Self.inset, y: barTop + (Self.barHeight - JudgingBar.height) / 2, width: judgingBar.width,
+            height: JudgingBar.height,
+        )
         let buttons: [(ToolbarButton, CGFloat)] = [(link, 28), (swap, 28), (makeSelect, 92)]
-        var x = (bounds.width - buttons.reduce(0) { $0 + $1.1 + 6 }) / 2
+        var x = max((bounds.width - buttons.reduce(0) { $0 + $1.1 + 6 }) / 2, judgingBar.frame.maxX + Self.gap)
         for (button, buttonWidth) in buttons {
             button.frame = CGRect(x: x, y: barTop + (Self.barHeight - 22) / 2, width: buttonWidth, height: 22)
             x += buttonWidth + 6
