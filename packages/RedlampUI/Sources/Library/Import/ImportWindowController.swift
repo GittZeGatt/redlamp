@@ -69,11 +69,12 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         split.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
         split.setHoldingPriority(.defaultLow, forSubviewAt: 1)
         split.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
-        sourcesView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        sourcesView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 210).isActive = true
         grid.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
-        destinationView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 290).isActive = true
+        destinationView.view.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
 
-        status.font = .systemFont(ofSize: 12)
+        status.font = .systemFont(ofSize: NSFont.systemFontSize)
+        status.textColor = .secondaryLabelColor
         status.setAccessibilityIdentifier("import.summary")
         status.maximumNumberOfLines = 3
         progress.isIndeterminate = false
@@ -95,10 +96,13 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         rollBackButton.setAccessibilityIdentifier("import.roll-back")
         rollBackButton.toolTip = "Moves the copies the import made to the Trash, takes its photos out of the library "
             + "and removes the folders it made"
+        for button in [rollBackButton, resumeButton, cancelButton, importButton] {
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+        }
         let bar = NSStackView(views: [status, progress, rollBackButton, resumeButton, cancelButton, importButton])
         bar.orientation = .horizontal
-        bar.spacing = 10
-        bar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 10, right: 12)
+        bar.spacing = 12
+        bar.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
         status.setContentHuggingPriority(.defaultLow, for: .horizontal)
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         progress.widthAnchor.constraint(equalToConstant: 160).isActive = true

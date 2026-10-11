@@ -4,14 +4,15 @@ import RedlampLibrary
 /// The import window's From (LIB-27): the cards on this Mac and the folders added, each with a box to
 /// import from it, its count with the photos the library has counted apart, its part of the import as it
 /// copies, and at the end whether it's safe to erase, with Eject for a card. Choosing one shows its photos.
+/// It's a sidebar as the system draws one (LIB-45), its + and − adding a folder and removing the source chosen.
 @MainActor
 final class ImportSourcesViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     let model: ImportWindowModel
     /// Add Folder…: the window asks for the folder.
     var onAddFolder: (() -> Void)?
     let table = NSTableView()
-    private let addButton = NSButton(title: "Add Folder…", target: nil, action: nil)
-    private let removeButton = NSButton(title: "Remove", target: nil, action: nil)
+    private let addButton = ImportSourcesViewController.barButton("plus", "Add Folder…")
+    private let removeButton = ImportSourcesViewController.barButton("minus", "Remove")
     private var reloading = false
     /// What each row showed when the table was last loaded: it's loaded again only when that changes.
     private var shownRows: [String] = []
@@ -28,19 +29,22 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
 
     override func loadView() {
         let title = NSTextField(labelWithString: "From")
-        title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        title.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        title.textColor = .secondaryLabelColor
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("source"))
         column.resizingMask = .autoresizingMask
         table.addTableColumn(column)
         table.headerView = nil
-        table.rowHeight = 72
+        table.rowHeight = 54
         table.style = .sourceList
+        table.backgroundColor = .clear
         table.dataSource = self
         table.delegate = self
         table.setAccessibilityIdentifier("import.sources")
         let scroll = NSScrollView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         addButton.target = self
         addButton.action = #selector(addFolder)
@@ -49,18 +53,38 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
         removeButton.action = #selector(removeSource)
         removeButton.setAccessibilityIdentifier("import.remove-source")
         let buttons = NSStackView(views: [addButton, removeButton])
-        let stack = NSStackView(views: [title, scroll, buttons])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 8)
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        buttons.spacing = 12
+        let sidebar = NSVisualEffectView()
+        sidebar.material = .sidebar
+        sidebar.blendingMode = .behindWindow
+        sidebar.state = .followsWindowActiveState
+        for view in [title, scroll, buttons] as [NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            sidebar.addSubview(view)
+        }
         NSLayoutConstraint.activate([
-            scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20),
+            title.topAnchor.constraint(equalTo: sidebar.topAnchor, constant: 12),
+            title.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor, constant: 18),
+            scroll.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 6),
+            scroll.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor),
             scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 120),
+            buttons.topAnchor.constraint(equalTo: scroll.bottomAnchor, constant: 6),
+            buttons.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor, constant: 14),
+            buttons.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor, constant: -10),
         ])
-        view = stack
-        view.setFrameSize(NSSize(width: 250, height: 500))
+        view = sidebar
+        view.setFrameSize(NSSize(width: 240, height: 500))
+    }
+
+    /// A borderless symbol button at the sidebar's foot, as the system's sidebars have them.
+    private static func barButton(_ symbol: String, _ title: String) -> NSButton {
+        let button = NSButton()
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+        button.isBordered = false
+        button.toolTip = title
+        button.setAccessibilityLabel(title)
+        return button
     }
 
     func modelChanged(_ change: ImportWindowModel.Change) {
@@ -113,63 +137,89 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
     }
 }
 
-/// A source's row: the box and its name, what it holds or how its import went, its part of the copying,
-/// and Eject for a card.
+/// A source's row: the box, its kind's symbol and its name, Eject for a card, then what it holds or how its import
+/// went, and its part of the copying.
 final class ImportSourceRow: NSTableCellView {
     var onIncluded: ((String, Bool) -> Void)?
     var onEject: ((String) -> Void)?
     private let id: String
-    private let box: NSButton
-    private let ejectButton = NSButton(title: "Eject", target: nil, action: nil)
+    private let box = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let ejectButton = NSButton()
 
     init(_ source: ImportWindowModel.Source, detail: String) {
         id = source.id
-        box = NSButton(checkboxWithTitle: source.source.name, target: nil, action: nil)
-        super.init(frame: NSRect(x: 0, y: 0, width: 230, height: 72))
+        super.init(frame: NSRect(x: 0, y: 0, width: 220, height: 54))
         box.state = source.isIncluded ? .on : .off
         box.isEnabled = source.problem == nil && !source.isEjected
-        box.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         box.target = self
         box.action = #selector(toggled)
+        box.setAccessibilityLabel("Import from \(source.source.name)")
         box.setAccessibilityIdentifier("import.source." + source.source.name)
-        let kind = NSTextField(labelWithString: source.isCard ? "Card" : source.source.url.path)
-        kind.font = .systemFont(ofSize: 10)
-        kind.textColor = .tertiaryLabelColor
-        kind.lineBreakMode = .byTruncatingMiddle
+        let symbol = NSImageView(image: NSImage(
+            systemSymbolName: source.isCard ? "sdcard" : "folder",
+            accessibilityDescription: source.isCard ? "Card" : "Folder",
+        ) ?? NSImage())
+        symbol.contentTintColor = .secondaryLabelColor
+        symbol.toolTip = source.isCard ? "Card" : source.source.url.path
+        let name = NSTextField(labelWithString: source.source.name)
+        name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        name.lineBreakMode = .byTruncatingMiddle
+        name.toolTip = source.isCard ? source.source.name : source.source.url.path
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let text = NSTextField(wrappingLabelWithString: detail)
-        text.font = .systemFont(ofSize: 11)
+        text.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         text.textColor = source.problem == nil ? .secondaryLabelColor : .systemRed
         text.maximumNumberOfLines = 2
-        var views: [NSView] = [box, kind, text]
-        if let progress = source.progress, progress.photos > 0 {
-            let bar = NSProgressIndicator()
-            bar.isIndeterminate = false
-            bar.minValue = 0
-            bar.maxValue = Double(progress.photos)
-            bar.doubleValue = Double(progress.done + progress.failed)
-            bar.controlSize = .small
-            views.append(bar)
-        }
+        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        var top: [NSView] = [box, symbol, name]
         if source.isCard, source.source.medium.isEjectable, !source.isEjected, source.progress == nil {
-            ejectButton.controlSize = .small
+            ejectButton.image = NSImage(systemSymbolName: "eject", accessibilityDescription: "Eject")
+            ejectButton.isBordered = false
+            ejectButton.contentTintColor = .secondaryLabelColor
+            ejectButton.toolTip = "Eject \(source.source.name)"
             ejectButton.target = self
             ejectButton.action = #selector(eject)
             ejectButton.setAccessibilityIdentifier("import.eject." + source.source.name)
-            views.append(ejectButton)
+            top.append(ejectButton)
         }
-        let stack = NSStackView(views: views)
+        let first = NSStackView(views: top)
+        first.orientation = .horizontal
+        first.alignment = .centerY
+        first.spacing = 6
+        first.setCustomSpacing(4, after: box)
+        // The detail and the bar start under the name.
+        let indent: CGFloat = 46
+        let lower = NSStackView(views: [text])
+        lower.orientation = .vertical
+        lower.alignment = .leading
+        lower.spacing = 3
+        lower.edgeInsets = NSEdgeInsets(top: 0, left: indent, bottom: 0, right: 0)
+        var bar: NSProgressIndicator?
+        if let progress = source.progress, progress.photos > 0 {
+            let shown = NSProgressIndicator()
+            shown.isIndeterminate = false
+            shown.minValue = 0
+            shown.maxValue = Double(progress.photos)
+            shown.doubleValue = Double(progress.done + progress.failed)
+            shown.controlSize = .small
+            lower.addArrangedSubview(shown)
+            bar = shown
+        }
+        let stack = NSStackView(views: [first, lower])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 2
+        stack.spacing = 1
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            text.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
-            kind.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            first.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
+            lower.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            text.widthAnchor.constraint(lessThanOrEqualTo: lower.widthAnchor, constant: -indent),
         ])
+        bar?.widthAnchor.constraint(equalTo: lower.widthAnchor, constant: -indent).isActive = true
     }
 
     @available(*, unavailable)

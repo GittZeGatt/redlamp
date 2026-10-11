@@ -36,6 +36,8 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     private let presetNote = ImportDestinationViewController.note("")
     private let ejects = NSButton(checkboxWithTitle: "Eject cards after importing", target: nil, action: nil)
     private let destinations = NSTextField(wrappingLabelWithString: "")
+    /// The backup's folder and its Choose…, shown while there's a backup.
+    private var backupRow: NSView?
     private var textFields: [String: NSTextField] = [:]
     private var shownPhase: ImportWindowModel.Phase?
 
@@ -51,8 +53,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
 
     override func loadView() {
         let title = NSTextField(labelWithString: "To")
-        title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        title.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        title.textColor = .secondaryLabelColor
         destination.lineBreakMode = .byTruncatingMiddle
+        destination.textColor = .secondaryLabelColor
         destination.setAccessibilityIdentifier("import.destination")
         let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseDestination))
         choose.setAccessibilityIdentifier("import.destination.choose")
@@ -70,6 +74,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         backupBox.action = #selector(backupToggled)
         backupBox.setAccessibilityIdentifier("import.backup")
         backup.lineBreakMode = .byTruncatingMiddle
+        backup.textColor = .secondaryLabelColor
         backupChoose.target = self
         backupChoose.action = #selector(chooseBackup)
         rawOnly.target = self
@@ -92,28 +97,38 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         destinations.font = .systemFont(ofSize: 11)
 
         let (folderRows, nameRows) = (folders.rows, names.rows)
-        let stack = NSStackView(views: [
-            title,
-            Self.heading("Destination"), destination, choose,
-            Self.heading("Folders"),
-        ] as [NSView] + folderRows + [Self.heading("Names")] + nameRows + [
-            texts,
-            Self.heading("Example"), example,
-            Self.heading("Backup"), backupBox, backup, backupChoose,
-            Self.heading("Files"), rawOnly, rawNote,
-            Self.heading("Keywords"), keywords,
-            Self.heading("Metadata Preset"), presets, presetNote,
-            Self.heading("Card"), ejects,
-            destinations,
-        ])
+        for error in [folders.error, names.error] {
+            error.preferredMaxLayoutWidth = 260
+        }
+        let destinationRow = Self.row([destination, choose])
+        let backupRow = Self.row([backup, backupChoose])
+        self.backupRow = backupRow
+        let sections: [[NSView]] = [
+            [title, Self.heading("Destination"), destinationRow],
+            [Self.heading("Folders")] + folderRows,
+            [Self.heading("Names")] + nameRows + [texts],
+            [Self.heading("Example"), example],
+            [Self.heading("Backup"), backupBox, backupRow],
+            [Self.heading("Files"), rawOnly, rawNote],
+            [Self.heading("Keywords"), keywords],
+            [Self.heading("Metadata Preset"), presets, presetNote],
+            [Self.heading("Card"), ejects, destinations],
+        ]
+        let stack = NSStackView(views: sections.flatMap(\.self))
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 8, bottom: 12, right: 12)
-        for field in [destination, example, backup, keywords, destinations] as [NSView] + folderRows.dropFirst()
+        stack.setCustomSpacing(10, after: title)
+        for section in sections.dropLast() {
+            if let last = section.last {
+                stack.setCustomSpacing(18, after: last)
+            }
+        }
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 16, right: 16)
+        for field in [destinationRow, example, backupRow, keywords, destinations] as [NSView] + folderRows.dropFirst()
             + nameRows.dropFirst() {
             field.translatesAutoresizingMaskIntoConstraints = false
-            field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20).isActive = true
+            field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
@@ -137,9 +152,19 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
 
     static func heading(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .secondaryLabelColor
+        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         return label
+    }
+
+    /// A path and the button that chooses it, side by side, the path taking the room left.
+    private static func row(_ views: [NSView]) -> NSStackView {
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 8
+        views.first?.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        views.first?.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return row
     }
 
     static func note(_ text: String) -> NSTextField {
@@ -176,8 +201,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             ?? "Choose a photo to see where it goes."
         backupBox.state = settings.backup == nil ? .off : .on
         backup.stringValue = settings.backup?.path ?? ""
-        backup.isHidden = settings.backup == nil
-        backupChoose.isHidden = settings.backup == nil
+        backupRow?.isHidden = settings.backup == nil
         rawOnly.state = settings.rawOnly ? .on : .off
         if keywords.currentEditor() == nil {
             keywords.objectValue = settings.metadata.keywords

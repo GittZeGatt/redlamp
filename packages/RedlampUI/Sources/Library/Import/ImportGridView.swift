@@ -423,20 +423,23 @@ final class ImportGridCell: NSView {
 
     var isSelected = false {
         didSet {
-            layer?.borderWidth = isSelected ? 3 : 0
+            if isSelected != oldValue {
+                needsDisplay = true
+            }
         }
     }
 
     override init(frame: NSRect) {
         super.init(frame: NSRect(origin: frame.origin, size: Self.size))
         wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.borderColor = NSColor.controlAccentColor.cgColor
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        layer?.cornerRadius = 8
+        layer?.cornerCurve = .continuous
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.wantsLayer = true
-        imageView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
-        name.font = .systemFont(ofSize: 11)
+        imageView.layer?.cornerRadius = 4
+        imageView.layer?.cornerCurve = .continuous
+        imageView.layer?.masksToBounds = true
+        name.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         name.lineBreakMode = .byTruncatingMiddle
         badges.font = .systemFont(ofSize: 11)
         badges.textColor = .secondaryLabelColor
@@ -450,6 +453,18 @@ final class ImportGridCell: NSView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    override var wantsUpdateLayer: Bool {
+        true
+    }
+
+    /// Selected, the cell is ringed in the accent colour on a tint of it, as the system's grids ring a selection.
+    override func updateLayer() {
+        layer?.borderWidth = isSelected ? 3 : 0
+        layer?.borderColor = NSColor.controlAccentColor.cgColor
+        layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor : nil
+        imageView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
     }
 
     override func layout() {
