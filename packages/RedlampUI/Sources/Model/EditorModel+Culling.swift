@@ -844,14 +844,25 @@ public extension EditorModel {
         redrawLabels(Set(colors.keys).union(before.keys).filter { colors[$0] != before[$0] })
     }
 
-    /// Draws again the listed photos of the custom labels `names`, in their labels' colours now.
+    /// Draws again the listed photos of the custom labels `names`, in their labels' colours now: of a large source,
+    /// those whose rows are read, as the others show the colours once they are.
     private func redrawLabels(_ names: Set<String>) {
         guard !names.isEmpty else { return }
         let items = library.items
         var rows: [Int] = []
-        for row in items.indices {
-            if let name = items.row(row)?.metadata.customLabel, names.contains(name) {
-                rows.append(row)
+        if items.readsOnRequest {
+            let list = library.photoList
+            for (id, item) in items.rowsRead {
+                if let name = item.metadata.customLabel, names.contains(name), let row = list.index(of: id) {
+                    rows.append(row)
+                }
+            }
+            rows.sort()
+        } else {
+            for row in items.indices {
+                if let name = items.row(row)?.metadata.customLabel, names.contains(name) {
+                    rows.append(row)
+                }
             }
         }
         guard !rows.isEmpty else { return }
