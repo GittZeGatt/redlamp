@@ -49,7 +49,10 @@
                     let dark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                     NSColor(white: dark ? 0.12 : 0.94, alpha: 1).setFill()
                     NSRect(origin: .zero, size: picture.size).fill()
-                    drawn.draw(in: NSRect(origin: .zero, size: picture.size))
+                    drawn.draw(
+                        in: NSRect(origin: .zero, size: picture.size), from: .zero, operation: .sourceOver,
+                        fraction: 1, respectFlipped: false, hints: nil,
+                    )
                     NSGraphicsContext.restoreGraphicsState()
                     return (try? picture.representation(using: .png, properties: [:])?.write(to: url)) != nil
                 }
