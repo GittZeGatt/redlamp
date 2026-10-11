@@ -226,19 +226,25 @@ struct FolderCountsTests {
         #expect(rows(list.folders)["A"]?.count == 3)
     }
 
-    @Test func `photos that can't be read aren't counted, as their folder's list leaves them out`() async throws {
+    @Test func `files that can't be read are counted, as their folder's list holds them`() async throws {
         defer { cleanUp() }
         try photos(["Year/B/C/1.JPG", "Year/B/C/locked.JPG"])
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o000],
             ofItemAtPath: photo("Year/B/C/locked.JPG").path,
         )
-        let (library, _) = try await indexedLibrary()
-        try await eventually(seconds: 10) { library.photoCount(of: folder("Year")) == 1 }
-        #expect(library.photoCount(of: folder("Year")) == 1)
+        let (library, service) = try await indexedLibrary()
+        let core = try #require(service.core)
+        let unreadable = try LibraryQuery(parsing: "unreadable:yes")
+        try await SourcesSandbox.eventually(seconds: 10) {
+            try await core.engine.list(.allPhotographs, matching: unreadable).count == 1
+        }
+        #expect(try await core.engine.list(.allPhotographs, matching: unreadable).count == 1, "it's kept as unreadable")
+        try await eventually(seconds: 10) { library.photoCount(of: folder("Year")) == 2 }
+        #expect(library.photoCount(of: folder("Year")) == 2)
         library.open(folder("Year"))
         try await eventually(seconds: 10) { library.isShownFromLibrary && !library.isListing }
-        #expect(library.items.map(\.name) == ["1.JPG"])
+        #expect(library.items.map(\.name) == ["1.JPG", "locked.JPG"])
     }
 
     @Test func `a folder holding only folders shows every photo beneath it, from the library or the disk`(

@@ -457,7 +457,7 @@ extension FolderLibrary {
         Task { [weak self] in
             let started = ContinuousClock.now
             let counted = await Task.detached(priority: .utility) { () -> (FolderCounts, Set<String>)? in
-                guard let counts = try? await FolderCounts.read(index: core.index, engine: core.engine) else {
+                guard let counts = try? await FolderCounts.read(index: core.index) else {
                     return nil
                 }
                 return (counts, counts.changed(from: before))

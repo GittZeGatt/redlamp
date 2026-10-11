@@ -450,7 +450,10 @@ public final class LibrarySources {
         } else {
             source.title
         }
-        SourceSummaryPopover.show(title, relativeTo: view) { await service.summary(of: listed) }
+        SourceSummaryPopover.show(
+            title, relativeTo: view, summary: { await service.summary(of: listed) },
+            unreadable: { await service.unreadableCount(in: listed) },
+        )
     }
 
     private func received(_ change: LibrarySourceList.Change, generation: Int) {

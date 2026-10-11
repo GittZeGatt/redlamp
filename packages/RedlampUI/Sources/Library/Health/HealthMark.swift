@@ -22,14 +22,30 @@ struct HealthMark: Hashable, Sendable {
     let proposal: Proposal
     /// The badge's word: "To Trash", "Keep", "Left Out", "Empty", "→ .heic".
     let word: String
+    /// A file of the folder shown, rather than of a check's list (`init(unreadable:)`).
+    let isInFolder: Bool
 
     /// Framed as a proposal the check's batch carries out.
     var isFramed: Bool {
         proposal == .trash || proposal == .rename
     }
 
+    /// What's wrong with it is that Redlamp may not read it, so nothing is proposed for it.
+    var isForbidden: Bool {
+        guard case let .damage(damage) = finding.reason else { return false }
+        return damage.isForbidden
+    }
+
+    /// A file of the folder shown that can't be read (LIB-40): what's wrong in its word, "Unreadable" or "No Access",
+    /// and nothing drawn as proposed, since no check's batch is shown with it; `finding` says what's wrong.
+    init(unreadable finding: HealthFinding) {
+        self.finding = finding
+        (proposal, word, isInFolder) = (.none, Self.damageWord(finding) ?? "Unreadable", true)
+    }
+
     init(_ finding: HealthFinding) {
         self.finding = finding
+        isInFolder = false
         let damage = Self.damageWord(finding)
         if finding.apart != nil {
             (proposal, word) = (.leftOut, damage ?? "Left Out")
@@ -68,6 +84,8 @@ struct HealthMark: Hashable, Sendable {
             default: "it's rated, flagged or labelled"
             }
             return "\(reason): left out of the batch, as \(why)"
+        case .none where isInFolder:
+            return reason
         case .none:
             switch finding.reason {
             case .wrongExtension:

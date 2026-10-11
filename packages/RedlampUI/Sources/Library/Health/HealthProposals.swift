@@ -4,9 +4,13 @@ import RedlampLibrary
 
 /// The proposals of the Library Health check the grid shows (LIB-40): the check's findings as the library has them,
 /// read again off the main thread each time the check's list changes, and each photo's mark, which the grid's cells
-/// draw and their tooltips and VoiceOver say. Only a check's list has them. The menus follow only what's offered,
-/// which a batch or Keep Anyway changes once, not the counts, which change with each part of a batch's photos: SwiftUI
-/// asks every item of the menu bar again whenever something its menus read changes.
+/// draw and their tooltips and VoiceOver say. The menus follow only what's offered, which a batch or Keep Anyway
+/// changes once, not the counts, which change with each part of a batch's photos: SwiftUI asks every item of the menu
+/// bar again whenever something its menus read changes.
+///
+/// A folder shown has marks too: those of its files that can't be read, which its grid shows as the Finder shows
+/// them, each saying what's wrong with it and proposing nothing (`HealthMark.init(unreadable:)`). They're read again
+/// off the main thread whenever the photos shown change.
 @MainActor
 @Observable
 public final class HealthProposals {
@@ -48,9 +52,26 @@ public final class HealthProposals {
     @ObservationIgnored private var confirmedFrom: Int?
     /// How long each reading of the findings took to reach the grid, for the budgets.
     @ObservationIgnored @_spi(Harness) public private(set) var readsTook: [Duration] = []
+    /// The folder shown's files that can't be read, each with its mark.
+    @ObservationIgnored private var folderMarks = FolderMarks()
+    @ObservationIgnored private var readingFolder = false
+    @ObservationIgnored private var readFolderAgain = false
+    @ObservationIgnored private var libraryObservation: LibraryObservation?
+
+    /// A folder's files that can't be read, each one's mark by the index's ID and by its path, as the folder is shown
+    /// from the library or listed from the disk.
+    private struct FolderMarks: Sendable, Equatable {
+        var byID: [Int64: HealthMark] = [:]
+        var byPath: [String: HealthMark] = [:]
+    }
 
     init(model: EditorModel) {
         self.model = model
+        libraryObservation = model.library.observe { [weak self] diff in
+            guard !diff.onlyReads else { return }
+            self?.readFolder()
+        }
+        readFolder()
     }
 
     /// The source shown, or its list, changed: a check's findings are read again, and anything else has none.
@@ -66,10 +87,22 @@ public final class HealthProposals {
         read()
     }
 
-    /// The mark of the photo at `url`, while it's in the check shown.
+    /// The mark of the photo at `url`, while it's in the check shown, or it's a file of the folder shown that can't be
+    /// read.
     func mark(for url: URL) -> HealthMark? {
-        guard !marks.isEmpty, let id = model?.librarySources.indexID(ofShown: url) else { return nil }
-        return marks[id]
+        if !marks.isEmpty, let id = model?.librarySources.indexID(ofShown: url) {
+            return marks[id]
+        }
+        guard !folderMarks.byPath.isEmpty, let library = model?.library else { return nil }
+        if library.showsIndexIDs, let id = library.photoID(of: url) {
+            return folderMarks.byID[id]
+        }
+        return folderMarks.byPath[url.path]
+    }
+
+    /// How many of the folder shown's files can't be read, as last read.
+    var unreadableInFolder: Int {
+        folderMarks.byPath.count
     }
 
     /// The marks of the photos the index knows as `ids`.
@@ -207,6 +240,77 @@ public final class HealthProposals {
             observer()
         }
     }
+
+    // MARK: - The folder shown
+
+    /// Reads again which of the folder shown's files can't be read, and what's wrong with each, off the main thread;
+    /// none while anything else is shown.
+    private func readFolder() {
+        guard let library = model?.library, let open = library.openFolder, let core = library.service?.core else {
+            return applyFolder(FolderMarks())
+        }
+        guard !readingFolder else {
+            readFolderAgain = true
+            return
+        }
+        readingFolder = true
+        let folder = PhotoSource.folder(open, includingSubfolders: library.includesSubfolders)
+        let (engine, index) = (core.engine, core.index)
+        Task { [weak self] in
+            let read = await Task.detached(priority: .userInitiated) {
+                await Self.unreadable(in: folder, engine: engine, index: index)
+            }.value
+            guard let self else { return }
+            readingFolder = false
+            if let read, let library = model?.library, library.openFolder.map({
+                PhotoSource.folder($0, includingSubfolders: library.includesSubfolders)
+            }) == folder {
+                applyFolder(read)
+            }
+            if readFolderAgain {
+                readFolderAgain = false
+                readFolder()
+            }
+        }
+    }
+
+    /// The files of `folder` that can't be read, each marked with what's wrong with it, as the index keeps it; nil
+    /// when they couldn't be read.
+    private nonisolated static func unreadable(
+        in folder: PhotoSource, engine: QueryEngine, index: LibraryIndex,
+    ) async -> FolderMarks? {
+        guard let ids = try? await Array(engine.list(folder, matching: unreadableQuery).ids) else { return nil }
+        guard !ids.isEmpty else { return FolderMarks() }
+        return try? await index.read { reader in
+            let health = try reader.photoHealth(ids)
+            var marks = FolderMarks()
+            var folders: [Int64: String] = [:]
+            for id in ids {
+                guard let photo = try reader.photo(id: id) else { continue }
+                if folders[photo.folder] == nil {
+                    folders[photo.folder] = try reader.folder(id: photo.folder)?.path
+                }
+                guard let path = folders[photo.folder] else { continue }
+                let damage = health[id]?.damage ?? .unreadable("")
+                let mark = HealthMark(unreadable: HealthFinding(photo: id, check: .damaged, reason: .damage(damage)))
+                marks.byID[id] = mark
+                marks.byPath[URL(fileURLWithPath: path + "/" + photo.name, isDirectory: false).path] = mark
+            }
+            return marks
+        }
+    }
+
+    private func applyFolder(_ read: FolderMarks) {
+        guard read != folderMarks else { return }
+        let replaced = folderMarks
+        folderMarks = read
+        Task.detached(priority: .utility) { withExtendedLifetime(replaced) {} }
+        for observer in observers.values {
+            observer()
+        }
+    }
+
+    private static let unreadableQuery = LibraryQuery.filter(LibraryQuery.Filter(.unreadable, .equal, [.bool(true)]))
 
     private func clear() {
         shown = nil

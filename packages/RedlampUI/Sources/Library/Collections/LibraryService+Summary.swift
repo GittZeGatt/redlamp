@@ -18,6 +18,20 @@ extension LibraryService {
         }.value
     }
 
+    /// How many of `source`'s photos are files that can't be read (LIB-40), which only a folder, a smart collection
+    /// that finds them and Library Health's lists of them hold; nil while the library isn't open.
+    func unreadableCount(in source: PhotoSource) async -> Int? {
+        guard let engine = core?.engine else { return nil }
+        return await Task.detached(priority: .userInitiated) { () -> Int? in
+            guard let listed = try? await engine.list(source),
+                  let unreadable = try? await engine.list(.allPhotographs, matching: Self.unreadable)
+            else { return nil }
+            return unreadable.ids.count { listed.contains($0) }
+        }.value
+    }
+
+    private static let unreadable = LibraryQuery.filter(LibraryQuery.Filter(.unreadable, .equal, [.bool(true)]))
+
     // MARK: - For the regression suite
 
     /// Tells the library's open lists that the rows of `ids` changed, as Redlamp's own writes do.

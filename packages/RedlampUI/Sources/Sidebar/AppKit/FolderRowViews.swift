@@ -93,7 +93,10 @@ extension SidebarCellView {
                 let source = PhotoSource.folder(row.url, includingSubfolders: model.library.includesSubfolders)
                 menu.addItem(afterMenu("Show Summary…") { [weak anchor] in
                     guard let anchor else { return }
-                    SourceSummaryPopover.show(row.name, relativeTo: anchor) { await service.summary(of: source) }
+                    SourceSummaryPopover.show(
+                        row.name, relativeTo: anchor, summary: { await service.summary(of: source) },
+                        unreadable: { await service.unreadableCount(in: source) },
+                    )
                 })
             }
             let subfolders = NSMenuItem(title: ShortcutAction.showPhotosInSubfolders.title) {

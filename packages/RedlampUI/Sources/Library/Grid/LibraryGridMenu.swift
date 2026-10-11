@@ -155,9 +155,13 @@ enum LibraryGridMenu {
     // MARK: - Library Health
 
     /// On a photo of a Library Health check's list (LIB-40): what the check found in it and proposes, the check's batch
-    /// with its count, and Keep Anyway for the photo or the selection it's in; in Kept Anyway's list, List Again.
+    /// with its count, and Keep Anyway for the photo or the selection it's in; in Kept Anyway's list, List Again; on a
+    /// folder's file that can't be read, what Library Health offers for it (`EditorModel+Unreadable`).
     static func health(for photo: URL, model: EditorModel) -> [NSMenuItem] {
         guard model.module == .library, !model.isModalDialogOpen else { return [] }
+        if let unreadable = model.unreadableMenuItems(for: photo) {
+            return unreadable
+        }
         if model.librarySources.shown == .keptAnyway {
             let again = item(ShortcutAction.listAgain.title, key: nil, enabled: model.canListAgain) {
                 model.listAgain(photo)

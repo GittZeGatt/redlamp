@@ -32,10 +32,12 @@ struct HealthIndexingTests {
         let engine = QueryEngine(index: sandbox.index)
         try await engine.load()
         let shoot = URL(fileURLWithPath: LibraryIndexer.path(sandbox.url("Shoot")), isDirectory: true)
-        for source in [PhotoSource.allPhotographs, .folder(shoot, includingSubfolders: false), .query(.all)] {
+        for source in [PhotoSource.allPhotographs, .query(.all)] {
             let list = try await engine.list(source)
             #expect(list.count == 2 && !list.contains(unreadable.id), "\(source)")
         }
+        let folder = try await engine.list(.folder(shoot, includingSubfolders: false))
+        #expect(folder.count == 3 && folder.contains(unreadable.id), "its folder holds it, as the Finder shows it")
         let found = try await engine.list(.query(LibraryQuery(parsing: "unreadable:yes")))
         #expect(Array(found) == [unreadable.id])
         let searched = try await engine.results(LibraryQuery(parsing: "unreadable:no"))

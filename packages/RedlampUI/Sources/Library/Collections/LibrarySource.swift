@@ -13,7 +13,7 @@ public enum LibrarySource: Sendable, Hashable {
     case rejected
     /// A check of Library Health; pairs under the rule the Library panel keeps.
     case health(HealthCheck.Kind)
-    /// The photos whose read failed (LIB-40), which every other list leaves out.
+    /// The photos whose read failed (LIB-40), which every other list but their folder's leaves out.
     case unreadable
     /// The findings the user kept anyway, any check's.
     case keptAnyway
@@ -87,7 +87,7 @@ public enum LibrarySource: Sendable, Hashable {
             "Photos whose files went from their folders outside Redlamp, which no other list shows: Locate… finds one "
                 + "again, and Remove from Library takes it out"
         case .health(.extensions): "Files whose extension names another format than the one they hold"
-        case .unreadable: "Files whose read failed: every other list leaves them out"
+        case .unreadable: "Files whose read failed, which only their folders and Library Health show"
         case .keptAnyway: "The photos Library Health's checks found that were kept anyway"
         case let .collection(path): path.displayName
         }

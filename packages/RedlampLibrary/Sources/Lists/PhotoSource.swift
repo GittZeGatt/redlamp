@@ -23,13 +23,14 @@ public enum PhotoSource: Sendable, Hashable {
     /// The photos of these IDs the library has: an import's (LIB-23, LIB-27), whose folders may hold others.
     case photos(Set<Int64>)
 
-    /// Whether it holds photos that can't be read, which other sources leave out (LIB-40). A collection
-    /// leaves them out itself, keeping those a smart collection's query finds.
+    /// Whether it holds photos that can't be read, which other sources leave out (LIB-40): a folder holds
+    /// every file in it, as the Finder shows them. A collection leaves them out itself, keeping those a
+    /// smart collection's query finds.
     var findsUnreadable: Bool {
         switch self {
         case let .query(query): query.findsUnreadable
         case let .health(check): check.findsUnreadable
-        case .keptAnyway, .collection: true
+        case .keptAnyway, .collection, .folder: true
         default: false
         }
     }

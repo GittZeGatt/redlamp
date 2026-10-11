@@ -96,8 +96,11 @@ struct QueryDamagedTests {
         for source in [PhotoSource.allPhotographs, cards.root, .query(.all)] {
             let list = try await engine.list(source, matching: Self.damaged)
             #expect(cards.paths(list) == Self.found, "\(source)")
+        }
+        for source in [PhotoSource.allPhotographs, .query(.all)] {
             #expect(try await engine.list(source).count == 5, "without the term, the photo that can't be read is out")
         }
+        #expect(try await engine.list(cards.root).count == 6, "but in its folder, which holds every file in it")
         let search = try await LibrarySearch.run(Self.damaged, index: cards.sandbox.index)
         #expect(search.count == 3 && search.summary.hasPrefix("3 photos for is:damaged"))
     }

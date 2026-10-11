@@ -1,14 +1,18 @@
 import AppKit
 import RedlampLibrary
 
-/// A source's summary in words (LIB-23, LIB-41): its photos and picks, the days they were taken on, its cameras
-/// and lenses with how many photos each has, its ISO, shutter and aperture ranges, and its pairs and stacks.
+/// A source's summary in words (LIB-23, LIB-41): its photos and picks, how many of them are files that can't be read
+/// (LIB-40), the days they were taken on, its cameras and lenses with how many photos each has, its ISO, shutter and
+/// aperture ranges, and its pairs and stacks.
 @_spi(Harness) public enum SourceSummaryText {
     /// The most cameras or lenses named; the rest are counted.
     static let named = 6
 
-    public static func lines(_ summary: SourceSummary) -> [String] {
+    public static func lines(_ summary: SourceSummary, unreadable: Int = 0) -> [String] {
         var lines = [count(summary.photos, "photo") + (summary.picks > 0 ? ", " + count(summary.picks, "pick") : "")]
+        if unreadable > 0 {
+            lines.append(count(unreadable, "file") + " can't be read")
+        }
         if let first = summary.firstDay.flatMap(day), let last = summary.lastDay.flatMap(day) {
             lines.append(
                 (summary.days == 1 ? "Taken on \(first)" : "Taken over \(summary.days) days, from \(first) to \(last)")
@@ -89,9 +93,11 @@ import RedlampLibrary
         return stack.arrangedSubviews.compactMap { ($0 as? NSTextField)?.stringValue }
     }
 
-    /// Shows `title`'s summary beside `view`, "Counting…" until `summary` is worked out.
+    /// Shows `title`'s summary beside `view`, "Counting…" until `summary` is worked out, with how many of its files
+    /// `unreadable` finds can't be read.
     static func show(
         _ title: String, relativeTo view: NSView, summary: @escaping @MainActor () async -> SourceSummary?,
+        unreadable: @escaping @MainActor () async -> Int? = { nil },
     ) {
         current?.close()
         let heading = NSTextField(labelWithString: title)
@@ -114,10 +120,11 @@ import RedlampLibrary
         current = popover
         Task {
             let found = await summary()
+            let unreadable = await unreadable() ?? 0
             guard current === popover else { return }
             stack.removeArrangedSubview(counting)
             counting.removeFromSuperview()
-            let lines = found.map(SourceSummaryText.lines) ?? ["The library isn't open"]
+            let lines = found.map { SourceSummaryText.lines($0, unreadable: unreadable) } ?? ["The library isn't open"]
             for (place, line) in lines.enumerated() {
                 let label = NSTextField(wrappingLabelWithString: line)
                 label.preferredMaxLayoutWidth = 360
