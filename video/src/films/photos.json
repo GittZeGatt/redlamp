@@ -1,0 +1,239 @@
+{
+ "photos": [
+  {
+   "id": "snail",
+   "file": "~/src/redlamp-social/photos/DSC00983.ARW",
+   "crop": [
+    0.55,
+    0.42,
+    0.72
+   ],
+   "values": {
+    "basic.exposure": 0.8,
+    "basic.shadows": 20
+   }
+  },
+  {
+   "id": "street",
+   "file": "~/src/redlamp-social/photos/DSC01300.ARW",
+   "crop": [
+    0.55,
+    0.5,
+    1.0
+   ],
+   "values": {
+    "basic.exposure": 1.8,
+    "basic.shadows": 50,
+    "basic.highlights": -30
+   }
+  },
+  {
+   "id": "laugh",
+   "file": "~/src/redlamp-social/photos/DSC02005.ARW",
+   "crop": [
+    0.45,
+    0.5,
+    0.62
+   ],
+   "values": {
+    "basic.exposure": 1.3,
+    "basic.shadows": 30
+   }
+  },
+  {
+   "id": "cosplay",
+   "file": "~/src/redlamp-social/photos/DSC02372.ARW",
+   "crop": [
+    0.71,
+    0.48,
+    0.42
+   ],
+   "values": {
+    "basic.exposure": 1.1,
+    "basic.shadows": 30
+   }
+  },
+  {
+   "id": "scooter",
+   "file": "~/src/redlamp-social/photos/DSC03213.ARW",
+   "crop": [
+    0.55,
+    0.45,
+    0.72
+   ],
+   "values": {
+    "basic.exposure": 1.5,
+    "basic.shadows": 30
+   }
+  },
+  {
+   "id": "bass",
+   "file": "~/src/redlamp-social/photos/DSC04319.ARW",
+   "crop": [
+    0.5,
+    0.46,
+    0.62
+   ],
+   "values": {
+    "basic.exposure": 0.9,
+    "basic.shadows": 25
+   }
+  },
+  {
+   "id": "matterhorn",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/2/21/Matterhorn_sunset_2016_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Matterhorn_sunset_2016_(Unsplash).jpg",
+   "author": "Sam Ferrara samferrara",
+   "licence": "CC0",
+   "camera": "Canon Canon EOS 5DS",
+   "crop": [
+    0.42,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "aurora",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/86/Lofoten%2C_Norway_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Lofoten,_Norway_(Unsplash).jpg",
+   "author": "Johannes Groll followhansi",
+   "licence": "CC0",
+   "camera": null,
+   "crop": [
+    0.45,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "summer",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Mother_Nature%2C_Summer_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Mother_Nature,_Summer_(Unsplash).jpg",
+   "author": "Autumn Goodman auttgood",
+   "licence": "CC0",
+   "camera": "Canon Canon EOS 6D",
+   "crop": [
+    0.5,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "clown",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/a/aa/Circus_Liquor_clown_sign_at_night_2015-08-17.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Circus_Liquor_clown_sign_at_night_2015-08-17.jpg",
+   "author": "Junkyardsparkle",
+   "licence": "CC0",
+   "camera": "OLYMPUS IMAGING CORP.   XZ-2",
+   "crop": [
+    0.6,
+    0.42,
+    0.68
+   ]
+  },
+  {
+   "id": "peacock",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/6f/Pavo_Real_Venezolano.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Pavo_Real_Venezolano.jpg",
+   "author": "Wilfredor",
+   "licence": "CC0",
+   "camera": "NIKON CORPORATION NIKON D300",
+   "crop": [
+    0.47,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "lavender",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/1/14/%C3%8Ele_d%27Orl%C3%A9ans_009.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:%C3%8Ele_d%27Orl%C3%A9ans_009.jpg",
+   "author": "Wilfredor",
+   "licence": "CC0",
+   "camera": "NIKON CORPORATION NIKON Z 7_2",
+   "crop": [
+    0.5,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "tertre",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/07/Restaurants%2C_Place_du_Tertre%2C_Paris_30_September_2019.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Restaurants,_Place_du_Tertre,_Paris_30_September_2019.jpg",
+   "author": "Pierre Blach\u00e9 from Paris, France",
+   "licence": "CC0",
+   "camera": "SONY ILCE-7M3",
+   "crop": [
+    0.36,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "fuji",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/6/66/Mount_Fuji_at_sunset%2C_March_2025.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Mount_Fuji_at_sunset,_March_2025.jpg",
+   "author": "Romain Guy from San Francisco, USA",
+   "licence": "CC0",
+   "camera": "Hasselblad X2D 100C",
+   "crop": [
+    0.38,
+    0.58,
+    0.22
+   ]
+  },
+  {
+   "id": "peppers",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Sweet_Pepper_Market.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Sweet_Pepper_Market.jpg",
+   "author": "Wilfredor",
+   "licence": "CC0",
+   "camera": "NIKON CORPORATION NIKON D300",
+   "crop": [
+    0.5,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "symi",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/9/90/Colorful_houses_symi.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Colorful_houses_symi.jpg",
+   "author": "Jebulon",
+   "licence": "CC0",
+   "camera": "SONY DSLR-A550",
+   "crop": [
+    0.5,
+    0.62,
+    0.3
+   ]
+  },
+  {
+   "id": "headwrap",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Woman_in_a_headwrap_in_Quebec_City.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Woman_in_a_headwrap_in_Quebec_City.jpg",
+   "author": "Wilfredor",
+   "licence": "CC0",
+   "camera": "NIKON CORPORATION NIKON Z 7_2",
+   "crop": [
+    0.52,
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "id": "reservoir",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/4/44/Landscape_and_banks%2C_Embalse_de_los_Bermejales%2C_Andalusia%2C_Spain.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+   "page": "https://commons.wikimedia.org/wiki/File:Landscape_and_banks,_Embalse_de_los_Bermejales,_Andalusia,_Spain.jpg",
+   "author": "Jebulon",
+   "licence": "CC0",
+   "camera": "SONY DSLR-A550",
+   "crop": [
+    0.45,
+    0.5,
+    1.0
+   ]
+  }
+ ]
+}

@@ -1,0 +1,220 @@
+{
+ "looks": [
+  {
+   "slug": "portra-400",
+   "name": "PORTRA 400",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "summer"
+  },
+  {
+   "slug": "cinestill-800t",
+   "name": "CINESTILL 800T",
+   "kind": "TUNGSTEN NEGATIVE",
+   "photo": "clown"
+  },
+  {
+   "slug": "velvia-50",
+   "name": "VELVIA 50",
+   "kind": "SLIDE",
+   "photo": "matterhorn"
+  },
+  {
+   "slug": "tri-x-400",
+   "name": "TRI-X 400",
+   "kind": "BLACK AND WHITE",
+   "photo": "laugh"
+  },
+  {
+   "slug": "kodachrome-64",
+   "name": "KODACHROME 64",
+   "kind": "SLIDE",
+   "photo": "symi"
+  },
+  {
+   "slug": "ektar-100",
+   "name": "EKTAR 100",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "peacock"
+  },
+  {
+   "slug": "superia-400",
+   "name": "SUPERIA 400",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "cosplay"
+  },
+  {
+   "slug": "velvia-100",
+   "name": "VELVIA 100",
+   "kind": "SLIDE",
+   "photo": "lavender"
+  },
+  {
+   "slug": "ultramax-400",
+   "name": "ULTRAMAX 400",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "peppers"
+  },
+  {
+   "slug": "tri-x-multigrade-soft",
+   "name": "SOFT PRINT",
+   "kind": "GRADE 1 PRINT",
+   "photo": "summer"
+  },
+  {
+   "slug": "cinestill-50d",
+   "name": "CINESTILL 50D",
+   "kind": "DAYLIGHT NEGATIVE",
+   "photo": "reservoir"
+  },
+  {
+   "slug": "delta-100",
+   "name": "DELTA 100",
+   "kind": "BLACK AND WHITE",
+   "photo": "snail"
+  },
+  {
+   "slug": "fp4-plus",
+   "name": "FP4 PLUS",
+   "kind": "BLACK AND WHITE",
+   "photo": "fuji"
+  },
+  {
+   "slug": "portra-800-1600",
+   "name": "PORTRA 800",
+   "kind": "PUSHED TO 1600",
+   "photo": "scooter"
+  },
+  {
+   "slug": "tri-x-multigrade",
+   "name": "DARKROOM PRINT",
+   "kind": "GRADE 2 PRINT",
+   "photo": "headwrap"
+  },
+  {
+   "slug": "vision3-500t-2383",
+   "name": "VISION3 500T",
+   "kind": "CINEMA PRINT",
+   "photo": "tertre"
+  },
+  {
+   "slug": "tri-x-1600",
+   "name": "TRI-X 400",
+   "kind": "PUSHED TO 1600",
+   "photo": "street"
+  },
+  {
+   "slug": "gold-200",
+   "name": "GOLD 200",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "symi"
+  },
+  {
+   "slug": "t-max-100",
+   "name": "T-MAX 100",
+   "kind": "BLACK AND WHITE",
+   "photo": "clown"
+  },
+  {
+   "slug": "provia-100f-cross",
+   "name": "PROVIA 100F",
+   "kind": "CROSS-PROCESSED",
+   "photo": "peppers"
+  },
+  {
+   "slug": "delta-3200",
+   "name": "DELTA 3200",
+   "kind": "BLACK AND WHITE",
+   "photo": "bass"
+  },
+  {
+   "slug": "eterna-vivid-250d-2383",
+   "name": "ETERNA VIVID",
+   "kind": "CINEMA PRINT",
+   "photo": "aurora"
+  },
+  {
+   "slug": "portra-160",
+   "name": "PORTRA 160",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "laugh"
+  },
+  {
+   "slug": "vision3-250d-2383",
+   "name": "VISION3 250D",
+   "kind": "CINEMA PRINT",
+   "photo": "lavender"
+  },
+  {
+   "slug": "t-max-400",
+   "name": "T-MAX 400",
+   "kind": "BLACK AND WHITE",
+   "photo": "tertre"
+  },
+  {
+   "slug": "vision3-2383-bleach-bypass",
+   "name": "BLEACH BYPASS",
+   "kind": "CINEMA PRINT",
+   "photo": "street"
+  },
+  {
+   "slug": "ektachrome-e100",
+   "name": "EKTACHROME",
+   "kind": "SLIDE",
+   "photo": "reservoir"
+  },
+  {
+   "slug": "pan-f-plus",
+   "name": "PAN F PLUS",
+   "kind": "BLACK AND WHITE",
+   "photo": "matterhorn"
+  },
+  {
+   "slug": "portra-800",
+   "name": "PORTRA 800",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "bass"
+  },
+  {
+   "slug": "provia-100f",
+   "name": "PROVIA 100F",
+   "kind": "SLIDE",
+   "photo": "aurora"
+  },
+  {
+   "slug": "hp5-plus",
+   "name": "HP5 PLUS",
+   "kind": "BLACK AND WHITE",
+   "photo": "scooter"
+  },
+  {
+   "slug": "pro-400h",
+   "name": "PRO 400H",
+   "kind": "COLOUR NEGATIVE",
+   "photo": "snail"
+  },
+  {
+   "slug": "portra-400-overexposed",
+   "name": "PORTRA 400",
+   "kind": "OVEREXPOSED",
+   "photo": "headwrap"
+  },
+  {
+   "slug": "tri-x-multigrade-hard",
+   "name": "HARD PRINT",
+   "kind": "GRADE 4 PRINT",
+   "photo": "cosplay"
+  },
+  {
+   "slug": "vision3-50d-2383",
+   "name": "VISION3 50D",
+   "kind": "CINEMA PRINT",
+   "photo": "fuji"
+  },
+  {
+   "slug": "velvia-50-cross",
+   "name": "VELVIA 50",
+   "kind": "CROSS-PROCESSED",
+   "photo": "peacock"
+  }
+ ]
+}

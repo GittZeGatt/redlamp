@@ -21,3 +21,6 @@ public/pixelkit/
 
 # The feature videos' theme, in each of its arrangements (scripts/features-theme.py).
 public/features/
+
+# The film looks reel's renders (scripts/films-renders.py) and score (scripts/films-score.py).
+public/films/

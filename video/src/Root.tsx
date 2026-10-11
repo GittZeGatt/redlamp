@@ -1,5 +1,6 @@
 import { type CalculateMetadataFunction, Composition, Folder, Still } from "remotion";
 import { durationOf, Explainer, type ExplainerProps } from "./Explainer";
+import { FILM_LOOKS_FRAMES, FilmLooks, filmLooksDefaults } from "./films/FilmLooks";
 import { FEATURE_VIDEO_FRAMES, FeatureVideo, type FeatureVideoProps, withFrames } from "./features/FeatureVideo";
 import { loadManifest } from "./introducing/assets";
 import { durationOf as filmDuration, Introducing, type IntroducingProps } from "./introducing/Introducing";
@@ -146,6 +147,17 @@ export function RemotionRoot() {
             calculateMetadata={withFrames}
           />
         ))}
+      </Folder>
+      <Folder name="Films">
+        <Composition
+          id="FilmLooks9x16"
+          component={FilmLooks}
+          durationInFrames={FILM_LOOKS_FRAMES}
+          fps={FPS}
+          width={1080}
+          height={1920}
+          defaultProps={filmLooksDefaults}
+        />
       </Folder>
       <Folder name="Review">
         <Still

@@ -669,6 +669,21 @@ def click(velocity=1.0):
     return out * velocity * 0.5
 
 
+def shutter(velocity=1.0):
+    """A camera's focal-plane shutter: the first curtain's click, the second's a sixtieth of a second
+    later, and the mirror's soft slap under them."""
+    t = times(0.09)
+    out = np.zeros(len(t))
+    for at, a, centre in ((0, 1.0, 3400), (1 / 60, 0.8, 4300)):
+        s = t - at
+        on = s >= 0
+        burst = bandpass(rng.standard_normal(on.sum()), centre, octaves=1.2) * np.exp(-s[on] / 0.0018)
+        ring = np.sin(2 * np.pi * centre * 0.62 * s[on]) * np.exp(-s[on] / 0.004) * 0.3
+        out[on] += a * (burst + ring)
+    slap = np.sin(2 * np.pi * 160 * t) * np.exp(-t / 0.012) * 0.5 * np.clip(t / 0.001, 0, 1)
+    return (out + slap) * velocity * 0.6
+
+
 def tick(velocity=1.0):
     t = times(0.03)
     return np.sin(2 * np.pi * 3900 * t) * np.exp(-t / 0.004) * velocity

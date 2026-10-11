@@ -26,6 +26,10 @@
     "features": "node scripts/features.mjs",
     "features-frames": "python3 scripts/features-frames.py",
     "features-score": "python3 scripts/features-score.py",
+    "prefilms": "npm run sync-assets",
+    "films": "node scripts/films.mjs",
+    "films-renders": "python3 scripts/films-renders.py",
+    "films-score": "python3 scripts/films-score.py",
     "review": "node scripts/review.mjs",
     "storyboard": "node scripts/storyboard.mjs",
     "typecheck": "tsc --noEmit"
