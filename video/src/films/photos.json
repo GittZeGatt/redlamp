@@ -70,9 +70,9 @@
    "id": "bass",
    "file": "~/src/redlamp-social/photos/DSC04319.ARW",
    "crop": [
-    0.48,
-    0.3,
-    0.58
+    0.5,
+    0.46,
+    0.62
    ],
    "values": {
     "basic.exposure": 0.9,

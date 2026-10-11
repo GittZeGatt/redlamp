@@ -42,8 +42,10 @@ const H = 1920;
 const LEFT = 110;
 const TEXT_WIDTH = 920 - LEFT;
 const LABEL_TOP = 880;
-/** The hook and the logo sit at the top, over the opening photo's dark ceiling, clear of the face below. */
-const HOOK_TOP = 290;
+/** The hook and the mark sit low in the frame, below the opening photo's face and above the apps' controls. */
+const HOOK_BOTTOM = 1450;
+/** The mark spans the hook's two lines. */
+const MARK_LINES = 2 * 1.04;
 const ICON = 280;
 
 /** The contact sheet in world units, a tile the size of the frame, so the pull back starts sharp. */
@@ -168,7 +170,9 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
   // The first look develops across the plain photo, left to right, over the half beat after it lands.
   const wipe = ramp(frame, b(sheet.looks[0]), b(sheet.looks[0]) + g.beat / 2);
   const hookLines = hooks[hook];
-  const hookSize = fitted(hookLines, TEXT_WIDTH, 104);
+  const roughMark = MARK_LINES * fitted(hookLines, TEXT_WIDTH, 104);
+  const hookSize = fitted(hookLines, TEXT_WIDTH - roughMark * 1.25, 104);
+  const markSize = MARK_LINES * hookSize;
   const nameSize = fitted(
     looks.map((look) => look.name),
     TEXT_WIDTH,
@@ -217,10 +221,12 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
         }}
       />
 
-      <div style={{ position: "absolute", left: LEFT, top: HOOK_TOP }}>
-        <Words text={hookLines[0]} start={-18} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 6} style={{ textShadow: text.textShadow }} />
-        <Words text={hookLines[1]} start={-14} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 5} style={{ textShadow: text.textShadow }} />
-        <HookLogo frame={frame} out={b(sheet.looks[0]) - 4} />
+      <div style={{ position: "absolute", left: LEFT, bottom: H - HOOK_BOTTOM, display: "flex", alignItems: "center", gap: markSize * 0.25 }}>
+        <HookMark frame={frame} out={b(sheet.looks[0]) - 6} size={markSize} />
+        <div>
+          <Words text={hookLines[0]} start={-18} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 6} style={{ textShadow: text.textShadow }} />
+          <Words text={hookLines[1]} start={-14} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 5} style={{ textShadow: text.textShadow }} />
+        </div>
       </div>
       {index >= 0 && frame < cue("drop") + 8 ? <Label frame={frame} look={looks[index]} start={start} end={end} size={nameSize} /> : null}
 
@@ -239,19 +245,18 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
 }
 
 /**
- * Redlamp's lockup under the hook from the first frame, so the brand is there before anything moves: the
- * colour version, for dark backgrounds, over the opening photo's black ceiling, unaltered, with its clear
- * space (a quarter of the mark's height) above it, leaving just after the hook's lines.
+ * Redlamp's flat mark beside the hook from the first frame, so the brand is there before anything moves: the
+ * one-colour white version, for photographic backgrounds, unaltered, a quarter of its height from the words,
+ * leaving with the hook's lines.
  */
-function HookLogo({ frame, out }: { frame: number; out: number }) {
+function HookMark({ frame, out, size }: { frame: number; out: number; size: number }) {
   const { fps } = useVideoConfig();
   const o = spring({ frame: frame - out, fps, config: springs.snap });
   if (o > 0.999) return null;
-  const height = 120;
   return (
     <Img
-      src={staticFile("synced/brand/logo/redlamp-lockup.svg")}
-      style={{ display: "block", height, width: (height * 192.37) / 48, marginTop: height * 0.25, opacity: 1 - o, transform: `translateY(${-o * height * 0.4}px)` }}
+      src={staticFile("synced/brand/logo/redlamp-mark-white.svg")}
+      style={{ display: "block", flex: "none", height: size, width: size, opacity: 1 - o, transform: `translateY(${-o * size * 0.2}px)` }}
     />
   );
 }
