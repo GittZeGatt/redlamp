@@ -23,6 +23,7 @@
             + HealthScenarios.all
             + MissingPhotosScenarios.all
             + CollectionScenarios.all
+            + JudgingScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
             + MoveEditsScenarios.all
