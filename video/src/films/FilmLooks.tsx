@@ -42,6 +42,8 @@ const H = 1920;
 const LEFT = 110;
 const TEXT_WIDTH = 920 - LEFT;
 const LABEL_TOP = 880;
+/** The hook and the logo sit at the top, over the opening photo's dark ceiling, clear of the face below. */
+const HOOK_TOP = 290;
 const ICON = 280;
 
 /** The contact sheet in world units, a tile the size of the frame, so the pull back starts sharp. */
@@ -215,7 +217,7 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
         }}
       />
 
-      <div style={{ position: "absolute", left: LEFT, top: LABEL_TOP + 160 }}>
+      <div style={{ position: "absolute", left: LEFT, top: HOOK_TOP }}>
         <Words text={hookLines[0]} start={-18} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 6} style={{ textShadow: text.textShadow }} />
         <Words text={hookLines[1]} start={-14} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 5} style={{ textShadow: text.textShadow }} />
         <HookLogo frame={frame} out={b(sheet.looks[0]) - 4} />
@@ -238,18 +240,18 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
 
 /**
  * Redlamp's lockup under the hook from the first frame, so the brand is there before anything moves: the
- * one-colour white version, which the brand allows on a photograph, unaltered, with more than its clear
+ * colour version, for dark backgrounds, over the opening photo's black ceiling, unaltered, with its clear
  * space (a quarter of the mark's height) above it, leaving just after the hook's lines.
  */
 function HookLogo({ frame, out }: { frame: number; out: number }) {
   const { fps } = useVideoConfig();
   const o = spring({ frame: frame - out, fps, config: springs.snap });
   if (o > 0.999) return null;
-  const height = 80;
+  const height = 120;
   return (
     <Img
-      src={staticFile("synced/brand/logo/redlamp-lockup-white.svg")}
-      style={{ display: "block", height, width: (height * 192.37) / 48, marginTop: height * 0.4, opacity: 1 - o, transform: `translateY(${-o * height * 0.4}px)` }}
+      src={staticFile("synced/brand/logo/redlamp-lockup.svg")}
+      style={{ display: "block", height, width: (height * 192.37) / 48, marginTop: height * 0.25, opacity: 1 - o, transform: `translateY(${-o * height * 0.4}px)` }}
     />
   );
 }

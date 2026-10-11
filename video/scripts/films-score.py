@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
 """
-The film looks reel's score: a dark, driving synth track in E minor at 112.5 BPM, 14 bars and 29.9 seconds
+The film looks reel's score: a bright, driving synth track in E major at 112.5 BPM, 14 bars and 29.9 seconds
 on the reel's cue sheet, src/films/cues.json, whose build drives the cuts: a look a bar, then every two
 beats, every beat and every half beat, a camera's shutter firing on each, until the shutters run like a
 motor drive into the stop; the drop lands heavily on the pull back to the contact sheet.
 
-The owner asked for it darker, grittier and more energetic than the first cut's F sharp minor synthwave
-(11 October 2026). So the harmony turns on E minor's darkest neighbours: Em, C, then F, the Neapolitan
-a semitone above the tonic, and B7 with a flat ninth, a bar each; Em and C again; then through the build
-the bass climbs a semitone every two beats, F, F sharp, G, G sharp and A (F, F#m7b5, G, E/G# and Am), to
-Bsus4 letting down to B7b9 into the drop on Em; on the end line C, Am and B7b9, then Em, F and B7b9, and
-Em on the last hit. The riff, on a driven saw lead in the middle of the range, grinds the flat second
-against the tonic: E, G and F held, then E, D and down to B; E, G and A, then G, F and E. The answer goes
-over F and B7b9 to the tritone and the flat ninth, and through the build a line rises a semitone every two
-beats from F to B, held through the stop; the drop brings the riff back doubled an octave down.
+The owner asked first for more grit and energy than the reel's first synthwave, then, hearing it in E
+minor, for a major key that suits a parade of colourful photos, keeping the grit (11 October 2026). So the
+chords are major with their colour notes rather than tense ones: Eadd9 under the hook and the first look,
+C#m7, Amaj9 and Bsus4 a bar each, then Eadd9 and C#m7 again; through the run of half beats the IV, V and vi
+lift twice, Amaj9, Bsus4 and C#m7 every two beats, to Bsus4 opening to Badd9 into the drop on Eadd9; on
+the end line Amaj9, C#m7 and Bsus4, then Eadd9, Amaj9 and Badd9, and Eadd9 on the last hit. The riff, on a
+driven saw lead in the middle of the range, climbs the tonic chord and steps down: E, G sharp and B held,
+then C sharp, B and G sharp; F sharp, G sharp and B, then G sharp, F sharp and E. The answer reaches up
+over Amaj9 to E and lands on F sharp held over Bsus4; through the build a line climbs the chords two beats
+at a time from A to G sharp, held through the stop, and the drop brings the riff back doubled an octave
+down; the closing phrase turns through D sharp to E on the last hit.
 
-What makes it gritty: a bass of detuned saws driven into a soft clip and crushed a little (`grit_bass`),
+What keeps it gritty: a bass of detuned saws driven into a soft clip and crushed a little (`grit_bass`),
 in eighths from the first look and sixteenths from the looks every beat; a punchy kick whose body is
 driven (`punch_kick`); a snare with noise in its wires, driven and crushed (`grit_snare`); hats in eighths,
 then sixteenths, then sixteenths with open hats on the off-beats as the cuts quicken; a driven supersaw
-pad held low in the range for weight in the low mids, and a pluck in sixteenths kept dark. The build
-screws a Shepard tone tighter under a riser and a snare roll doubling into the stop, where the rhythm stops
-and a breath is drawn in while the drop's chord swells up through it; the drop is a trailer's low brass,
-a deep kick, the punch kick and a dark crash, with air rising as the picture pulls back.
+pad held low in the range, and a pluck in sixteenths kept warm rather than glassy. No bouncy effects: the
+sounds on screen are the shutters, air and low brass. The build screws a Shepard tone tighter under a riser
+and a snare roll doubling into the stop, where the rhythm stops and a breath is drawn in while the drop's
+chord swells up through it; the drop is a trailer's low brass, a deep kick, the punch kick and a dark
+crash, with air rising as the picture pulls back.
 
     python3 scripts/films-score.py     writes public/films/score.wav and score.json
 """
@@ -82,19 +85,15 @@ def cut(x, seconds):
     return out
 
 
-# Each chord: the bass's root, climbing a semitone at a time through the build; and the pad's voicing,
-# held between E3 and F4 for weight in the low mids, its voices moving by step: the Neapolitan F's A
-# against the tonic's G, B7's flat ninth (C) and its D sharp, the half-diminished F sharp's C.
+# Each chord: the bass's root; and the pad's voicing, held between C sharp 3 and C sharp 4 for weight in the
+# low mids, its voices moving by step and keeping the colour notes: the tonic's added ninth, A's major
+# seventh and ninth, the suspended fourth over B that opens to its third with the ninth kept.
 VOICINGS = {
-    "Em": (40, [52, 55, 59, 64]),
-    "C": (36, [52, 55, 60, 64]),
-    "F": (41, [53, 57, 60, 65]),
-    "B7b9": (47, [51, 54, 57, 60]),
-    "F#m7b5": (42, [52, 54, 57, 60]),
-    "G": (43, [50, 55, 59, 62]),
-    "E/G#": (44, [52, 56, 59, 64]),
-    "Am": (45, [52, 57, 60, 64]),
-    "Bsus4": (47, [52, 54, 59, 64]),
+    "Eadd9": (40, [52, 56, 59, 66]),
+    "C#m7": (37, [52, 56, 59, 61]),
+    "Amaj9": (45, [49, 52, 56, 59]),
+    "Bsus4": (47, [52, 54, 59, 61]),
+    "Badd9": (47, [51, 54, 59, 61]),
 }
 CHORDS = sheet["chords"]
 
@@ -103,14 +102,14 @@ def chord(beat):
     return VOICINGS[[name for name, first, _ in CHORDS if first <= beat][-1]]
 
 
-# The riff and its answer, [beat, note, beats] from where each starts; the line rising through the build;
+# The riff and its answer, [beat, note, beats] from where each starts; the line climbing through the build;
 # and the closing phrase, through D sharp to E on the last hit.
-RIFF = [(0, 64, 0.5), (0.5, 67, 0.5), (1, 65, 1.0), (2, 64, 0.5), (2.5, 62, 0.5), (3, 59, 1.0),
-        (4, 64, 0.5), (4.5, 67, 0.5), (5, 69, 1.0), (6, 67, 0.5), (6.5, 65, 0.5), (7, 64, 1.0)]
-ANSWER = [(0, 65, 0.5), (0.5, 69, 0.5), (1, 72, 1.0), (2, 71, 0.5), (2.5, 69, 0.5), (3, 65, 1.0),
-          (4, 63, 0.5), (4.5, 66, 0.5), (5, 69, 1.0), (6, 72, 1.0), (7, 71, 1.0)]
-RISE = [(0, 65, 2), (2, 66, 2), (4, 67, 2), (6, 68, 2), (8, 69, 2), (10, 71, 2)]
-CLOSE = [(0, 64, 0.5), (0.5, 67, 0.5), (1, 65, 1.0), (2, 64, 0.5), (2.5, 62, 0.5), (3, 63, 1.0), (4, 64, 4.0)]
+RIFF = [(0, 64, 0.5), (0.5, 68, 0.5), (1, 71, 1.0), (2, 73, 0.5), (2.5, 71, 0.5), (3, 68, 1.0),
+        (4, 66, 0.5), (4.5, 68, 0.5), (5, 71, 1.0), (6, 68, 0.5), (6.5, 66, 0.5), (7, 64, 1.0)]
+ANSWER = [(0, 69, 0.5), (0.5, 73, 0.5), (1, 76, 1.0), (2, 75, 0.5), (2.5, 73, 0.5), (3, 71, 1.0),
+          (4, 71, 0.5), (4.5, 73, 0.5), (5, 76, 1.0), (6, 78, 2.0)]
+RISE = [(0, 69, 2), (2, 71, 2), (4, 73, 2), (6, 76, 2), (8, 78, 2), (10, 80, 2)]
+CLOSE = [(0, 64, 0.5), (0.5, 68, 0.5), (1, 71, 1.0), (2, 73, 0.5), (2.5, 71, 0.5), (3, 75, 1.0), (4, 76, 4.0)]
 
 
 def placed(start, phrase):
@@ -143,7 +142,7 @@ def score():
     kicks = []
 
     # The first frame lands as a deep hit under the hook, the driven bass holding E through a closed
-    # filter and a low drone swelling in.
+    # filter and a low drone on E and B swelling in.
     drums.add(at(0), s.deep_kick(0.9), gain=0.55, wet=0.1)
     drums.add(at(0), s.punch_kick(0.9), gain=0.35, wet=0.05)
     kicks.append(0.0)
@@ -166,12 +165,12 @@ def score():
             pad = dying(pad, 3.0)
         pads.add(at(first), pad, gain=0.15 * swell(first), wet=0.3)
 
-    # The pluck in sixteenths, climbing each half bar an octave above the pad, kept dark: muffled under the
-    # hook and opening only a little as the cuts quicken.
+    # The pluck in sixteenths, climbing each half bar an octave above the pad, kept warm: muffled under the
+    # hook and opening as the cuts quicken.
     for i, beat in enumerate(playing(0, LAST, 0.25)):
         note = chord(beat)[1][CLIMB[round(beat * 4) % 8]] + 12
-        bright = 0.1 + 0.12 * beat / FIRST if beat < FIRST else opening(beat, FIRST, STOP, 0.25, 0.5) if beat < DROP else 0.5
-        tone = s.lowpass(s.pluck(note, 0.85, 0.14, bright=bright), 2600)
+        bright = 0.1 + 0.12 * beat / FIRST if beat < FIRST else opening(beat, FIRST, STOP, 0.3, 0.6) if beat < DROP else 0.6
+        tone = s.lowpass(s.pluck(note, 0.85, 0.14, bright=bright), 3400)
         level = 0.1 * swell(beat) * (0.5 + 0.5 * min(1, beat / FIRST))
         arps.add(at(beat), tone, gain=level, pan_to=(-0.3, 0.3)[i % 2], wet=0.2)
 
@@ -253,7 +252,7 @@ def score():
     fx.add(at(HALVES), s.shepard(0.15 + 1.4 * p**2, 0.25 + 0.75 * p), gain=0.1, wet=0.3)
     fx.add(at(HALVES), s.riser(at(DROP) - at(HALVES), 200, 5000, curve=2.4), gain=0.06, wet=0.3)
     fx.add(at(STOP), s.inhale(at(DROP) - at(STOP)), gain=0.12, wet=0.1)
-    hit = s.drive(s.supersaw([n - 12 for n in VOICINGS["Em"][1]] + VOICINGS["Em"][1], 1.6, cutoff=2400, attack=0.01,
+    hit = s.drive(s.supersaw([n - 12 for n in VOICINGS["Eadd9"][1]] + VOICINGS["Eadd9"][1], 1.6, cutoff=2400, attack=0.01,
                              release=0.6), 2.0)
     fx.add(at(STOP), s.swell_into(hit, at(DROP) - at(STOP), room), gain=0.22, wet=0.0)
 
@@ -283,7 +282,7 @@ def score():
     kicks.append(at(LAST))
     fx.add(at(LAST), s.boom(2.4, 0.9), gain=0.18, wet=0.25)
     drums.add(at(LAST), s.lowpass(s.crash(0.8, 3.0, decay=1.4), 4500), gain=0.15, wet=0.35)
-    for i, (note, pan) in enumerate(zip(VOICINGS["Em"][1], (-0.3, -0.1, 0.1, 0.3))):
+    for i, (note, pan) in enumerate(zip(VOICINGS["Eadd9"][1], (-0.3, -0.1, 0.1, 0.3))):
         arps.add(at(LAST + i / 4), s.lowpass(s.pluck(note + 12, 0.7, 0.3, bright=0.4), 2600), gain=0.1, pan_to=pan, wet=0.45)
 
     pump = s.sidechain(length, kicks, depth=0.55, release=0.16)
@@ -300,7 +299,7 @@ def score():
 
 def main():
     buses, room = score()
-    mix = s.master(buses, seconds=LENGTH, target=-14.0, ceiling=-1.4, room=room, wet=0.45, presence=1.0, fade=at(BEATS) - at(FADE))
+    mix = s.master(buses, seconds=LENGTH, target=-14.0, ceiling=-1.4, room=room, wet=0.45, presence=1.5, fade=at(BEATS) - at(FADE))
     out = ROOT / "public/films"
     out.mkdir(parents=True, exist_ok=True)
     s.write(out / "score.wav", mix)
