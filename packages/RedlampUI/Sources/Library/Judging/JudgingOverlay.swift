@@ -233,6 +233,7 @@ final class JudgingOverlay {
         }
         guard shown else {
             cancelRequests()
+            spokenChanged()
             return
         }
         if model.showRawClipping || judging.showsHistogram {
@@ -246,6 +247,7 @@ final class JudgingOverlay {
             requestAFPoints()
         }
         layoutLayers()
+        spokenChanged()
     }
 
     private func cancelRequests() {
@@ -326,7 +328,6 @@ final class JudgingOverlay {
             self.marks = marks
             histogram.state = .read(marks.reading)
             refresh()
-            onChange?()
         }
     }
 
@@ -360,7 +361,6 @@ final class JudgingOverlay {
             guard let marks = marks ?? nil else { return }
             regionMarks = marks
             refresh()
-            onChange?()
         }
     }
 
@@ -417,7 +417,6 @@ final class JudgingOverlay {
             guard let self, self.url == url, edit == key.edit else { return }
             peakingEntry = entry
             refresh()
-            onChange?()
         }
     }
 
@@ -436,7 +435,6 @@ final class JudgingOverlay {
                     }
                 }
                 refresh()
-                onChange?()
             }
     }
 
@@ -523,12 +521,44 @@ final class JudgingOverlay {
         lens.update(with: self)
     }
 
-    // MARK: - What's drawn, for the tests
+    // MARK: - What's drawn
 
     /// Which layers are on screen: sensor clipping over the whole photo and over the part shown, peaking, the AF
     /// point and the histogram.
     var drawn: (clipping: Bool, region: Bool, peaking: Bool, afPoints: Bool, histogram: Bool) {
         (!clipping.isHidden, !clippingRegion.isHidden, !peaking.isHidden, !afPoints.isHidden, !histogram.isHidden)
+    }
+
+    /// What's drawn over the photo, for VoiceOver and the regression suite: "sensor clipping marked" or "nothing
+    /// clipped on the sensor", "focus peaking", "AF point" and "loupe at 400%", each once it's on screen. The host
+    /// adds them to its accessibility value.
+    var spoken: [String] {
+        let drawn = drawn
+        var parts: [String] = []
+        if isShown, model.showRawClipping, let marks {
+            parts.append(drawn.clipping || drawn.region || marks.image != nil
+                ? "sensor clipping marked" : "nothing clipped on the sensor")
+        }
+        if drawn.peaking {
+            parts.append("focus peaking")
+        }
+        if drawn.afPoints {
+            parts.append("AF point")
+        }
+        if lens.isShown, let magnification = model.libraryJudging.magnification {
+            parts.append("loupe at \(magnification.title)")
+        }
+        return parts
+    }
+
+    private var lastSpoken: [String] = []
+
+    /// Tells the host when what's drawn has changed.
+    private func spokenChanged() {
+        let spoken = spoken
+        guard spoken != lastSpoken else { return }
+        lastSpoken = spoken
+        onChange?()
     }
 
     var clippingFrame: CGRect {
@@ -544,6 +574,12 @@ final class JudgingOverlay {
 
     /// The pointer moved over the host, at `point` in its coordinates.
     func pointerMoved(to point: CGPoint) {
+        let lensShown = lens.isShown
+        defer {
+            if lens.isShown != lensShown {
+                spokenChanged()
+            }
+        }
         guard isShown, let magnification = model.libraryJudging.magnification, url != nil else {
             lens.hide()
             return
@@ -553,7 +589,9 @@ final class JudgingOverlay {
     }
 
     func pointerExited() {
+        guard lens.isShown else { return }
         lens.hide()
+        spokenChanged()
     }
 
     /// The part of the photo the lens shows rendered with its marks, once the pointer rests.

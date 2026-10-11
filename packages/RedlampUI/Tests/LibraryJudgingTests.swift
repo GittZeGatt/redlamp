@@ -141,6 +141,8 @@ struct LibraryJudgingTests {
         try await fixture.settle()
         let drawn = judging.drawn
         #expect(drawn.clipping && drawn.peaking && drawn.histogram)
+        let spoken = loupe.accessibilityValue() as? String ?? ""
+        #expect(spoken.contains("sensor clipping marked") && spoken.contains("focus peaking"), "VoiceOver: \(spoken)")
         #expect(judging.clippingFrame == loupe.photoFrame, "the marks lie over the photo")
         #expect(judging.histogram
             .summary == "Clipped on the sensor: red 20%, green 20%, blue 20%, all three 4.0% of the photo")
@@ -256,6 +258,8 @@ struct LibraryJudgingTests {
         for photo in photos {
             #expect(photo.judging.drawn.clipping && photo.judging.drawn.peaking && photo.judging.drawn.histogram)
             #expect(photo.judging.clippingFrame == photo.photoFrame)
+            let spoken = photo.accessibilityValue() as? String ?? ""
+            #expect(spoken.contains("sensor clipping marked") && spoken.contains("focus peaking"), "\(spoken)")
         }
         #expect(Set(engine.opened.withLock { $0 }) == Set([fixture.photos[0], fixture.photos[1]]))
         #expect(!modules.content.library.loupe.judging.drawn.clipping, "the loupe, not shown, draws nothing")
@@ -279,6 +283,7 @@ struct LibraryJudgingTests {
         #expect(lens.isShown && close(lens.center, CGPoint(x: frame.midX, y: frame.midY)))
         #expect(abs((lens.photoPoint?.x ?? 0) - 0.5) < 0.001 && abs((lens.photoPoint?.y ?? 0) - 0.5) < 0.001)
         #expect(abs(lens.magnified.width - pixels * 2 / scale) < 1, "two of the screen's pixels to one")
+        #expect((loupe.accessibilityValue() as? String)?.contains("loupe at 200%") == true)
         model.setFollowingLoupe(.quadruple)
         try move(loupe, to: CGPoint(x: frame.minX + frame.width / 4, y: frame.midY))
         #expect(abs(lens.magnified.width - pixels * 4 / scale) < 1)

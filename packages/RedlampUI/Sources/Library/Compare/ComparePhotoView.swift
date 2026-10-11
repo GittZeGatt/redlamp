@@ -89,6 +89,7 @@ final class ComparePhotoView: NSView {
         }
         judging.install(in: self, above: photo)
         judging.shownImage = { [weak self] in self?.image }
+        judging.onChange = { [weak self] in self?.updateOverlays() }
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
     }
@@ -405,8 +406,8 @@ final class ComparePhotoView: NSView {
             )
         }
         CATransaction.commit()
-        setAccessibilityValue([isActive ? "active" : nil, marked ? "Unedited preview" : nil].compactMap(\.self)
-            .joined(separator: ", "))
+        let states = [isActive ? "active" : nil, marked ? "Unedited preview" : nil].compactMap(\.self)
+        setAccessibilityValue((states + judging.spoken).joined(separator: ", "))
     }
 
     // MARK: - Mouse

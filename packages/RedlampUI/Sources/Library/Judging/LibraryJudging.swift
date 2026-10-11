@@ -35,6 +35,14 @@ public final class LibraryJudging {
     @ObservationIgnored var clipping: SensorClipping?
 
     init() {}
+
+    /// What reading the raws for sensor clipping and the histogram has cost: the photos opened (decoded in the
+    /// decode service, their pyramids built) and the time the opens took, and the renders and their time with the
+    /// marks found, for the regression suite to report.
+    @_spi(Harness) public var rawCost: (opened: Int, opening: Duration, rendered: Int, rendering: Duration) {
+        let statistics = clipping?.statistics ?? SensorClipping.Statistics()
+        return (statistics.opened, statistics.opening, statistics.rendered, statistics.rendering)
+    }
 }
 
 public extension EditorModel {

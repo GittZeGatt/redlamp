@@ -71,6 +71,7 @@ final class LibraryLoupeView: NSView {
         judging.install(in: self, above: photo)
         judging.histogram.setAccessibilityIdentifier("library.loupe.histogram")
         judging.shownImage = { [weak self] in self?.image }
+        judging.onChange = { [weak self] in self?.updateMark() }
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         setAccessibilityIdentifier("library.loupe")
@@ -270,7 +271,8 @@ final class LibraryLoupeView: NSView {
 
     private func updateMark() {
         let marked = showsUneditedPreview
-        setAccessibilityValue(marked ? "Unedited preview" : nil)
+        let value = ((marked ? ["Unedited preview"] : []) + judging.spoken).joined(separator: ", ")
+        setAccessibilityValue(value.isEmpty ? nil : value)
         let size = GridBadges.Kind.uneditedPreview.size
         let visible = photo.frame.intersection(bounds)
         CATransaction.begin()
