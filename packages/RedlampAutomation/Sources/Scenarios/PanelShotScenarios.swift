@@ -1,6 +1,7 @@
 #if DEBUG || REDLAMP_PROFILING
     import AppKit
     import Foundation
+    import RedlampDesign
     import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
@@ -25,6 +26,53 @@
                 let url = folder.appending(path: "\(name).png")
                 let written = try app.main { _ in window().map { Snapshot.capture($0, to: url) } ?? false }
                 try app.expect(written, "\(name) captured")
+            }
+            /// The right column's every panel, top to bottom, on the window's background.
+            func shootColumn(_ name: String) throws {
+                app.pause(0.8)
+                let url = folder.appending(path: "\(name).png")
+                let written = try app.main { _ -> Bool in
+                    guard let window = Views.editorWindow, let document = rightColumn()?.scrollView.documentView,
+                          let drawn = document.bitmapImageRepForCachingDisplay(in: document.bounds),
+                          let picture = NSBitmapImageRep(
+                              bitmapDataPlanes: nil, pixelsWide: drawn.pixelsWide, pixelsHigh: drawn.pixelsHigh,
+                              bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                              colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0,
+                          ),
+                          let context = NSGraphicsContext(bitmapImageRep: picture)
+                    else { return false }
+                    document.cacheDisplay(in: document.bounds, to: drawn)
+                    picture.size = document.bounds.size
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = context
+                    window.effectiveAppearance.performAsCurrentDrawingAppearance {
+                        NSColor.windowBackgroundColor.setFill()
+                        NSRect(origin: .zero, size: picture.size).fill()
+                    }
+                    drawn.draw(in: NSRect(origin: .zero, size: picture.size))
+                    NSGraphicsContext.restoreGraphicsState()
+                    return (try? picture.representation(using: .png, properties: [:])?.write(to: url)) != nil
+                }
+                try app.expect(written, "\(name) captured")
+            }
+            @MainActor func rightColumn() -> PanelColumnScrollView? {
+                guard let root = Views.editorWindow?.contentView else { return nil }
+                return Views.all(PanelColumnScrollView.self, in: root).filter { !$0.isHiddenOrHasHiddenAncestor }
+                    .max { $0.convert($0.bounds, to: nil).maxX < $1.convert($1.bounds, to: nil).maxX }
+            }
+            // The windows at one size, whatever they were left at.
+            try app.main { _ in
+                guard let window = Views.editorWindow, let area = (window.screen ?? NSScreen.main)?.visibleFrame
+                else { return }
+                let size = NSSize(width: min(1440, area.width), height: min(940, area.height))
+                window.setFrame(
+                    NSRect(
+                        x: area.midX - size.width / 2,
+                        y: area.midY - size.height / 2,
+                        width: size.width,
+                        height: size.height,
+                    ), display: true,
+                )
             }
 
             try app.withPanels { _ in
@@ -55,10 +103,11 @@
                         && model.libraryPanels.selection.hasEverywhere(KeywordPath("Night")!) == nil
                 }
                 try shoot("panels") { Views.editorWindow }
+                try shootColumn("panels-column")
 
                 try app.typeInField("keywording.entry", "tr", returning: false)
                 try app.wait("completions for tr") { !$0.libraryPanels.completions("tr").isEmpty }
-                try shoot("keywording-completions") { Views.editorWindow }
+                try shootColumn("keywording-completions")
                 try app.pressInWindow(KeyCombo(.escape))
                 try app.main { _ in _ = Views.editorWindow?.makeFirstResponder(nil) }
 
@@ -111,8 +160,15 @@
             try app.wait("the card browsed", timeout: 60) { _ in
                 ImportWindowController.current.map { $0.isBrowsed && $0.photoCount == card.count } == true
             }
-            try app.run("the moments", timeout: 30) { _ in }
             app.pause(1)
+            try app.inImportWindow { window in
+                guard let frame = window.window?.frame, let area = window.window?.screen?.visibleFrame else { return }
+                let size = NSSize(width: min(1180, area.width), height: min(740, area.height))
+                window.window?.setFrame(
+                    NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height),
+                    display: true,
+                )
+            }
             try app.inImportWindow { $0.select([0, 1]) }
             for key in ["3", "p"] {
                 try app.pressInImportWindow(KeyCombo(.character(Character(key))))
