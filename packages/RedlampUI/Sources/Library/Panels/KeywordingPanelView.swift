@@ -2,22 +2,20 @@ import AppKit
 import RedlampDesign
 import RedlampLibrary
 
-/// The Keywording panel (LIB-21): the keywords of the photos selected as full paths, those only some of them
-/// have marked with how many; a field that adds keywords, completing them from the library's keywords and
-/// synonyms and making new ones; and the keyword set ⌥1 to ⌥9 apply, chosen here, its nine keywords toggled
-/// on the photos by a click, with the painter's button beside it (`KeywordPainterButton`).
+/// The Keywording panel (LIB-21): the keywords of the photos selected as full paths, as tokens (LIB-45), those
+/// only some of them have greyed with how many; a field that adds keywords, completing them from the library's
+/// keywords and synonyms in a list under it and making new ones; and the keyword set ⌥1 to ⌥9 apply, chosen here,
+/// its nine keywords toggled on the photos by a click on their buttons, each naming its key, with the painter's
+/// button beside it (`KeywordPainterButton`).
 final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
     private let panels: LibraryPanels
-    private let summary = PanelControls.label("", secondary: true)
+    private let summary = PanelControls.note("")
     private let progress = NSProgressIndicator()
-    private let keywords = NSStackView()
-    private var keywordRows: [KeywordRow] = []
-    /// Below the rows, how many keywords the rows leave out.
-    private let more = PanelControls.label("", secondary: true)
-    private var rowHeight: CGFloat?
-    private var moreHeight: CGFloat?
-    private let entry = NSTextField()
-    private let completions = NSStackView()
+    private let tokens = KeywordTokensView()
+    /// Below the tokens, how many keywords they leave out.
+    private let more = PanelControls.note("")
+    private let entry = PanelControls.field(placeholder: "Add Keywords")
+    private let completions = KeywordCompletionList()
     private let sets = NSPopUpButton()
     private let setButtons: [ActionButton]
     private var matches: [KeywordCompletion.Match] = []
@@ -30,16 +28,16 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         var buttons: [ActionButton] = []
         for number in 1 ... KeywordSet.size {
             let button = ActionButton(title: "") { [weak panels] in _ = panels?.applyKeywordSet(number) }
-            button.bezelStyle = .rounded
-            button.controlSize = .small
-            button.font = Typography.label.nsFont
+            button.bezelStyle = .push
+            button.controlSize = .regular
+            button.font = PanelControls.font
             button.lineBreakMode = .byTruncatingTail
             button.setAccessibilityIdentifier("keywording.set.\(number)")
             button.setButtonType(.pushOnPushOff)
             buttons.append(button)
         }
         setButtons = buttons
-        super.init(spacing: 6)
+        super.init(spacing: 8)
         setAccessibilityIdentifier("keywording")
         progress.style = .bar
         progress.controlSize = .small
@@ -48,38 +46,45 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         // milliseconds of the main thread for each change.
         progress.alphaValue = 0
         progress.setAccessibilityElement(false)
-        keywords.orientation = .vertical
-        keywords.alignment = .leading
-        keywords.spacing = 2
         more.isHidden = true
-        keywords.addArrangedSubview(more)
-        entry.placeholderString = "Add keywords, separated by commas"
-        entry.font = Typography.label.nsFont
+        tokens.onRemove = { [weak panels] path in _ = panels?.remove(path) }
+        tokens.onHeightChange = { [weak self] delta in self?.rowsChanged(by: delta) }
         entry.delegate = self
         entry.setAccessibilityIdentifier("keywording.entry")
-        completions.orientation = .vertical
-        completions.alignment = .leading
-        completions.spacing = 0
+        entry.toolTip = "Keywords separated by commas; a keyword inside another as Places > Portugal"
         completions.isHidden = true
-        sets.controlSize = .small
-        sets.font = Typography.label.nsFont
+        completions.onChoose = { [weak self] place in
+            guard let self, matches.indices.contains(place) else { return }
+            complete(with: matches[place])
+            commit()
+        }
+        sets.controlSize = .regular
+        sets.font = PanelControls.font
         sets.target = self
         sets.action = #selector(chooseSet)
         sets.setAccessibilityIdentifier("keywording.sets")
         let grid = NSGridView(views: stride(from: 0, to: buttons.count, by: 3).map { start in
             buttons[start ..< start + 3].map { $0 as NSView }
         })
-        grid.rowSpacing = 4
-        grid.columnSpacing = 4
+        grid.rowSpacing = 6
+        grid.columnSpacing = 6
+        for column in 0 ..< grid.numberOfColumns {
+            grid.column(at: column).xPlacement = .fill
+        }
         addFullWidth(summary)
         addFullWidth(progress)
-        addFullWidth(keywords)
+        addFullWidth(tokens)
+        addFullWidth(more)
         addFullWidth(entry)
         addFullWidth(completions)
-        addFullWidth(PanelControls.row([
-            PanelControls.label("Keyword Set", secondary: true), sets, KeywordPainterButton(model: panels.model),
+        addFullWidth(PanelControls.form([
+            ("Keyword Set", PanelControls.row([sets, KeywordPainterButton(model: panels.model)])),
         ]))
         addFullWidth(grid)
+        stack.setCustomSpacing(4, after: progress)
+        stack.setCustomSpacing(4, after: tokens)
+        stack.setCustomSpacing(4, after: entry)
+        stack.setCustomSpacing(12, after: completions)
         for button in buttons {
             button.widthAnchor.constraint(equalTo: stack.widthAnchor, multiplier: 1.0 / 3, constant: -4).isActive = true
         }
@@ -113,10 +118,8 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
 
     // MARK: - Showing
 
-    /// The keywords of the photos selected, in rows kept from one selection to the next: a held arrow key shows
-    /// another photo's keywords every few frames, and making a row's controls, and measuring the panel when its
-    /// height changes, were much of its frames' work. Rows hold one line each, so the panel's height changes with
-    /// their number alone, by their heights (`keywordsHeight`).
+    /// The keywords of the photos selected, as tokens kept from one selection to the next (`KeywordTokensView`),
+    /// which say when their height changes, so the panel isn't measured again for a held arrow key's every photo.
     private func showSelection(_ selection: PanelSelection) {
         MetadataPanelView.set(summary, to: Self.summary(of: selection))
         let enabled = selection.isAvailable && !selection.ids.isEmpty
@@ -128,39 +131,13 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         let rows = ordered.map { "\($0.path.text) \($0.count)" } + ["\(all.count)"]
         guard rows != shown.rows else { return }
         shown.rows = rows
-        let before = keywordsHeight
-        while keywordRows.count < ordered.count {
-            let row = KeywordRow(panels: panels)
-            keywords.insertArrangedSubview(row, at: keywordRows.count)
-            row.widthAnchor.constraint(equalTo: keywords.widthAnchor).isActive = true
-            keywordRows.append(row)
-        }
-        for (place, row) in keywordRows.enumerated() {
-            if ordered.indices.contains(place) {
-                row.show(ordered[place].path, on: ordered[place].count, of: selection.ids.count)
-            } else {
-                row.hide()
-            }
-        }
+        tokens.show(ordered, of: selection.ids.count)
         more.stringValue = "and \(all.count - ordered.count) more, in the Keyword List"
-        more.isHidden = all.count <= ordered.count
-        if keywordsHeight != before {
-            rowsChanged(by: keywordsHeight - before)
+        let hidesMore = all.count <= ordered.count
+        if more.isHidden != hidesMore {
+            more.isHidden = hidesMore
+            rowsChanged()
         }
-    }
-
-    /// The height of the keywords' rows shown and of the line below them, from a row's and the line's own, measured
-    /// once.
-    private var keywordsHeight: CGFloat {
-        let rows = keywordRows.count(where: { !$0.isHidden })
-        let lines = rows + (more.isHidden ? 0 : 1)
-        guard lines > 0 else { return 0 }
-        if rowHeight == nil {
-            rowHeight = KeywordRow(panels: panels).fittingSize.height
-            moreHeight = more.fittingSize.height
-        }
-        return CGFloat(rows) * (rowHeight ?? 0) + (more.isHidden ? 0 : moreHeight ?? 0)
-            + CGFloat(lines - 1) * keywords.spacing
     }
 
     /// Keywords shown at most: a selection of thousands can have hundreds.
@@ -189,11 +166,33 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         }
         for (place, button) in setButtons.enumerated() {
             let keyword = active?.keyword(forShortcut: place + 1)
-            button.title = keyword?.name ?? "—"
+            let enabled = keyword != nil && !selection.ids.isEmpty
+            let title = Self.title(keyword?.name, key: place + 1, enabled: enabled)
+            if button.attributedTitle != title {
+                button.attributedTitle = title
+            }
             button.toolTip = keyword.map { "⌥\(place + 1): \($0.displayName)" }
-            button.isEnabled = keyword != nil && !selection.ids.isEmpty
+            button.isEnabled = enabled
             button.state = keyword.flatMap(selection.hasEverywhere) == true ? .on : .off
         }
+    }
+
+    /// A keyword set's button: the keyword's name, then its key in the small size and the secondary colour.
+    private static func title(_ name: String?, key: Int, enabled: Bool) -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        style.lineBreakMode = .byTruncatingMiddle
+        let title = NSMutableAttributedString(string: name ?? "—", attributes: [
+            .font: PanelControls.font, .paragraphStyle: style,
+            .foregroundColor: enabled ? NSColor.controlTextColor : .disabledControlTextColor,
+        ])
+        if name != nil {
+            title.append(NSAttributedString(string: "  ⌥\(key)", attributes: [
+                .font: PanelControls.noteFont, .paragraphStyle: style,
+                .foregroundColor: enabled ? NSColor.secondaryLabelColor : .tertiaryLabelColor,
+            ]))
+        }
+        return title
     }
 
     private func showProgress(_ shown: PanelProgress?) {
@@ -273,87 +272,11 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
     }
 
     private func showCompletions() {
-        for view in completions.arrangedSubviews {
-            view.removeFromSuperview()
-        }
-        for (place, match) in matches.enumerated() {
-            let detail = match.path.parent.map { "  \($0.displayName)" } ?? ""
-            let synonym = match.synonym.map { "  (\($0))" } ?? ""
-            let button = ActionButton(title: match.path.name + synonym + detail + "  \(match.count)") { [weak self] in
-                self?.complete(with: match)
-                self?.commit()
-            }
-            button.isBordered = false
-            button.alignment = .left
-            button.lineBreakMode = .byTruncatingTail
-            button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            button.font = Typography.label.nsFont
-            button.setAccessibilityIdentifier("keywording.completion.\(place)")
-            if place == highlighted {
-                button.contentTintColor = .controlAccentColor
-                button.font = NSFontManager.shared.convert(Typography.label.nsFont, toHaveTrait: .boldFontMask)
-            }
-            completions.addArrangedSubview(button)
-        }
+        let wasHidden = completions.isHidden
+        completions.show(matches, highlighted: highlighted)
         completions.isHidden = matches.isEmpty
-        rowsChanged()
-    }
-}
-
-/// A keyword of the photos selected in the Keywording panel: its name, marked when only some of them have it, with
-/// how many do, and a button that takes it off them all.
-private final class KeywordRow: NSStackView {
-    private let name = PanelControls.label("")
-    private let partial = PanelControls.label("", secondary: true)
-    private var remove: NSButton?
-    private var path: KeywordPath?
-
-    init(panels: LibraryPanels) {
-        super.init(frame: .zero)
-        let remove = PanelControls.symbolButton("minus.circle", "Remove", identifier: "") { [weak self, weak panels] in
-            guard let path = self?.path else { return }
-            _ = panels?.remove(path)
+        if !wasHidden || !matches.isEmpty {
+            rowsChanged()
         }
-        self.remove = remove
-        orientation = .horizontal
-        alignment = .centerY
-        spacing = 6
-        distribution = .fill
-        name.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        for view in [name, partial, remove] {
-            addArrangedSubview(view)
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    /// Shows `path`, on `count` of the `selected` photos.
-    func show(_ path: KeywordPath, on count: Int, of selected: Int) {
-        isHidden = false
-        let isPartial = count < selected
-        let counted = "\(count) of \(selected)"
-        guard path != self.path || isPartial == partial.isHidden || counted != partial.stringValue else { return }
-        self.path = path
-        name.stringValue = isPartial ? path.displayName + " *" : path.displayName
-        name.toolTip = isPartial ? "On \(count) of \(selected) photos" : "On every photo selected"
-        name.setAccessibilityIdentifier("keywording.keyword.\(path.text)")
-        partial.stringValue = counted
-        partial.isHidden = !isPartial
-        let description = "Remove “\(path.displayName)”"
-        remove?.toolTip = description
-        remove?.setAccessibilityLabel(description)
-        remove?.setAccessibilityIdentifier("keywording.remove.\(path.text)")
-    }
-
-    /// Out of the panel until another keyword needs a row, its controls named for none.
-    func hide() {
-        guard !isHidden else { return }
-        isHidden = true
-        path = nil
-        name.setAccessibilityIdentifier("")
-        remove?.setAccessibilityIdentifier("")
     }
 }

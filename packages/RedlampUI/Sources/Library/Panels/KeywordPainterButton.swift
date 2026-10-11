@@ -10,11 +10,14 @@ final class KeywordPainterButton: NSButton {
     init(model: EditorModel?) {
         self.model = model
         super.init(frame: .zero)
-        title = "Painter"
+        title = ""
+        image = NSImage(systemSymbolName: "paintbrush.pointed", accessibilityDescription: "Painter")
+        imagePosition = .imageOnly
+        setAccessibilityLabel("Painter")
         setButtonType(.pushOnPushOff)
-        bezelStyle = .rounded
-        controlSize = .small
-        font = Typography.label.nsFont
+        bezelStyle = .push
+        controlSize = .regular
+        font = PanelControls.font
         toolTip = "\(ShortcutAction.keywordPainter.title) (\(ShortcutAction.keywordPainter.combos.first?.display ?? "")): "
             + "click or drag over photos in the grid to put the keyword set's keywords on them, ⌥ to take them off"
         setAccessibilityIdentifier("keywording.painter")
