@@ -130,6 +130,15 @@
             let (a, b) = (scratch.photo("A.jpg"), scratch.photo("B.jpg"))
             let picks = "Picks \(scratch.folder.lastPathComponent.suffix(8))"
 
+            // Marked is in the Library panel only while a photo is marked. While it's the target, as no collection
+            // is yet, B marks the photo selected (DEC-62).
+            try app.main { $0.select(b) }
+            try app.press(.toggleMark)
+            try app.wait("B marked, and Marked the target in the list", timeout: 30) { model in
+                model.library.item(for: b)?.metadata.mark == true
+                    && app.sourceRowLabel("sources.marked")?.contains(", target collection") == true
+            }
+
             // ⌘N, the target as it's made.
             try app.main { $0.select(a) }
             try app.press(.newCollection)
@@ -153,11 +162,12 @@
                 app.sourceRowLabel("collections.\(picks)") == "\(picks), 2 photos, target collection"
             }
 
-            // Marked's menu makes it the target: the next photo is marked.
+            // Marked's menu makes it the target again: the next photo is marked.
             try app.rightClickSourceRow("sources.marked", choosing: "Set as Target Collection")
             try app.wait("Marked the target", timeout: 30) { model in
                 model.librarySources.target == nil
                     && app.sourceRowLabel("collections.\(picks)") == "\(picks), 2 photos"
+                    && app.sourceRowLabel("sources.marked")?.contains(", target collection") == true
             }
             try app.main { $0.select(a) }
             try app.choose(.addToTargetCollection)
