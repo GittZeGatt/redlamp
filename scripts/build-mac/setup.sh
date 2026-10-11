@@ -10,11 +10,11 @@
 #       https://raw.githubusercontent.com/pdcgomes/redlamp/main/scripts/build-mac/setup.sh
 #   bash /tmp/build-mac-setup.sh [--gate] [--no-settings] [--no-fixtures]
 #
-# Afterwards it is ~/build-mac/redlamp/scripts/build-mac/setup.sh (over SSH, `ssh -t`, for sudo).
-# Running it again brings everything up to date and leaves what's right as it is.
+# Afterwards it is ~/src/build-mac/redlamp/scripts/build-mac/setup.sh (over SSH, `ssh -t`, for
+# sudo). Running it again brings everything up to date and leaves what's right as it is.
 #
-# In order: Homebrew, which installs the Command Line Tools; the clone at ~/build-mac/redlamp, put
-# on origin/main; the tools in scripts/build-mac/Brewfile; Xcode, from the App Store (mas) when the
+# In order: Homebrew, which installs the Command Line Tools; the clone at ~/src/build-mac/redlamp,
+# put on origin/main; the tools in scripts/build-mac/Brewfile; Xcode, from the App Store (mas) when the
 # App Store's version is the main Mac's, or else from Apple's developer downloads (xcodes, which
 # asks for an Apple Account), with its licence, first launch, Metal toolchain and iOS SDK; PATH for
 # commands run over SSH; mise's tools (mise.toml); the sample raws (2.1 GB); `mise run generate`;
@@ -33,7 +33,7 @@ MACOS_VERSION="${MACOS_VERSION:-26.6.2}"
 XCODE_VERSION="${XCODE_VERSION:-26.6}"
 XCODE_BUILD="${XCODE_BUILD:-17F113}"
 REPOSITORY="${REDLAMP_REPOSITORY:-https://github.com/pdcgomes/redlamp.git}"
-ROOT="$HOME/build-mac"
+ROOT="$HOME/src/build-mac"
 CLONE="$ROOT/redlamp"
 XCODE_STORE_ID=497799835
 # Xcode, the iOS platform, the sample raws and a build or two.
@@ -241,7 +241,7 @@ shell_environment() {
     # shellcheck disable=SC2016
     write_block "$HOME/.zshenv" \
         'case ":$PATH:" in *:/opt/homebrew/bin:*) ;; *) export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH" ;; esac' \
-        'export MISE_TRUSTED_CONFIG_PATHS="$HOME/build-mac"'
+        'export MISE_TRUSTED_CONFIG_PATHS="$HOME/src/build-mac"'
     # shellcheck disable=SC2016
     write_block "$HOME/.zprofile" 'eval "$(/opt/homebrew/bin/brew shellenv)"'
     export MISE_TRUSTED_CONFIG_PATHS="$ROOT"
