@@ -25,6 +25,7 @@
             + PanelScenarios.all
             + RenameScenarios.all
             + MoveEditsScenarios.all
+            + FilesScenarios.all
             + DragScenarios.all
             + MenuBarScenarios.all
             + ShortcutScenarios.all
