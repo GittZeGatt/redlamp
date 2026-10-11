@@ -44,5 +44,6 @@ One sentence on the photo and the look, the settings as a short list people can 
 ## Files
 
 - `video/scripts/showcase.py`: renders a showcase from a raw and its recipe with the CLI, and lays out the carousel's slides.
-- `~/src/redlamp-social/renders/showcases/<id>/`: the renders, the slides and the recipe for each showcase.
+- `~/src/redlamp-social/showcases/<id>/`: the package the owner posts from, with only what's posted: `slide-1.jpg` to `slide-6.jpg`, `caption.txt`, `alt.txt` (a line per slide) and `post.txt`.
+- `~/src/redlamp-social/work/showcases/<id>/`: the showcase's `showcase.json`, its recipe, the CLI's renders and the contact sheet.
 - The posts themselves join `docs/social/posts.json` once the room handles carousels.

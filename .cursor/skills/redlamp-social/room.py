@@ -4,13 +4,14 @@
     python3 .cursor/skills/redlamp-social/room.py room [--canvas PATH]
     python3 .cursor/skills/redlamp-social/room.py thumbs [--canvas PATH]
     python3 .cursor/skills/redlamp-social/room.py published POST [--at TIME] [--link URL] [--canvas PATH]
+    python3 .cursor/skills/redlamp-social/room.py package [EPISODE]
 
 status checks docs/social/posts.json: each part has the fields it needs and no others; times are ISO
 with an offset; platforms are instagram or tiktok; each post's episode and hook exist; every line on
 screen has at most 17 characters, and a hook or end line at most two lines; the captions, alt text and
 lines have no em or en dashes, exclamation marks, emoji or banned words; and each caption has the
 standard lines and ends with 3 to 5 hashtags. It then lists each episode's storyboard files in
-video/out/features/boards/ and its renders in ~/src/redlamp-social/renders/, says whether the room's schedule
+video/out/features/boards/ and its renders in its package, ~/src/redlamp-social/reels/<episode>/, says whether the room's schedule
 and images are up to date, and gives the next three posts due. It exits with 1 when a check fails.
 
 room writes the room's POSTS block, between its // POSTS:BEGIN and // POSTS:END lines, from posts.json,
@@ -29,6 +30,12 @@ platforms still to come.
 The owner can also mark an Instagram post Posted in the room itself, with its link. room copies each
 such mark into the same record (a link given later is added to its entry), and status lists the marks
 it hasn't copied yet, so the record stays the one place the publisher looks.
+
+package writes each reel's package, ~/src/redlamp-social/reels/<episode>/, beside its renders: caption.txt
+(the caption of its first post, and caption-<hook>.txt for a post whose caption differs), alt.txt and
+post.txt (each post's file, when and where it goes out, trial reels marked, and its cover's time), from
+posts.json; one episode, or every episode that has a render. The owner sends the folder to his phone and
+posts from it, so it holds only what's posted; drafts and variations go to ~/src/redlamp-social/work/.
 
 Paths are this checkout's, so the script works in any worktree. Boards are rendered, not committed, so a
 board missing here is taken from the main checkout or another worktree that has it. The room is
@@ -50,7 +57,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 ROOT = Path(__file__).resolve().parents[3]
 SCHEDULE = "docs/social/posts.json"
 BOARDS = "video/out/features/boards"
-RENDERS = Path.home() / "src" / "redlamp-social" / "renders"
+REELS = Path.home() / "src" / "redlamp-social" / "reels"
 PUBLISHED = Path.home() / "src" / "redlamp-social" / "state" / "published.json"
 
 PLATFORMS = {"instagram": "Instagram", "tiktok": "TikTok"}
@@ -282,15 +289,15 @@ def board(name, trees):
     return None
 
 
-def renders():
-    """The names in the renders folder, or None and why when this shell can't read it."""
+def renders(episode):
+    """The names in an episode's package, or None and why when this shell can't read it."""
+    folder = REELS / episode
     try:
-        return set(os.listdir(RENDERS)), ""
+        return {f for f in os.listdir(folder) if not f.startswith(".")}, ""
     except FileNotFoundError:
-        return set(), "~/src/redlamp-social/renders/ doesn't exist yet"
+        return set(), ""
     except OSError:
-        return None, "this shell can't read ~/src/redlamp-social/renders/"
-
+        return None, f"this shell can't read {folder}"
 
 def images(schedule, trees):
     """Each episode's hook and result frames as data URIs, by "<episode>-hook" and "<episode>-result",
@@ -471,10 +478,7 @@ def status(canvas):
         print(f"  Warning: {warning}")
 
     trees = checkouts()
-    names, why = renders()
-    print(f"\nStoryboards in {BOARDS}/ and renders in ~/src/redlamp-social/renders/:")
-    if why:
-        print(f"  {why}" + (", so the renders weren't checked." if names is None else "."))
+    print(f"\nStoryboards in {BOARDS}/ and renders in each package in {REELS}/:")
     for episode in episodes:
         eid = str(episode.get("id"))
         print(f"  {eid} {episode.get('title')}, {episode.get('stage')}")
@@ -487,8 +491,9 @@ def status(canvas):
                 have.append(name + ("" if hit[1] == ROOT else f" (from {hit[1]})"))
         print(f"      boards: {listed(have, missing)}")
         files = [p["file"] for p in posts if p.get("episode") == eid and isinstance(p.get("file"), str)]
+        names, why = renders(eid)
         if names is None:
-            print("      renders: not checked")
+            print(f"      renders: not checked ({why})")
         else:
             print(f"      renders: {listed([f for f in files if f in names], [f for f in files if f not in names])}")
 
@@ -581,10 +586,49 @@ def by_hand(canvas, post, at, link):
     return 0
 
 
+def package(only):
+    schedule = load()
+    zone = zone_of(schedule)
+    episodes = {e.get("id"): e for e in schedule.get("episodes", []) if isinstance(e, dict)}
+    posts = [p for p in schedule.get("posts", []) if isinstance(p, dict)]
+    if only and only not in episodes:
+        sys.exit(f"posts.json has no episode {only}: its episodes are {', '.join(map(str, episodes))}")
+    wrote = []
+    for eid, episode in episodes.items():
+        folder = REELS / str(eid)
+        if only and eid != only or not only and not folder.is_dir():
+            continue
+        own = [p for p in posts if p.get("episode") == eid]
+        if not own:
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        first = own[0]
+        (folder / "caption.txt").write_text(first.get("caption", "").rstrip("\n") + "\n")
+        for post in own[1:]:
+            if post.get("caption") != first.get("caption"):
+                (folder / f"caption-{post.get('hook')}.txt").write_text(post.get("caption", "").rstrip("\n") + "\n")
+        alts = dict.fromkeys(p.get("alt", "") for p in own)
+        (folder / "alt.txt").write_text("\n\n".join(a for a in alts if a) + "\n")
+        lines = [f"{eid}: {episode.get('title')}", ""]
+        for post in own:
+            at = moment(post.get("at"))
+            where = " and ".join(PLATFORMS.get(p, str(p)) for p in post.get("platforms", []))
+            kind = ", as a trial reel, which only non-followers see" if post.get("trial") else ""
+            caption = "caption.txt" if post.get("caption") == first.get("caption") else f"caption-{post.get('hook')}.txt"
+            ready = "" if (folder / str(post.get("file"))).is_file() else " (not rendered yet)"
+            lines.append(f"{post.get('file')}{ready}: {when(at, zone) if at else post.get('at')}, {where}{kind}. "
+                         f"Hook {str(post.get('hook')).upper()}. Cover at {post.get('coverMs', 0) / 1000:.1f} s "
+                         f"({Path(str(post.get('file'))).stem}-cover.jpg). Caption in {caption}.")
+        (folder / "post.txt").write_text("\n".join(lines) + "\n")
+        wrote.append(str(eid))
+    print(f"Wrote the packages for {', '.join(wrote)} in {REELS}" if wrote else f"No packages to write in {REELS}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("status", "room", "thumbs", "published"))
-    parser.add_argument("post", nargs="?", help="published: the post's ID in posts.json")
+    parser.add_argument("command", choices=("status", "room", "thumbs", "published", "package"))
+    parser.add_argument("post", nargs="?", help="published: the post's ID in posts.json; package: one episode")
     parser.add_argument("--at", help="published: when it went out, ISO with an offset; now if left out")
     parser.add_argument("--link", help="published: its address on Instagram")
     parser.add_argument("--canvas", type=Path, help="the room's .canvas.tsx, if not the default one")
@@ -594,6 +638,8 @@ def main():
         if not args.post:
             parser.error("published needs the post's ID, such as e01")
         sys.exit(by_hand(canvas, args.post, args.at, args.link))
+    if args.command == "package":
+        sys.exit(package(args.post))
     sys.exit({"status": status, "room": room, "thumbs": thumbs}[args.command](canvas))
 
 

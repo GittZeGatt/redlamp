@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// Renders a feature video (docs/plans/2026-10-10-feature-videos.md) into ~/src/redlamp-social/renders/,
-// named by its post's file in docs/social/posts.json (e01-a.mp4), as H.264 at 1080 × 1920: the opener,
-// then the episode with its score, and the cover each post uses (its coverMs) as a JPEG beside it.
+// Renders a feature video (docs/plans/2026-10-10-feature-videos.md) into its package,
+// ~/src/redlamp-social/reels/<episode>/, named by its post's file in docs/social/posts.json (e01-a.mp4), as
+// H.264 at 1080 × 1920: the opener, then the episode with its score, and the cover each post uses (its
+// coverMs) as a JPEG beside it; then room.py package writes the package's caption, alt text and posting
+// note. Drafts and variations go to ~/src/redlamp-social/work/reels/<episode>/, outside the package.
 // Draws the frames and writes the scores first if any is missing.
 //   npm run features -- --episode=e01            every hook the episode posts with
 //   npm run features -- --episode=e01 --hook=b   one hook
@@ -18,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { renderUntilPainted } from "./blank.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const out = path.join(os.homedir(), "src/redlamp-social/renders");
+const social = path.join(os.homedir(), "src/redlamp-social");
 const ID = "FeatureVideo";
 const FPS = 30;
 
@@ -66,6 +68,9 @@ if (manifest.standIn) console.warn(`note: ${episode}'s real result is a stand-in
 const { NODE_USE_ENV_PROXY: _, ...env } = process.env;
 env.NO_PROXY = env.no_proxy = ["localhost", "127.0.0.1", "::1", env.NO_PROXY].filter(Boolean).join(",");
 const remotion = (...a) => execFileSync("npx", ["remotion", ...a], { cwd: root, stdio: "inherit", env });
+// The package holds only what's posted; drafts and variations are work.
+const packaged = !draft && !variation.length && score === "score";
+const out = path.join(social, packaged ? "reels" : "work/reels", base);
 mkdirSync(out, { recursive: true });
 for (const post of chosen) {
   const props = JSON.stringify({ episode, hook: post.hook, score, opener: true, guides: false });
@@ -83,4 +88,7 @@ for (const post of chosen) {
     await renderUntilPainted(cover, () => remotion("still", ID, cover, `--props=${props}`, `--frame=${frame}`, "--image-format=jpeg", "--jpeg-quality=92"));
   }
   console.log(path.relative(process.cwd(), video));
+}
+if (packaged) {
+  execFileSync("python3", [path.join(root, "../.cursor/skills/redlamp-social/room.py"), "package", base], { stdio: "inherit" });
 }

@@ -20,7 +20,8 @@ Read `~/.cursor/skills-cursor/canvas/SKILL.md` once per session before the first
 | Storyboards | `video/out/features/boards/`: `<episode>.png` is the sheet, and `<episode>-hook.png` and `<episode>-result.png` are the two frames the room shows. They are rendered, not committed, so `room.py` takes a board from the main checkout or another worktree when this one hasn't got it. |
 | The owner's photos | `~/src/redlamp-social/photos/`, outside the repository, which agents can read (they can't read `~/Pictures` or `~/Downloads`). Each photo keeps its `.redlamp` sidecar, so a result is the owner's edit. |
 | The publisher's records | `~/src/redlamp-social/state/`: what was posted, its links and numbers. No tokens. `published.json` is what's on Instagram, by post, whoever posted it; the room shows it, and the publisher never posts a post that's in it. |
-| Renders | `~/src/redlamp-social/renders/`, one file per post, named by its `file` (`e01-a.mp4`), outside every worktree. The publisher uploads from it, and the owner opens it in Finder for a TikTok sitting. |
+| Packages | One folder per episode, holding only what's posted, so the owner can send it to his phone and post from it: `~/src/redlamp-social/reels/<episode>/` (each post's video named by its `file`, its cover, and `caption.txt`, `alt.txt` and `post.txt`, which `room.py package` writes from posts.json) and `~/src/redlamp-social/showcases/<id>/` (the slides, caption, alt text and posting note, which `video/scripts/showcase.py` writes). The publisher uploads from them too. |
+| Work | `~/src/redlamp-social/work/`: drafts and variations of reels, showcases' renders, recipes and contact sheets, and stills. Never in a package. |
 | Tokens and app secrets | The macOS Keychain, and nowhere else |
 | Where things stand | [room.py](room.py) `status` |
 

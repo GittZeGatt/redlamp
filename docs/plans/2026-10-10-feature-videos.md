@@ -64,7 +64,7 @@ E01 sets the template (`scripts/features/boards/e01.py`), and every episode is b
 - **The score**, `npm run features-score -- --episode e01`: the theme in the series' arrangement, synthwave, with the episode's sounds on their frames, and the opener's sound with the theme's lead-in over its end; with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
 - **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's line and the title come in, and the header takes over. The frames script draws it before each episode, with the episode's hook, its title and its feature.
 - **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays the frames and the two scores, with `episode`, `hook`, `score`, `opener` and `guides` props. Each episode that's built also has an entry of its own beside it (E01, E02), which opens it in one click; add the episode to `featureEpisodes` in `src/Root.tsx` when its board is built. With `opener` off it plays the episode alone, on its cue sheet's own frames, as `scripts/storyboard.mjs` and the review stills expect.
-- **The render**, `npm run features -- --episode=e01 [--hook=a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
+- **The render**, `npm run features -- --episode=e01 [--hook=a] [--draft]`, writes the post's file and its cover into the episode's package, `~/src/redlamp-social/reels/<episode>/`, once the owner has approved the cut, and `room.py package` adds its `caption.txt`, `alt.txt` and `post.txt`, so the owner can send the folder to his phone and post from it. A draft is half the size, named `…-draft.mp4`, and goes to `~/src/redlamp-social/work/reels/<episode>/` with any variation, outside the package.
 
 ## Sound
 
@@ -449,7 +449,7 @@ The owner found the cut from the opener's sound into the theme too abrupt and as
 
 ### E01 approved, 10 October 2026
 
-The owner approved E01's cut, in the dashboard look with the synthwave score and the lead-in, as the series' first reel: hook A posts on Tue 27 Oct and hook B goes out as an Instagram trial reel on Thu 29 Oct. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e01-a.mp4`, `e01-b.mp4`).
+The owner approved E01's cut, in the dashboard look with the synthwave score and the lead-in, as the series' first reel: hook A posts on Tue 27 Oct and hook B goes out as an Instagram trial reel on Thu 29 Oct. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e01-a.mp4`, `e01-b.mp4`), since moved to its package, `~/src/redlamp-social/reels/e01/`.
 
 ### E02, 10 October 2026
 
@@ -463,7 +463,7 @@ The first cut, in E01's dashboard look with the synthwave score and the lead-in,
 
 ### E02 approved, 10 October 2026
 
-The owner approved E02's cut with its own track: hook A posts on Fri 30 Oct and hook B goes out as an Instagram trial reel on Sun 1 Nov. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e02-a.mp4`, `e02-b.mp4`).
+The owner approved E02's cut with its own track: hook A posts on Fri 30 Oct and hook B goes out as an Instagram trial reel on Sun 1 Nov. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e02-a.mp4`, `e02-b.mp4`), since moved to its package, `~/src/redlamp-social/reels/e02/`.
 
 ### E08, 10 October 2026
 

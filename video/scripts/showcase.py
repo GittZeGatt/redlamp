@@ -5,7 +5,7 @@ Every picture on the slides is Redlamp's own render of the raw, made here with t
 the settings slide is drawn from the recipe's values, so what a slide says is what made the picture.
 The plan is docs/plans/2026-10-11-edit-showcases.md.
 
-    video/scripts/showcase.py ~/src/redlamp-social/renders/showcases/s01
+    video/scripts/showcase.py ~/src/redlamp-social/work/showcases/s01
 
 The folder holds `showcase.json`:
 
@@ -17,10 +17,14 @@ The folder holds `showcase.json`:
      "gridFrame": [0.5, 0.05, 0.8],        the film looks' frame: centre x, top, width (shares of the photo)
      "caption": "One sentence on the photo and its look.",
      "trademarks": "Kodak, Portra ... are trademarks of their owners. Redlamp isn't affiliated with them.",
-     "hashtags": ["#rawediting", ...]}
+     "hashtags": ["#rawediting", ...],
+     "alt": ["Slide 1's alt text.", ...],
+     "post": "Where and when it goes out, for post.txt."}
 
-It writes `renders/` (the CLI's renders and the recipes that made them), `slide-1.jpg` to
-`slide-6.jpg` at 1080 x 1350, `contact.jpg` and `caption.txt`. `--layout-only` reuses the renders.
+The folder is the showcase's work folder, ~/src/redlamp-social/work/showcases/<id>/: it keeps `renders/`
+(the CLI's renders and the recipes that made them) and `contact.jpg`. The package the owner posts from,
+~/src/redlamp-social/showcases/<id>/, gets `slide-1.jpg` to `slide-6.jpg` at 1080 x 1350, `caption.txt`,
+and `alt.txt` and `post.txt` when the spec has them. `--layout-only` reuses the renders.
 """
 
 import argparse
@@ -437,6 +441,11 @@ def caption(recipe, spec, best_name):
     return "\n".join(lines) + "\n"
 
 
+# Only what's posted goes in a showcase's package, which the owner sends to his phone; the renders,
+# recipes and contact sheet stay in its work folder.
+PACKAGES = Path.home() / "src" / "redlamp-social" / "showcases"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("folder", type=Path)
@@ -470,11 +479,17 @@ def main():
         one_look(best, photos[f"look-{spec['best']}"], spec),
         call_to_action(),
     ]
+    package = PACKAGES / folder.name
+    package.mkdir(parents=True, exist_ok=True)
     for i, slide in enumerate(slides, 1):
-        slide.save(folder / f"slide-{i}.jpg", quality=95, subsampling=0)
+        slide.save(package / f"slide-{i}.jpg", quality=95, subsampling=0)
     contact(slides).save(folder / "contact.jpg", quality=90)
-    (folder / "caption.txt").write_text(caption(edit, spec, best))
-    print(f"wrote {len(slides)} slides, contact.jpg and caption.txt to {folder}")
+    (package / "caption.txt").write_text(caption(edit, spec, best))
+    if spec.get("alt"):
+        (package / "alt.txt").write_text("\n".join(f"Slide {i}: {text}" for i, text in enumerate(spec["alt"], 1)) + "\n")
+    if spec.get("post"):
+        (package / "post.txt").write_text(spec["post"].rstrip("\n") + "\n")
+    print(f"wrote {len(slides)} slides, caption.txt, alt.txt and post.txt to {package}, and contact.jpg to {folder}")
 
 
 if __name__ == "__main__":
