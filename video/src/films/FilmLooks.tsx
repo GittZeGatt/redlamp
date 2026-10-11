@@ -4,6 +4,7 @@ import { type Framing, framing } from "../kit/camera";
 import { type CueSheet, grid, onBeats } from "../kit/grid";
 import { textWidth } from "../kit/measure";
 import { SafeZones } from "../kit/SafeZones";
+import { springs } from "../layout";
 import { color, easeOut, font } from "../theme";
 import { copy, DEFAULT_HOOK, type Hook, hooks } from "./copy";
 import cueSheet from "./cues.json";
@@ -217,6 +218,7 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
       <div style={{ position: "absolute", left: LEFT, top: LABEL_TOP + 160 }}>
         <Words text={hookLines[0]} start={-18} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 6} style={{ textShadow: text.textShadow }} />
         <Words text={hookLines[1]} start={-14} size={hookSize} stagger={2} mode="pop" align="left" out={b(sheet.looks[0]) - 5} style={{ textShadow: text.textShadow }} />
+        <HookLogo frame={frame} out={b(sheet.looks[0]) - 4} />
       </div>
       {index >= 0 && frame < cue("drop") + 8 ? <Label frame={frame} look={looks[index]} start={start} end={end} size={nameSize} /> : null}
 
@@ -231,6 +233,24 @@ export function FilmLooks({ hook, musicSrc, guides }: FilmLooksProps) {
       {guides ? <SafeZones /> : null}
       {music ? <Html5Audio src={staticFile(music)} /> : null}
     </AbsoluteFill>
+  );
+}
+
+/**
+ * Redlamp's lockup under the hook from the first frame, so the brand is there before anything moves: the
+ * one-colour white version, which the brand allows on a photograph, unaltered, with more than its clear
+ * space (a quarter of the mark's height) above it, leaving just after the hook's lines.
+ */
+function HookLogo({ frame, out }: { frame: number; out: number }) {
+  const { fps } = useVideoConfig();
+  const o = spring({ frame: frame - out, fps, config: springs.snap });
+  if (o > 0.999) return null;
+  const height = 80;
+  return (
+    <Img
+      src={staticFile("synced/brand/logo/redlamp-lockup-white.svg")}
+      style={{ display: "block", height, width: (height * 192.37) / 48, marginTop: height * 0.4, opacity: 1 - o, transform: `translateY(${-o * height * 0.4}px)` }}
+    />
   );
 }
 

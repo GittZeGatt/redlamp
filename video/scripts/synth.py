@@ -154,6 +154,26 @@ def saturate(x, drive=1.5):
     return np.tanh(x * drive) / np.tanh(drive)
 
 
+def drive(x, amount=4.0, tone=None, asym=0.0):
+    """A waveshaper, as an overdriven amp or a distortion pedal: `x` pushed by `amount` into a soft clip, an
+    `asym` bias adding the even harmonics a valve adds, and the result levelled back to `x`'s own peak;
+    `tone` (Hz) low-passes what the clipping adds above it, so the grit growls rather than fizzes."""
+    y = np.tanh(amount * x + asym) - np.tanh(asym)
+    if tone:
+        y = lowpass(y, tone)
+    peak = np.max(np.abs(y))
+    return y * (np.max(np.abs(x)) / peak) if peak > 0 else y
+
+
+def crush(x, bits=8, rate=12000):
+    """A bit crusher: `x` held at `rate` samples a second, aliasing as an old sampler does, and rounded to
+    `bits` bits."""
+    step = SR / rate
+    held = x[(np.floor(np.arange(len(x)) / step) * step).astype(int)]
+    levels = 2 ** (bits - 1)
+    return np.round(held * levels) / levels
+
+
 # ---------------------------------------------------------------- drums
 
 
@@ -173,6 +193,26 @@ def snare(velocity=1.0, tone=185.0, length=0.24, snap=1.0):
     noise = bandpass(rng.standard_normal(len(t)), 4200, octaves=2.4) * np.exp(-t / 0.085) * 1.6 * snap
     attack = highpass(rng.standard_normal(len(t)) * np.exp(-t / 0.002), 3000) * 0.6
     return saturate((0.55 * body + noise + attack) * np.clip(t / 0.0008, 0, 1), 1.4) * velocity
+
+
+def punch_kick(velocity=1.0, length=0.36):
+    """A hard kick: a short, steep fall in pitch, the beater's click, and the body driven so its harmonics
+    punch through on a phone's speaker."""
+    t = times(length)
+    pitch = 48 + 170 * np.exp(-t / 0.022) + 60 * np.exp(-t / 0.003)
+    body = np.sin(2 * np.pi * np.cumsum(pitch) / SR) * np.exp(-t / 0.2) * np.clip((length - t) / 0.04, 0, 1)
+    beater = bandpass(rng.standard_normal(len(t)), 3500, octaves=1.5) * np.exp(-t / 0.004) * 0.5
+    return drive(body + beater, 3.0, asym=0.1) * velocity
+
+
+def grit_snare(velocity=1.0, tone=200.0, length=0.22, grit=1.0):
+    """A snare with grit: the snare's body with more noise in its wires, driven hard and crushed a little,
+    as a sampled snare from the nineties cracks."""
+    t = times(length)
+    wires = bandpass(rng.standard_normal(len(t)), 3000, octaves=2.0) * np.exp(-t / 0.11) * 0.5
+    x = snare(1.0, tone=tone, length=length, snap=1.3) + wires
+    x = drive(x, 2.5 + 3 * grit, asym=0.05)
+    return (0.75 * x + 0.25 * grit * crush(x, 8, 11025)) * velocity
 
 
 def gated_snare(velocity=1.0, tone=180.0, gate=0.24):
@@ -256,6 +296,18 @@ def bass(note, velocity=1.0, length=0.24, bright=1.0):
     cutoff = 180 + 2100 * bright * np.exp(-t / 0.05)
     tone = harmonics(hz(note), len(t), SAW, cutoff=cutoff, order=3) + 0.6 * np.sin(2 * np.pi * phase_of(hz(note - 12), len(t)))
     return saturate(tone * envelope(len(t), 0.003, 0.18, 0.35, 0.03) * velocity, 1.3) * 0.6
+
+
+def grit_bass(note, velocity=1.0, length=0.24, bright=1.0, grit=1.0):
+    """A driven bass: two saws a few cents apart through a low-pass that opens on each note, pushed through
+    `drive` by `grit` and crushed a little, so its harmonics growl in the low mids where a phone plays
+    them; no sine under it, so it takes little headroom below 60 Hz."""
+    t = times(length)
+    cutoff = 240 + 2600 * bright * np.exp(-t / 0.07)
+    saws = sum(harmonics(hz(note) * 2 ** (c / 1200), len(t), SAW, cutoff=cutoff, order=2) for c in (-7, 7)) * 0.5
+    tone = saws * envelope(len(t), 0.002, 0.2, 0.55, 0.03)
+    dirty = drive(tone, 2 + 5 * grit, tone=4800, asym=0.15)
+    return (0.8 * dirty + 0.2 * grit * crush(dirty, 10, 16000)) * velocity * 0.55
 
 
 def sub(note, seconds, velocity=1.0):

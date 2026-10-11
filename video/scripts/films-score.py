@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """
-The film looks reel's score: a synthwave track in F sharp minor at 112.5 BPM, 14 bars and 29.9 seconds
+The film looks reel's score: a dark, driving synth track in E minor at 112.5 BPM, 14 bars and 29.9 seconds
 on the reel's cue sheet, src/films/cues.json, whose build drives the cuts: a look a bar, then every two
 beats, every beat and every half beat, a camera's shutter firing on each, until the shutters run like a
-motor drive into the stop; the drop lands the pull back to the contact sheet.
+motor drive into the stop; the drop lands heavily on the pull back to the contact sheet.
 
-The chords go round the minor key's i, VI, III and VII, a bar each, with their colour notes: F#m9, Dmaj9,
-Amaj9 and E6, then F#m9 and Dmaj9 again; through the build they change every two beats and climb, Bm9,
-C#m7, Dmaj9, E6 and Dmaj7#11, to C#7sus4 letting down to C#7 into the drop on F#m9; on the end line
-Dmaj9, Bm9 and C#7, and F#m9 on the last hit. The riff is two bars on a lead that rings as it's struck:
-F sharp, A and up to C sharp, then B, A and down to E; F sharp, A and B, then A, F sharp and down to C
-sharp. The answer climbs over A major and E: E, G sharp and B, then A, G sharp and E; E, F sharp and G
-sharp up to B, held. Through the build a single line rises a step every two beats from C sharp to B,
-held through the stop, and the drop brings the riff back doubled an octave up; the closing phrase turns
-through E sharp, the leading note, to F sharp on the last hit.
+The owner asked for it darker, grittier and more energetic than the first cut's F sharp minor synthwave
+(11 October 2026). So the harmony turns on E minor's darkest neighbours: Em, C, then F, the Neapolitan
+a semitone above the tonic, and B7 with a flat ninth, a bar each; Em and C again; then through the build
+the bass climbs a semitone every two beats, F, F sharp, G, G sharp and A (F, F#m7b5, G, E/G# and Am), to
+Bsus4 letting down to B7b9 into the drop on Em; on the end line C, Am and B7b9, then Em, F and B7b9, and
+Em on the last hit. The riff, on a driven saw lead in the middle of the range, grinds the flat second
+against the tonic: E, G and F held, then E, D and down to B; E, G and A, then G, F and E. The answer goes
+over F and B7b9 to the tritone and the flat ninth, and through the build a line rises a semitone every two
+beats from F to B, held through the stop; the drop brings the riff back doubled an octave down.
 
-Under it a supersaw pad on each chord, opening through the build; a pluck in sixteenths climbing each
-half bar, brighter as the cuts quicken; an octave bass in eighths; a kick on 1 and 3 with a push on the
-and of 4 from the first look, a gated snare on 2 and 4 from the looks every two beats, four on the floor
-and a tambourine in sixteenths from the looks every beat, and a snare roll doubling into the stop. On the
-drop, a deep kick, a crash and air rising as the picture pulls back; the icons coming up across the sheet
-ring a run of glass up the chord.
+What makes it gritty: a bass of detuned saws driven into a soft clip and crushed a little (`grit_bass`),
+in eighths from the first look and sixteenths from the looks every beat; a punchy kick whose body is
+driven (`punch_kick`); a snare with noise in its wires, driven and crushed (`grit_snare`); hats in eighths,
+then sixteenths, then sixteenths with open hats on the off-beats as the cuts quicken; a driven supersaw
+pad held low in the range for weight in the low mids, and a pluck in sixteenths kept dark. The build
+screws a Shepard tone tighter under a riser and a snare roll doubling into the stop, where the rhythm stops
+and a breath is drawn in while the drop's chord swells up through it; the drop is a trailer's low brass,
+a deep kick, the punch kick and a dark crash, with air rising as the picture pulls back.
 
     python3 scripts/films-score.py     writes public/films/score.wav and score.json
 """
@@ -80,20 +82,19 @@ def cut(x, seconds):
     return out
 
 
-# Each chord: the bass's root; the pad's voicing, moving by step from chord to chord and keeping the
-# colour notes: F sharp minor's ninth and the major sevenths and ninths of D and A, E's sixth, B minor's
-# ninth, D's sharp eleventh, and C sharp's suspended fourth letting down to E sharp, the leading note;
-# and the pluck's four notes, climbing.
+# Each chord: the bass's root, climbing a semitone at a time through the build; and the pad's voicing,
+# held between E3 and F4 for weight in the low mids, its voices moving by step: the Neapolitan F's A
+# against the tonic's G, B7's flat ninth (C) and its D sharp, the half-diminished F sharp's C.
 VOICINGS = {
-    "F#m9": (42, [57, 61, 64, 68], [66, 69, 73, 76]),
-    "Dmaj9": (38, [57, 61, 64, 66], [62, 66, 69, 76]),
-    "Amaj9": (45, [56, 61, 64, 71], [61, 64, 68, 71]),
-    "E6": (40, [56, 59, 61, 64], [64, 68, 71, 73]),
-    "Bm9": (47, [57, 61, 62, 66], [62, 66, 69, 73]),
-    "C#m7": (49, [56, 59, 61, 64], [61, 64, 68, 71]),
-    "Dmaj7#11": (38, [56, 61, 62, 66], [62, 66, 68, 73]),
-    "C#7sus4": (49, [54, 56, 59, 61], [61, 66, 68, 71]),
-    "C#7": (49, [53, 56, 59, 61], [61, 65, 68, 71]),
+    "Em": (40, [52, 55, 59, 64]),
+    "C": (36, [52, 55, 60, 64]),
+    "F": (41, [53, 57, 60, 65]),
+    "B7b9": (47, [51, 54, 57, 60]),
+    "F#m7b5": (42, [52, 54, 57, 60]),
+    "G": (43, [50, 55, 59, 62]),
+    "E/G#": (44, [52, 56, 59, 64]),
+    "Am": (45, [52, 57, 60, 64]),
+    "Bsus4": (47, [52, 54, 59, 64]),
 }
 CHORDS = sheet["chords"]
 
@@ -102,26 +103,27 @@ def chord(beat):
     return VOICINGS[[name for name, first, _ in CHORDS if first <= beat][-1]]
 
 
-# The riff and its answer, [beat, note, beats] from where each starts; the rising line through the build;
-# and the closing phrase, through E sharp to F sharp on the last hit.
-RIFF = [(0, 78, 0.5), (0.5, 81, 0.5), (1, 85, 1.0), (2, 83, 0.5), (2.5, 81, 0.5), (3, 76, 1.0),
-        (4, 78, 0.5), (4.5, 81, 0.5), (5, 83, 1.0), (6, 81, 0.5), (6.5, 78, 0.5), (7, 73, 1.0)]
-ANSWER = [(0, 76, 0.5), (0.5, 80, 0.5), (1, 83, 1.0), (2, 81, 0.5), (2.5, 80, 0.5), (3, 76, 1.0),
-          (4, 76, 0.5), (4.5, 78, 0.5), (5, 80, 1.0), (6, 83, 2.0)]
-RISE = [(0, 73, 2), (2, 76, 2), (4, 78, 2), (6, 80, 2), (8, 81, 2), (10, 83, 2)]
-CLOSE = [(0, 78, 0.5), (0.5, 81, 0.5), (1, 85, 1.0), (2, 83, 0.5), (2.5, 81, 0.5), (3, 77, 1.0), (4, 78, 4.0)]
+# The riff and its answer, [beat, note, beats] from where each starts; the line rising through the build;
+# and the closing phrase, through D sharp to E on the last hit.
+RIFF = [(0, 64, 0.5), (0.5, 67, 0.5), (1, 65, 1.0), (2, 64, 0.5), (2.5, 62, 0.5), (3, 59, 1.0),
+        (4, 64, 0.5), (4.5, 67, 0.5), (5, 69, 1.0), (6, 67, 0.5), (6.5, 65, 0.5), (7, 64, 1.0)]
+ANSWER = [(0, 65, 0.5), (0.5, 69, 0.5), (1, 72, 1.0), (2, 71, 0.5), (2.5, 69, 0.5), (3, 65, 1.0),
+          (4, 63, 0.5), (4.5, 66, 0.5), (5, 69, 1.0), (6, 72, 1.0), (7, 71, 1.0)]
+RISE = [(0, 65, 2), (2, 66, 2), (4, 67, 2), (6, 68, 2), (8, 69, 2), (10, 71, 2)]
+CLOSE = [(0, 64, 0.5), (0.5, 67, 0.5), (1, 65, 1.0), (2, 64, 0.5), (2.5, 62, 0.5), (3, 63, 1.0), (4, 64, 4.0)]
 
 
 def placed(start, phrase):
     return [(start + beat, note, beats) for beat, note, beats in phrase]
 
 
-TUNE = placed(FIRST, RIFF) + placed(PAIRS, ANSWER) + placed(EVERY, RIFF) + placed(HALVES, RISE) + placed(DROP, RIFF)
-TUNE += placed(END, CLOSE)
+TUNE = (placed(FIRST, RIFF) + placed(PAIRS, ANSWER) + placed(EVERY, RIFF) + placed(HALVES, RISE) + placed(DROP, RIFF)
+        + placed(END, CLOSE))
 
-# How fully the arrangement plays from each cue: held back under the hook, growing with each quickening,
-# full on the drop, easing a little for the end line.
-SWELL = [(0, 0.55), (FIRST, 0.7), (PAIRS, 0.8), (EVERY, 0.8), (HALVES, 0.86), (32, 0.93), (36, 1.0), (DROP, 1.25), (END_LINE, 1.1), (END, 1.15), (LAST, 1.0)]
+# How fully the arrangement plays from each cue: held back under the hook, growing with each quickening of
+# the cuts, full on the drop and as the end card arrives.
+SWELL = [(0, 0.7), (FIRST, 0.8), (PAIRS, 0.84), (EVERY, 0.86), (HALVES, 0.88), (32, 0.92), (36, 1.0), (DROP, 1.25),
+         (END_LINE, 1.1), (END, 1.15), (LAST, 1.0)]
 
 
 def swell(beat):
@@ -136,128 +138,161 @@ CLIMB = (0, 1, 2, 1, 2, 3, 2, 3)
 def score():
     s.reset(112)
     length = LENGTH + 4
-    room = s.reverb(2.2, 0.5, 0.02)
+    room = s.reverb(1.8, 0.4, 0.015)
     drums, low, pads, arps, lead, shutters, fx = (s.Bus(length) for _ in range(7))
     kicks = []
 
-    # The first frame lands as a deep hit under the hook, with the pad swelling in.
-    drums.add(at(0), s.deep_kick(0.85), gain=0.6, wet=0.12)
-    fx.add(at(0), s.boom(1.6, 0.7), gain=0.2, wet=0.3)
+    # The first frame lands as a deep hit under the hook, the driven bass holding E through a closed
+    # filter and a low drone swelling in.
+    drums.add(at(0), s.deep_kick(0.9), gain=0.55, wet=0.1)
+    drums.add(at(0), s.punch_kick(0.9), gain=0.35, wet=0.05)
+    kicks.append(0.0)
+    fx.add(at(0), s.boom(1.6, 0.8), gain=0.18, wet=0.25)
+    held = s.lowpass(s.grit_bass(40, 0.9, at(FIRST) - 0.05, bright=0.2, grit=0.8), 700)
+    low.add(at(0), held * np.clip(np.arange(len(held)) / s.SR / 0.8, 0, 1), gain=0.5, wet=0.05)
+    pads.add(at(0), s.drone([40, 47, 52], at(FIRST), cutoff=600, release=0.6, attack=1.2), gain=0.26, wet=0.3)
 
-    # The pad on each chord, a supersaw opening through the build; the last chord rings out.
+    # The pad on each chord: a supersaw low in the range, driven a little, opening through the build; the
+    # last chord rings out.
     for name, first, beats in CHORDS:
-        _, voicing, _ = VOICINGS[name]
+        _, voicing = VOICINGS[name]
         final = first == LAST
-        cutoff = 4600 if first >= DROP else opening(first, 0, STOP, 1500, 3800)
+        cutoff = 2600 if first >= DROP else opening(first, 0, STOP, 900, 2200)
         seconds = (BEATS - LAST) * BEAT if final else beats * BEAT
-        pad = s.supersaw(voicing, seconds, voices=7, spread=18, cutoff=cutoff, attack=0.7 if first == 0 else 0.03,
-                         release=1.8 if final else 0.2)
+        pad = s.supersaw(voicing, seconds, voices=7, spread=16, cutoff=cutoff, attack=0.9 if first == 0 else 0.02,
+                         release=1.8 if final else 0.15)
+        pad = s.drive(pad, 1.8, tone=3200)
         if final:
-            pad = dying(pad, 3.5)
-        pads.add(at(first), pad, gain=0.11 * swell(first), wet=0.4)
+            pad = dying(pad, 3.0)
+        pads.add(at(first), pad, gain=0.15 * swell(first), wet=0.3)
 
-    # The pluck in sixteenths, climbing each half bar; dark and quiet under the hook, brightening as the
-    # cuts quicken, doubled an octave up from the drop, with an echo a dotted eighth later.
+    # The pluck in sixteenths, climbing each half bar an octave above the pad, kept dark: muffled under the
+    # hook and opening only a little as the cuts quicken.
     for i, beat in enumerate(playing(0, LAST, 0.25)):
-        notes = chord(beat)[2]
-        note = notes[CLIMB[round(beat * 4) % 8]]
-        bright = 0.12 + 0.2 * beat / FIRST if beat < FIRST else opening(beat, FIRST, STOP, 0.35, 0.85) if beat < DROP else 0.85
-        tone = s.pluck(note, 0.8, 0.16, bright=bright)
-        level = 0.16 * swell(beat) * (0.5 + 0.5 * min(1, beat / FIRST))
-        arps.add(at(beat), tone, gain=level, pan_to=(-0.3, 0.3)[i % 2], wet=0.25)
-        arps.add(at(beat + 0.75), s.lowpass(tone, 2200), gain=level * 0.35, pan_to=(0.4, -0.4)[i % 2], wet=0.45)
-        if beat >= DROP:
-            arps.add(at(beat), s.pluck(note + 12, 0.6, 0.14, bright=0.6), gain=level * 0.4, pan_to=(0.35, -0.35)[i % 2], wet=0.3)
+        note = chord(beat)[1][CLIMB[round(beat * 4) % 8]] + 12
+        bright = 0.1 + 0.12 * beat / FIRST if beat < FIRST else opening(beat, FIRST, STOP, 0.25, 0.5) if beat < DROP else 0.5
+        tone = s.lowpass(s.pluck(note, 0.85, 0.14, bright=bright), 2600)
+        level = 0.1 * swell(beat) * (0.5 + 0.5 * min(1, beat / FIRST))
+        arps.add(at(beat), tone, gain=level, pan_to=(-0.3, 0.3)[i % 2], wet=0.2)
 
-    # The bass holds its root under the hook, then plays octaves in eighths from the first look; the last
-    # root rings out.
-    held = s.bass(42, 0.8, at(FIRST) - 0.05, bright=0.15)
-    low.add(at(0), held * np.clip(np.arange(len(held)) / s.SR / 0.6, 0, 1), gain=0.3, wet=0.05)
-    for beat in playing(FIRST, LAST, 0.5):
-        root = chord(beat)[0]
-        octave = 12 if round(beat * 2) % 2 else 0
-        bright = opening(beat, FIRST, STOP, 0.3, 0.65) if beat < DROP else 0.75
-        low.add(at(beat), s.bass(root + octave, 0.9 if not octave else 0.7, 0.2, bright=bright), gain=0.24 * swell(beat), wet=0.04)
-    low.add(at(LAST), dying(s.bass(54, 0.9, 3.5, bright=0.35), 1.4), gain=0.32, wet=0.15)
-
-    # The beat: a kick through a wall under the hook; a kick on 1 and 3 with a push on the and of 4 from the
-    # first look; four on the floor from the looks every beat; a gated snare on 2 and 4 from the looks every
-    # two beats; hats in eighths from then, a tambourine in sixteenths from the looks every beat, and a
-    # snare roll doubling into the stop.
-    for beat in range(1, FIRST):
-        drums.add(at(beat), s.lowpass(s.kick(0.9), 220), gain=0.45, wet=0.02)
-        kicks.append(at(beat))
-    for beat in playing(FIRST, LAST, 0.5):
-        if beat < EVERY and beat % 4 not in (0, 2, 3.5) or beat >= EVERY and beat % 1:
+    # The driven bass: octaves in eighths from the first look, sixteenths from the looks every beat, the
+    # grit rising with the build; the last root rings out.
+    for beat in playing(FIRST, LAST, 0.25):
+        sixteenth = round(beat * 4) % 2
+        if sixteenth and (beat < EVERY or beat >= END):
             continue
-        drums.add(at(beat), s.kick(0.95, length=0.32, click=0.7), gain=0.55 * swell(beat) ** 0.5, wet=0.03)
+        root = chord(beat)[0]
+        octave = 12 if round(beat * 4) % 4 == 2 else 0
+        grit = opening(beat, FIRST, STOP, 0.5, 1.0) if beat < DROP else 1.0
+        bright = opening(beat, FIRST, STOP, 0.35, 0.7) if beat < DROP else 0.75
+        velocity = (0.95, 0.6, 0.8, 0.6)[round(beat * 4) % 4]
+        low.add(at(beat), s.grit_bass(root + octave, velocity, 0.13 if sixteenth else 0.2, bright=bright, grit=grit),
+                gain=0.34 * swell(beat), wet=0.02)
+    low.add(at(LAST), dying(s.grit_bass(52, 0.9, 3.5, bright=0.3, grit=0.7), 1.4), gain=0.32, wet=0.12)
+
+    # The beat: a kick through a wall under the hook; the punch kick on 1 and 3 with a push on the and of 4
+    # from the first look, four on the floor from the looks every beat, with a pickup on the last sixteenth
+    # of each bar through the run of half beats; the gritty snare on 2 and 4 from the looks every two beats;
+    # hats on the off-beats from the first look, in eighths from the looks every two beats, sixteenths from the looks every beat, and open hats on the off-beats from
+    # the run of half beats; a snare roll doubling into the stop.
+    for beat in range(1, FIRST):
+        drums.add(at(beat), s.lowpass(s.punch_kick(0.9), 260), gain=0.45, wet=0.02)
         kicks.append(at(beat))
+    for beat in playing(FIRST, LAST, 0.25):
+        on = beat % 1 == 0 and (beat >= EVERY or beat % 4 in (0, 2)) or beat < EVERY and beat % 4 == 3.5
+        pickup = HALVES <= beat < STOP and beat % 4 == 3.75
+        if on or pickup:
+            drums.add(at(beat), s.punch_kick(0.95 if on else 0.6), gain=0.6 * swell(beat) ** 0.5, wet=0.02)
+            kicks.append(at(beat))
     for beat in playing(PAIRS, LAST, 1):
         if beat % 2 == 1 and not 36 <= beat < DROP:
-            drums.add(at(beat), s.gated_snare(0.85, tone=190, gate=0.22), gain=0.3 * swell(beat) ** 0.5, pan_to=0.05, wet=0.3)
-    for beat in playing(PAIRS, LAST, 0.5):
-        drums.add(at(beat), s.hat(0.8 if beat % 1 else 0.45), gain=0.07 * swell(beat), pan_to=0.3, wet=0.05)
-    for beat in playing(EVERY, LAST, 0.25):
-        drums.add(at(beat), s.tambourine((0.45, 0.3, 0.9, 0.3)[round(beat * 4) % 4]), gain=0.09 * swell(beat), pan_to=-0.3, wet=0.15)
+            drums.add(at(beat), s.grit_snare(0.9, tone=195, grit=0.6 + 0.4 * min(1, beat / DROP)),
+                      gain=0.36 * swell(beat) ** 0.5, pan_to=0.05, wet=0.18)
+    for beat in playing(FIRST, LAST, 0.25):
+        sixteenth = round(beat * 4) % 2
+        if sixteenth and beat < EVERY or beat < PAIRS and round(beat * 4) % 4 != 2:
+            continue
+        offbeat = round(beat * 4) % 4 == 2
+        opened = offbeat and HALVES <= beat
+        velocity = (0.85 if opened else 0.7) if offbeat else (0.45 if not sixteenth else 0.35)
+        drums.add(at(beat), s.lowpass(s.drive(s.hat(velocity, open=opened), 1.5), 9000), gain=0.04 * swell(beat), pan_to=0.3 - 0.6 * sixteenth,
+                  wet=0.04)
     for first, last, step in ((32, 36, 0.5), (36, 38, 0.25), (38, STOP, 0.125)):
         for beat in np.arange(first, last - 1e-9, step):
             p = (beat - 32) / (STOP - 32)
-            drums.add(at(beat), s.snare(0.3 + 0.6 * p, tone=180 + 90 * p, length=0.14), gain=0.15, pan_to=-0.2 + 0.4 * p, wet=0.25)
+            drums.add(at(beat), s.grit_snare(0.3 + 0.6 * p, tone=180 + 80 * p, length=0.12, grit=0.5 + 0.5 * p),
+                      gain=0.17, pan_to=-0.2 + 0.4 * p, wet=0.18)
 
     # A camera's shutter on every look, a little harder as the cuts quicken.
     for i, beat in enumerate(LOOKS):
         p = i / (len(LOOKS) - 1)
-        shutters.add(at(beat), s.shutter(0.75 + 0.25 * p), gain=0.3 - 0.1 * p, pan_to=(-0.12, 0.12)[i % 2], wet=0.12)
+        shutters.add(at(beat), s.shutter(0.75 + 0.25 * p), gain=0.26 - 0.1 * p, pan_to=(-0.12, 0.12)[i % 2], wet=0.1)
 
-    # The riff on the ringing lead, with an echo a dotted eighth later that stops before the drop and the
-    # last hit; doubled an octave up on the drop.
+    # The riff on a driven saw lead, with an echo a dotted eighth later that stops before the drop and the
+    # last hit; from the drop doubled an octave down.
     for beat, note, beats in TUNE:
         final = beat >= LAST
-        tone = s.chime_lead(note, beats * BEAT * 0.94, 0.9, cutoff=3600 if beat >= DROP else 3000, vibrato=0.12 if beats >= 1 else 0.0)
+        tone = s.saw_lead(note, beats * BEAT * 0.92, 0.9, cutoff=2600 if beat >= DROP else 2100, detune=9,
+                          vibrato=0.1 if beats >= 1 else 0.0)
+        tone = s.drive(tone, 2.5, tone=4200, asym=0.1)
         if final:
             tone = dying(tone, 1.6)
-        level = 0.42 * swell(beat) ** 0.5
-        lead.add(at(beat), tone, gain=level, wet=0.3)
+        level = 0.38 * swell(beat) ** 0.5
+        lead.add(at(beat), tone, gain=level, wet=0.22)
         stop = DROP if beat < DROP else LAST if beat < LAST else BEATS
-        echo = cut(s.lowpass(tone.mean(axis=1), 1800), (stop - beat - 0.75) * BEAT)
-        lead.add(at(beat + 0.75), echo, gain=level * 0.3, pan_to=-0.45, wet=0.5)
-        if DROP <= beat < END or END <= beat < LAST:
-            lead.add(at(beat), s.chime_lead(note + 12, beats * BEAT * 0.9, 0.55, cutoff=4200), gain=level * 0.32, wet=0.4)
+        echo = cut(s.lowpass(tone.mean(axis=1), 1500), (stop - beat - 0.75) * BEAT)
+        lead.add(at(beat + 0.75), echo, gain=level * 0.25, pan_to=-0.45, wet=0.4)
+        if DROP <= beat < LAST:
+            low_tone = s.drive(s.saw_lead(note - 12, beats * BEAT * 0.9, 0.8, cutoff=1600, detune=11), 3.0, tone=3000)
+            lead.add(at(beat), low_tone, gain=level * 0.5, wet=0.15)
 
-    # The build: a riser, and the drop's own chord in the room swelling up into it through the stop.
-    hit = s.supersaw([n + 12 for n in VOICINGS["F#m9"][1]], 1.4, cutoff=5200, attack=0.01, release=0.6)
-    fx.add(at(HALVES), s.riser(at(DROP) - at(HALVES), 300, 7500, curve=2.2), gain=0.05, wet=0.35)
-    fx.add(at(STOP), s.swell_into(hit, at(DROP) - at(STOP), room), gain=0.2, wet=0.0)
+    # The build: a Shepard tone screwing tighter under a riser, then the stop: a breath drawn in, and the
+    # drop's chord swelling up into it.
+    span = int(round((at(STOP) - at(HALVES)) * s.SR))
+    p = np.arange(span) / span
+    fx.add(at(HALVES), s.shepard(0.15 + 1.4 * p**2, 0.25 + 0.75 * p), gain=0.1, wet=0.3)
+    fx.add(at(HALVES), s.riser(at(DROP) - at(HALVES), 200, 5000, curve=2.4), gain=0.06, wet=0.3)
+    fx.add(at(STOP), s.inhale(at(DROP) - at(STOP)), gain=0.12, wet=0.1)
+    hit = s.drive(s.supersaw([n - 12 for n in VOICINGS["Em"][1]] + VOICINGS["Em"][1], 1.6, cutoff=2400, attack=0.01,
+                             release=0.6), 2.0)
+    fx.add(at(STOP), s.swell_into(hit, at(DROP) - at(STOP), room), gain=0.22, wet=0.0)
 
-    # The drop: a deep kick, the chord struck and a crash, and air rising as the picture pulls back; the
-    # icons coming up across the sheet, from the corner the camera left, ring glass up the chord.
-    drums.add(at(DROP), s.deep_kick(1.0), gain=0.5, wet=0.08)
+    # The drop: a trailer's low brass on E, a deep kick and the punch kick, the chord struck, a dark crash,
+    # and air rising as the picture pulls back; the icons coming up across the sheet tick in a muffled run
+    # up the chord.
+    low.add(at(DROP), s.braam([40, 47, 52], 2.6, 1.0), gain=0.36, wet=0.25)
+    drums.add(at(DROP), s.deep_kick(1.0), gain=0.5, wet=0.06)
+    drums.add(at(DROP), s.punch_kick(1.0), gain=0.5, wet=0.03)
     kicks.append(at(DROP))
-    fx.add(at(DROP), s.boom(2.2, 1.0), gain=0.22, wet=0.3)
-    pads.add(at(DROP), hit, gain=0.16, wet=0.3)
-    drums.add(at(DROP), s.lowpass(s.crash(0.9, 3.0, decay=1.3), 6500), gain=0.2, wet=0.35)
-    fx.add(at(DROP), s.whoosh(at(cue["sheet"]) - at(DROP), 300, 2200), gain=0.12, pan_to=-0.1, wet=0.3)
-    run = [66, 69, 73, 76, 78, 81, 85, 88, 90, 93, 97]
+    fx.add(at(DROP), s.boom(2.2, 1.0), gain=0.2, wet=0.25)
+    pads.add(at(DROP), hit, gain=0.16, wet=0.25)
+    drums.add(at(DROP), s.lowpass(s.crash(0.9, 2.6, decay=1.1), 4500), gain=0.2, wet=0.3)
+    fx.add(at(DROP), s.whoosh(at(cue["sheet"]) - at(DROP), 250, 1800), gain=0.12, pan_to=-0.1, wet=0.25)
+    run = [52, 55, 59, 64, 67, 71, 76, 79, 83, 88, 91]
     for i, note in enumerate(run):
-        fx.add(at(DROP + 1) + i * 1.5 / sheet["fps"], s.glass(note, 1.4, 0.5), gain=0.05, pan_to=0.4 - 0.08 * i, wet=0.5)
+        tone = s.lowpass(s.pluck(note, 0.6, 0.12, bright=0.4), 2400)
+        fx.add(at(DROP + 1) + i * 1.5 / sheet["fps"], tone, gain=0.07, pan_to=0.4 - 0.08 * i, wet=0.3)
 
-    # The end line on Dmaj9, and the last hit under the end card: a deep kick, a crash, the last chord
-    # ringing, and the pluck's last chord rising after it into the room.
-    drums.add(at(END_LINE), s.lowpass(s.crash(0.6, 2.0, decay=0.9), 6000), gain=0.1, wet=0.35)
-    drums.add(at(END), s.lowpass(s.crash(0.8, 2.6, decay=1.1), 6500), gain=0.15, wet=0.35)
-    drums.add(at(LAST), s.deep_kick(1.0), gain=0.5, wet=0.1)
+    # The end line and the end card each on a dark crash; the last hit under the end card: the low brass,
+    # a deep kick, a boom and a crash, the last chord ringing and the pluck's last chord rising after it.
+    drums.add(at(END_LINE), s.lowpass(s.crash(0.6, 2.0, decay=0.9), 4500), gain=0.1, wet=0.3)
+    drums.add(at(END), s.lowpass(s.crash(0.8, 2.4, decay=1.0), 4500), gain=0.14, wet=0.3)
+    low.add(at(LAST), dying(s.braam([40, 47, 52], 3.4, 0.9), 1.6), gain=0.3, wet=0.3)
+    drums.add(at(LAST), s.deep_kick(1.0), gain=0.5, wet=0.08)
+    drums.add(at(LAST), s.punch_kick(0.9), gain=0.35, wet=0.03)
     kicks.append(at(LAST))
-    fx.add(at(LAST), s.boom(2.4, 0.9), gain=0.18, wet=0.3)
-    drums.add(at(LAST), s.lowpass(s.crash(0.8, 3.0, decay=1.4), 6000), gain=0.16, wet=0.4)
-    for i, (note, p) in enumerate(zip(VOICINGS["F#m9"][2], (-0.3, -0.1, 0.1, 0.3))):
-        arps.add(at(LAST + i / 4), s.pluck(note + 12, 0.7, 0.3, bright=0.5), gain=0.11, pan_to=p, wet=0.55)
+    fx.add(at(LAST), s.boom(2.4, 0.9), gain=0.18, wet=0.25)
+    drums.add(at(LAST), s.lowpass(s.crash(0.8, 3.0, decay=1.4), 4500), gain=0.15, wet=0.35)
+    for i, (note, pan) in enumerate(zip(VOICINGS["Em"][1], (-0.3, -0.1, 0.1, 0.3))):
+        arps.add(at(LAST + i / 4), s.lowpass(s.pluck(note + 12, 0.7, 0.3, bright=0.4), 2600), gain=0.1, pan_to=pan, wet=0.45)
 
-    pump = s.sidechain(length, kicks, depth=0.5, release=0.18)
-    low.duck(1 - 0.5 * (1 - pump))
-    pads.duck(1 - 0.4 * (1 - pump))
-    arps.duck(1 - 0.2 * (1 - pump))
+    pump = s.sidechain(length, kicks, depth=0.55, release=0.16)
+    low.duck(1 - 0.45 * (1 - pump))
+    pads.duck(1 - 0.45 * (1 - pump))
+    arps.duck(1 - 0.25 * (1 - pump))
     trim(drums, 50)
-    trim(low, 70)
+    trim(low, 60)
+    trim(pads, 90)
     trim(fx, 60)
     trim(shutters, 120)
     return [drums, low, pads, arps, lead, shutters, fx], room
@@ -265,7 +300,7 @@ def score():
 
 def main():
     buses, room = score()
-    mix = s.master(buses, seconds=LENGTH, target=-14.0, ceiling=-1.4, room=room, wet=0.55, presence=3.0, fade=at(BEATS) - at(FADE))
+    mix = s.master(buses, seconds=LENGTH, target=-14.0, ceiling=-1.4, room=room, wet=0.45, presence=1.0, fade=at(BEATS) - at(FADE))
     out = ROOT / "public/films"
     out.mkdir(parents=True, exist_ok=True)
     s.write(out / "score.wav", mix)
