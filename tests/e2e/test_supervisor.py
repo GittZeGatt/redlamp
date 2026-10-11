@@ -245,5 +245,60 @@ class Retries(unittest.TestCase):
         self.assertIn("so they don't count against the run", text)
 
 
+class PassingReport(unittest.TestCase):
+    """The release takes a passing release-tier report for its commit, made before approval with focus allowed."""
+
+    COMMIT = "595a48e6f0e4c1d2a3b4c5d6e7f8091a2b3c4d5e"
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="e2e-supervisor-"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        patcher = mock.patch.object(e2e, "ROOT", self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def report(self, name: str, **fields) -> Path:
+        data = {"tier": "release", "commit": self.COMMIT[:7], "dirty": False, "verdict": "Passed", "focus": True}
+        data.update(fields)
+        path = self.root / "build/e2e" / name / "report.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(data))
+        return path
+
+    def test_a_run_with_focus_is_found_for_the_commit(self):
+        found = self.report("595a48e-focus")
+        self.assertEqual(e2e.passing_report([self.COMMIT], "release", focus=True), found)
+
+    def test_with_focus_asked_for_a_run_in_the_background_isnt_taken(self):
+        background = self.report("595a48e-background", focus=False)
+        self.assertIsNone(e2e.passing_report([self.COMMIT], "release", focus=True))
+        self.assertEqual(e2e.passing_report([self.COMMIT], "release"), background)
+
+    def test_a_report_from_before_focus_was_recorded_counts_as_one_in_the_background(self):
+        older = self.report("595a48e-older")
+        data = json.loads(older.read_text())
+        del data["focus"]
+        older.write_text(json.dumps(data))
+        self.assertIsNone(e2e.passing_report([self.COMMIT], "release", focus=True))
+
+    def test_a_failed_or_dirty_run_or_another_commit_or_a_smaller_tier_isnt_taken(self):
+        self.report("595a48e-failed", verdict="Failed: 1 failed")
+        self.report("595a48e-dirty", dirty=True)
+        self.report("1234567-other", commit="1234567")
+        self.report("595a48e-full", tier="full")
+        self.assertIsNone(e2e.passing_report([self.COMMIT], "release", focus=True))
+
+    def test_the_report_says_whether_focus_was_allowed(self):
+        report = {"tier": "release", "commit": "595a48e", "dirty": False, "verdict": "Passed", "summary": "",
+                  "started": "", "seconds": 60, "machine": "", "load": {"before": 1.0, "after": 1.0},
+                  "scenarios": [], "crashes": [], "hangs": [], "ownerState": {"summary": ""}}
+        run = self.root / "run"
+        run.mkdir()
+        e2e.write_report(run, dict(report, focus=True))
+        self.assertIn("after, with focus allowed.", (run / "report.md").read_text())
+        e2e.write_report(run, dict(report, focus=False))
+        self.assertIn("after, in the background.", (run / "report.md").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

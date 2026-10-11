@@ -9,8 +9,14 @@ clicks and drags; this script launches it, watches it, and judges the run.
     scripts/e2e.py                       # the smoke tier, on a Debug build
     scripts/e2e.py --tier full           # every feature
     scripts/e2e.py --tier release        # full and soak on the QA build, then performance
+    scripts/e2e.py --tier release --focus   # the release check: the app in front for the steps that need it
     scripts/e2e.py --scenario smoke.export --scenario smoke.panel-sliders
     scripts/e2e.py --app build/release/Redlamp.app --tier release   # a build made elsewhere
+
+A run leaves the Mac to the person at it: the app stays in the background, and keys typed meanwhile
+are kept out of it. With --focus, the scenarios that need the app in front (Scenario.needsFocus)
+bring it there for those steps, so a click in another app would fail them: leave the Mac alone, with
+its screen unlocked, until the run ends.
 
 It exits 1 if a scenario fails (a pass on retry is flaky, reported, and doesn't fail the run), the
 app crashes or hangs, a feature the full tiers must cover isn't covered or exempted, or the
@@ -687,7 +693,8 @@ def write_report(run_dir: Path, report: dict) -> None:
         f"**{report['verdict']}.** {report['summary']}",
         "",
         f"Started {report['started']}, took {report['seconds'] / 60:.1f} min on {report['machine']}, "
-        f"load average {report['load']['before']:.1f} before and {report['load']['after']:.1f} after.",
+        f"load average {report['load']['before']:.1f} before and {report['load']['after']:.1f} after, "
+        f"{'with focus allowed' if report.get('focus') else 'in the background'}.",
         "",
         "| Scenario | Result | Time | Main thread p99 | Notes |",
         "| --- | --- | --- | --- | --- |",
@@ -869,8 +876,9 @@ def crash_reports_for(since: float, bundle: str) -> list[Path]:
     return found
 
 
-def passing_report(commits: list[str], tier: str) -> Path | None:
-    """A passing report for one of `commits` at `tier` or a tier that includes it."""
+def passing_report(commits: list[str], tier: str, focus: bool = False) -> Path | None:
+    """A passing report for one of `commits` at `tier` or a tier that includes it; with `focus`, of a run
+    that let the scenarios needing the app in front take focus."""
     includes = {"smoke": {"smoke", "full", "release"}, "full": {"full", "release"}, "release": {"release"}}
     for report in sorted((ROOT / "build/e2e").glob("*/report.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
@@ -878,6 +886,7 @@ def passing_report(commits: list[str], tier: str) -> Path | None:
         except (OSError, json.JSONDecodeError):
             continue
         if data.get("verdict") == "Passed" and not data.get("dirty") and data.get("tier") in includes.get(tier, {tier}) \
+                and (data.get("focus") or not focus) \
                 and any(c.startswith(data.get("commit", "-")) or data.get("commit", "-").startswith(c[:7]) for c in commits):
             return report
     return None
@@ -892,7 +901,9 @@ def main() -> int:
     parser.add_argument("--step", action="append", default=[], help="within them, only steps whose names contain this")
     parser.add_argument("--app", type=Path, help="a test app already built (with the driver compiled in)")
     parser.add_argument("--build", choices=["debug", "qa"], help="what to build (default: qa for release, else debug)")
-    parser.add_argument("--focus", action="store_true", help="let scenarios that need a key window take focus")
+    parser.add_argument("--focus", action="store_true",
+                        help="let the scenarios that need the app in front take focus (leave the Mac alone); "
+                             "with --passing-report, only a run made with it")
     parser.add_argument("--seed", type=int, default=int(time.time()) % 100000)
     parser.add_argument("--timeout", type=float, default=SCENARIO_TIMEOUT, help="seconds a scenario may take")
     parser.add_argument("--no-validation", dest="validation", action="store_false", help="Metal's validation layer off")
@@ -913,7 +924,7 @@ def main() -> int:
         args.out = args.out.resolve()
 
     if args.passing_report:
-        report = passing_report(args.passing_report, args.tier)
+        report = passing_report(args.passing_report, args.tier, args.focus)
         if report:
             print(report)
             return 0
@@ -922,6 +933,9 @@ def main() -> int:
         sha, _ = commit()
         out = args.out or ROOT / "build/e2e" / f"{sha}-blackbox-{dt.datetime.now():%Y%m%d-%H%M%S}"
         return blackbox(args.blackbox.resolve(), out, args.update)
+    if args.focus and screen_locked():
+        sys.exit("The screen is locked, and the app can't come to the front until it's unlocked: unlock it, "
+                 "then leave the Mac alone while the run takes focus")
 
     sha, dirty = commit()
     started = dt.datetime.now().astimezone()
@@ -1065,7 +1079,7 @@ def main() -> int:
     passed = len([s for s in scenarios if s["status"] == "passed"])
     summary = f"{passed} passed, {len(flaky)} flaky, {len(skipped)} skipped, {len(failed)} failed of {len(scenarios)}."
     report = {
-        "format": "app.redlamp.e2e-report", "tier": tier, "commit": sha, "dirty": dirty,
+        "format": "app.redlamp.e2e-report", "tier": tier, "commit": sha, "dirty": dirty, "focus": args.focus,
         "started": started.isoformat(timespec="seconds"), "seconds": (dt.datetime.now().astimezone() - started).total_seconds(),
         "machine": f"{platform.machine()} macOS {platform.mac_ver()[0]}", "load": {"before": load_before, "after": load_after},
         "noisy": max(load_before, load_after) > QUIET_LOAD, "app": str(built), "seed": args.seed,
