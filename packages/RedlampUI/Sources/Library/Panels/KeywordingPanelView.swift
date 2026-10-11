@@ -77,9 +77,12 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         addFullWidth(more)
         addFullWidth(entry)
         addFullWidth(completions)
-        addFullWidth(PanelControls.form([
-            ("Keyword Set", PanelControls.row([sets, KeywordPainterButton(model: panels.model)])),
-        ]))
+        let painter = KeywordPainterButton(model: panels.model)
+        // The set's name is cut short before the painter's button is.
+        sets.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        painter.setContentCompressionResistancePriority(.required, for: .horizontal)
+        painter.setContentHuggingPriority(.required, for: .horizontal)
+        addFullWidth(PanelControls.form([("Keyword Set", PanelControls.row([sets, painter]))]))
         addFullWidth(grid)
         stack.setCustomSpacing(4, after: progress)
         stack.setCustomSpacing(4, after: tokens)
