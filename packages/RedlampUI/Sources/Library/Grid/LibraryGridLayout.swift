@@ -103,8 +103,10 @@ struct GridCellGeometry: Equatable {
     var size: CGFloat
     var style: GridCellStyle
 
-    static let headerHeight: CGFloat = 44
+    static let headerHeight: CGFloat = 46
     static let footerHeight: CGFloat = 22
+    /// An expanded cell's three lines of text.
+    static let textHeight: CGFloat = 38
     /// How far a compact cell's corner badges' middles are from its edges, clear of the selection's ring.
     static let corner: CGFloat = 11
 
@@ -125,9 +127,9 @@ struct GridCellGeometry: Equatable {
         return CGRect(x: inset, y: top, width: side, height: side)
     }
 
-    /// An expanded cell's name, date and settings.
+    /// An expanded cell's name, date and settings, below the colour label's bar.
     var text: CGRect {
-        CGRect(x: inset, y: 4, width: size - 2 * inset, height: Self.headerHeight - 6)
+        CGRect(x: inset, y: label.maxY, width: size - 2 * inset, height: Self.textHeight)
     }
 
     /// The colour label's bar, along the cell's top inside the selection's ring, as wide as the thumbnail's area.

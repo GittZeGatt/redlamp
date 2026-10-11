@@ -162,7 +162,7 @@ enum GridText {
 
     /// Drawn in `space`, the window's, so Core Animation shows it as it is.
     nonisolated static func render(_ key: Key, in space: CGColorSpace?) -> CGImage? {
-        let height = GridCellGeometry.headerHeight - 6
+        let height = GridCellGeometry.textHeight
         let pixels = (width: Int((key.width * key.scale).rounded(.up)), height: Int((height * key.scale).rounded(.up)))
         guard pixels.width > 0, let space = space ?? CGColorSpace(name: CGColorSpace.sRGB), let context = CGContext(
             data: nil, width: pixels.width, height: pixels.height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
