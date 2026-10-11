@@ -1,6 +1,8 @@
 """
 The promo studio's synthesiser: instruments, sound effects and a mastering chain for scores written
-in code, with numpy and nothing sampled, so every score is free to use on any platform.
+in code, with numpy, so every score is our own and free to use on any platform; and a sampler, which
+layers recorded sounds from royalty-free packs kept outside the repository into a score (sample(),
+held()), decoded by ffmpeg.
 
 A score script imports what it needs, adds sounds into Buses at times in seconds, and calls
 master() once. Every random sound draws from `rng`, seeded by reset(), so a score renders the same
@@ -16,7 +18,12 @@ scripts/score.py (Introducing Redlamp) predates this library and keeps its own c
 published score can't change.
 """
 
+import functools
+import os
+import subprocess
+import sys
 import wave
+from pathlib import Path
 
 import numpy as np
 
@@ -1081,6 +1088,101 @@ def handshake(seconds=1.5):
     carrier = np.sin(2 * np.pi * 1800 * t[b:] + 2.2 * chip_noise(rest / SR, 2400))
     out[b:] = 0.25 * carrier + 0.25 * chip_noise(rest / SR, 12000)
     return bandpass(out, 1700, octaves=2.4) * envelope(n, 0.004, 10, 1.0, 0.05)
+
+
+# ---------------------------------------------------------------- samples
+# Recorded sounds from royalty-free packs, layered into a score's own synthesis: drums, drones, pads and
+# impacts with a production sound oscillators alone don't reach. The packs are kept outside the
+# repository, in ~/src/redlamp-social/samples or the folder $REDLAMP_SAMPLES names, each with its row in
+# that folder's LICENCES.md: sample licences allow using the sounds in music, not passing the files on.
+
+SAMPLES = Path(os.environ.get("REDLAMP_SAMPLES") or Path.home() / "src/redlamp-social/samples")
+
+
+@functools.cache
+def decode(path):
+    """Any audio file ffmpeg reads (FLAC, WAV, AIFF, CAF and the rest) as stereo at SR, a mono file in both
+    ears; read once and kept."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "f32le", "-acodec", "pcm_f32le", "-ac", "2",
+                          "-ar", str(SR), "-"], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype="<f4").reshape(-1, 2).astype(float)
+
+
+def resample(x, ratio):
+    """`x` played `ratio` times as fast, as a sampler plays a note away from the one it was recorded at:
+    its spectrum cut or padded to the new length, so nothing aliases as it rises. The padding keeps its end
+    from wrapping round onto its start."""
+    padded = np.concatenate([x, np.zeros((4096,) + x.shape[1:])])
+    m = int(round(len(padded) / ratio))
+    spectrum = np.fft.rfft(padded, axis=0)
+    out = np.zeros((m // 2 + 1,) + x.shape[1:], dtype=complex)
+    keep = min(len(spectrum), len(out))
+    out[:keep] = spectrum[:keep]
+    return np.fft.irfft(out, n=m, axis=0)[: int(round(len(x) / ratio))] * (m / len(padded))
+
+
+@functools.cache
+def recording(name, shift=0.0):
+    """The sample `name`, its path under SAMPLES ("sonic-pi/bd_tek.flac"), at a peak of 1, so a gain means
+    the same for every sample, and pitched `shift` semitones; kept once made. A missing sample stops the
+    score."""
+    path = SAMPLES / name
+    if not path.is_file():
+        sys.exit(f"The sample {path} is missing. Samples aren't in git: fetch its pack from where "
+                 f"{SAMPLES / 'LICENCES.md'} says it came from, or set REDLAMP_SAMPLES to the folder that holds it.")
+    x = decode(path)
+    x = x / max(float(np.max(np.abs(x))), 1e-9)
+    return resample(x, 2 ** (shift / 12)) if shift else x
+
+
+def faded(x, attack, release):
+    """`x` faded in over `attack` seconds and out over `release`."""
+    gain = np.ones(len(x))
+    rise, fall = min(len(x), int(round(attack * SR))), min(len(x), int(round(release * SR)))
+    gain[:rise] = np.linspace(0, 1, rise, endpoint=False)
+    if fall:
+        gain[len(x) - fall:] *= np.linspace(1, 0, fall)
+    return x * (gain[:, None] if x.ndim == 2 else gain)
+
+
+def sample(name, note=None, root=60, start=0.0, seconds=None, attack=0.0, release=0.005, reverse=False, mono=False):
+    """
+    A recorded sound, stereo, as a sampler plays it: the sample `name` under SAMPLES, at a peak of 1. Given
+    `note`, it's pitched there from `root`, the note it was recorded at (fractional for one recorded
+    between notes), by playing it faster or slower, so it's shorter as it rises. It plays from `start`
+    seconds for `seconds` (to its end if not given), both counted as it plays, faded in over `attack` and
+    out over `release`; `reverse` plays the result backwards, so a cymbal swells into the moment it ends
+    on. `mono` mixes it down, for Bus.add to pan.
+    """
+    x = recording(name, 0.0 if note is None else float(note - root))
+    first = int(round(start * SR))
+    last = len(x) if seconds is None else min(len(x), first + int(round(seconds * SR)))
+    out = faded(x[first:last], attack, release)
+    if reverse:
+        out = out[::-1]
+    return out.mean(axis=1) if mono else out
+
+
+def held(name, seconds, note=None, root=60, start=0.0, end=None, cross=0.3, attack=0.05, release=0.3):
+    """
+    A sustained sample, a drone or a pad, held for `seconds` and let go over `release`, stereo: the stretch
+    of it from `start` to `end` seconds (to its end if not given), pitched as sample() pitches it, played
+    over and over, each pass fading into the next over `cross` seconds at equal power, so the seams neither
+    dip nor bulge; swelling in over `attack`.
+    """
+    x = recording(name, 0.0 if note is None else float(note - root))
+    piece = x[int(round(start * SR)) : len(x) if end is None else int(round(end * SR))]
+    cross = min(int(round(cross * SR)), len(piece) // 2)
+    n = int(round((seconds + release) * SR))
+    out = np.zeros((n, 2))
+    rise = np.sin(np.linspace(0, np.pi / 2, cross))[:, None]
+    for i, first in enumerate(range(0, n, len(piece) - cross)):
+        part = piece.copy()
+        if i:
+            part[:cross] *= rise
+        part[len(part) - cross:] *= rise[::-1]
+        out[first : first + len(part)] += part[: n - first]
+    return out * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None]
 
 
 # ---------------------------------------------------------------- mixing
