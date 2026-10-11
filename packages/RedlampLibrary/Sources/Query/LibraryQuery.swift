@@ -235,9 +235,6 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .damaged: ["unreadable"]
             case .wideOpen: ["wideopen"]
             case .ultraWide: ["ultrawide"]
-            case .proposed: ["proposal", "suggested"]
-            case .soft: ["blurred", "blurry", "unsharp", "focus"]
-            case .changedByYou: ["overruled"]
             default: []
             }
         }

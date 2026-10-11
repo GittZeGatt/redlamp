@@ -98,7 +98,9 @@ struct QueryMomentTests {
         #expect(Self.unpicked.description == "is:unpicked-moment")
         #expect(LibraryQuery.Trait.unpickedMoment.title == "Moments without a Pick")
         #expect(LibraryQuery.Trait.unpickedMoment.query == nil)
-        #expect(LibraryQuery.Trait.allCases.filter { $0.query == nil } == [.wideOpen, .unpickedMoment, .damaged])
+        #expect(LibraryQuery.Trait.allCases.filter { $0.query == nil } == [
+            .wideOpen, .unpickedMoment, .damaged, .proposed, .soft, .changedByYou,
+        ])
         for text in ["is:unpicked-moment rating>=3", "-is:unpicked-moment", "(is:panorama,unpicked-moment OR kw:x) a"] {
             let query = try LibraryQuery(parsing: text)
             #expect(query.findsMoments, "\(text)")
@@ -221,7 +223,8 @@ struct QueryMomentTests {
         #expect(typed.first?.term == "is:unpicked-moment")
         let named = await engine.completions("moments with", field: nil, in: Day.wedding, moments: Self.looser(3))
         #expect(named.first?.value == "unpicked-moment" && named.first?.count == 5, "by its title")
-        #expect(await engine.completions("pick", field: .trait).first?.count == 9, "the library's moments")
+        let picks = await engine.completions("pick", field: .trait)
+        #expect(picks.first { $0.value == "unpicked-moment" }?.count == 9, "the library's moments")
 
         let requests = [FacetColumnRequest(.folder, query: Self.unpicked), FacetColumnRequest(.flag, query: .all)]
         var counted: [FacetColumnCounts] = []

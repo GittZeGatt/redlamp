@@ -210,7 +210,8 @@ struct QueryFilterBarTests {
         )
         let studio = PhotoSource.folder(Self.folder("2024/Studio"), includingSubfolders: false)
         let inStudio = await engine.completions("res", field: .trait, in: studio)
-        #expect(inStudio.map(\.term) == ["is:high-resolution"] && inStudio.first?.count == 1)
+        #expect(inStudio.map(\.term) == ["is:high-resolution", "is:soft"], "then Soft Frames' letters in order")
+        #expect(inStudio.first?.count == 1)
         #expect(await engine.completions("loca", field: nil).map(\.term) == ["is:no-location"])
         for trait in LibraryQuery.Trait.allCases {
             guard let query = trait.query else { continue }
