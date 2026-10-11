@@ -104,6 +104,42 @@ struct SourceListTests {
         #expect(selected(library).isEmpty, "the Library section's source no longer shown")
     }
 
+    @Test func `Marked comes into the Library section with its count as a photo is marked, and goes with the last mark`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Shoot/A.JPG", "Shoot/B.JPG"])
+        let model = try await sandbox.open()
+        let (column, window) = column(model)
+        defer { window.contentView = nil }
+        /// What VoiceOver says of the row carrying `identifier` as the column lays it out; nil while it has none.
+        @MainActor func label(_ identifier: String) -> String? {
+            column.layoutSubtreeIfNeeded()
+            return views(SidebarCellView.self, in: column)
+                .first { $0.accessibilityIdentifier() == identifier && !$0.isHiddenOrHasHiddenAncestor }?
+                .accessibilityLabel()
+        }
+        let (a, b) = (sandbox.photo("Shoot/A.JPG"), sandbox.photo("Shoot/B.JPG"))
+        let all = "All Photographs, 2 photos"
+        try await sandbox.eventually { label("sources.all-photographs")?.hasPrefix(all) == true }
+        #expect(label("sources.marked") == nil, "Marked isn't offered while no photo is marked")
+
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { model.items.count == 2 }
+        try await sandbox.cull(.toggleMark, [a])
+        try await sandbox.eventually(seconds: 30) { label("sources.marked") != nil }
+        #expect(label("sources.marked") == "Marked, 1 photo, target collection")
+
+        try await sandbox.cull(.toggleMark, [a, b])
+        try await sandbox.eventually(seconds: 30) { label("sources.marked")?.hasPrefix("Marked, 2 photos") == true }
+        #expect(label("sources.marked") == "Marked, 2 photos, target collection")
+
+        try await sandbox.cull(.toggleMark, [a, b])
+        try await sandbox.eventually(seconds: 30) { label("sources.marked") == nil }
+        #expect(label("sources.marked") == nil, "Marked goes once its last photo is unmarked")
+        #expect(label("sources.all-photographs")?.hasPrefix(all) == true)
+    }
+
     @Test func `a click on a header collapses its section, and Option-click leaves it the only one open`() async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
