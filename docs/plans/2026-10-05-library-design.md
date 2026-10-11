@@ -199,7 +199,7 @@ About 36 bytes a photo, 36 MB for a million, plus 4 bytes a photo for each sort 
 
 ### The query language
 
-One grammar for the filter bar, the command palette, smart collections and `redlamp library search`. Words are free text; `field:value` and comparisons filter; `-` negates; `OR` and parentheses group; quotes keep spaces. Text ignores case, accents and width everywhere (DEC-52), so `sao` finds São Paulo; free text under three characters is matched against folders, cameras, lenses, creators, places and keyword synonyms, and only the text index, which needs three, leaves it out.
+One grammar for the filter bar, the command palette, smart collections and `redlamp library search`. Since the polish phase the filter bar is a search field always on screen above the grid, the query's terms its tokens, with the Attribute row and the Metadata columns opening from it and Search All beside it (DEC-66, DEC-67). Words are free text; `field:value` and comparisons filter; `-` negates; `OR` and parentheses group; quotes keep spaces. Text ignores case, accents and width everywhere (DEC-52), so `sao` finds São Paulo; free text under three characters is matched against folders, cameras, lenses, creators, places and keyword synonyms, and only the text index, which needs three, leaves it out.
 
 ```text
 query    := term (("AND")? term | "OR" term)*
