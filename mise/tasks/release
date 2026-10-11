@@ -90,6 +90,30 @@ if [ "$DRY_RUN" != 1 ]; then
     gh auth status >/dev/null 2>&1 || fail "gh is not signed in"
 fi
 
+# The regression suite (ARC-07) runs before the release is approved, not here: its release tier on
+# this checkout at this commit, with the scenarios that need the app in front taking focus while the
+# Mac is left alone. The release takes that run's passing report, or one for the commit before a
+# version bump that changes nothing else, as when a release that pushed its bump is run again.
+# SKIP_E2E="<why>" skips it and the black-box check, and the reason goes in the log.
+E2E_TIER="${E2E_TIER:-release}"
+E2E_RUN="mise run e2e -- --tier $E2E_TIER --focus"
+E2E_COMMITS=("$SOURCE")
+if git rev-parse -q --verify "$SOURCE^" >/dev/null \
+    && git diff --quiet "$SOURCE^" "$SOURCE" -- . ':(exclude)Version.xcconfig'; then
+    E2E_COMMITS+=("$(git rev-parse "$SOURCE^")")
+fi
+if [ -n "${SKIP_E2E:-}" ]; then
+    echo "==> Regression suite skipped: $SKIP_E2E"
+elif REPORT="$(scripts/e2e.py --passing-report "${E2E_COMMITS[@]}" --tier "$E2E_TIER" --focus)"; then
+    echo "==> Regression suite: a passing $E2E_TIER run with focus, $REPORT"
+elif [ "$DRY_RUN" = 1 ]; then
+    echo "==> Regression suite: no passing $E2E_TIER run with focus for $(git rev-parse --short "$SOURCE"), which a release needs ($E2E_RUN)"
+else
+    fail "no passing $E2E_TIER run of the regression suite with focus for $(git rev-parse --short "$SOURCE").
+       Run it before approving the release, in this checkout at that commit, and leave the Mac alone
+       while it takes focus: $E2E_RUN"
+fi
+
 rm -rf "$OUT"
 mkdir -p "$OUT"
 WORK="$(mktemp -d)"
@@ -184,24 +208,8 @@ CLI_OUTPUT="$("$APP/Contents/Helpers/redlamp" 2>&1)" || CLI_STATUS=$?
 grep -q 'usage: redlamp' <<<"$CLI_OUTPUT" \
     || fail "the bundled CLI does not run (exit status $CLI_STATUS): ${CLI_OUTPUT:-no output}"
 
-# The regression suite (ARC-07): a passing run for this commit, made now on a test build of
-# the same worktree unless one was made earlier (mise run e2e -- --tier "$E2E_TIER"), then the
-# signed app as a black box. SKIP_E2E="<why>" skips it, and the reason goes in the log;
-# E2E_NO_UPDATE=1 leaves out the Sparkle update check.
-E2E_TIER="${E2E_TIER:-release}"
-if [ -n "${SKIP_E2E:-}" ]; then
-    echo "==> Regression suite skipped: $SKIP_E2E"
-else
-    if REPORT="$(scripts/e2e.py --passing-report "$COMMIT" "$SOURCE" --tier "$E2E_TIER")"; then
-        echo "==> Regression suite: a passing $E2E_TIER run of this commit, $REPORT"
-    else
-        echo "==> Regression suite ($E2E_TIER) on a test build of $(git rev-parse --short "$COMMIT")..."
-        mkdir -p "$SRC/tests/fixtures"
-        cp -cR tests/fixtures/raw "$SRC/tests/fixtures/"
-        "$SRC/scripts/e2e.py" --tier "$E2E_TIER" \
-            --out "$PWD/build/e2e/$(git rev-parse --short=7 "$COMMIT")-release-$(date +%Y%m%d-%H%M%S)" \
-            || fail "the regression suite failed; see the report above"
-    fi
+# The signed app as a black box (ARC-07); E2E_NO_UPDATE=1 leaves out the Sparkle update check.
+if [ -z "${SKIP_E2E:-}" ]; then
     echo "==> Checking the signed app as a black box..."
     scripts/e2e.py --blackbox "$APP" ${E2E_NO_UPDATE:+--no-update} || fail "the signed app failed its black-box checks"
 fi

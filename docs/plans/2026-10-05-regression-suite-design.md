@@ -52,6 +52,8 @@ Before every release, one command runs the real app through every feature, the w
 
 `mise/tasks/release`, after the bundled-CLI check and before the dry-run exit, builds the QA variant from the same worktree, runs the release tier (or accepts a passing report for the same commit) and the black-box checks. `REF=HEAD DRY_RUN=1 mise run release` rehearses it all. CI runs the contract tests only, since hosted runners can't be relied on for a Metal device.
 
+Decision (owner, 2026-10-11): the release tier runs as a check before the release is approved, with focus allowed (`mise run e2e -- --tier release --focus`, the Mac left alone), and the release task takes its passing report rather than running the suite. Inside the release, in the background, the release tier had failed the same scenarios in three runs on 0.2.9's candidate. The task looks for the report before it builds or pushes anything, and still checks the signed app as a black box after signing.
+
 ## Spike results (2026-10-05)
 
 A throwaway probe in a Debug build, re-identified as `app.redlamp.mac.e2e` and never activated, tried each way of delivering input on the Sony sample:
