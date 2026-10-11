@@ -134,9 +134,12 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
             editTime.isEnabled = enabled
         }
         Self.set(captured, to: Self.describe(selection.fields))
-        captured.toolTip = selection.fields.captured.map { range in
+        let whole = selection.fields.captured.map { range in
             CaptureTimeChange.describe(time: range.lowerBound) + (range.lowerBound == range.upperBound ? ""
                 : " to " + CaptureTimeChange.describe(time: range.upperBound))
+        }
+        if captured.toolTip != whole {
+            captured.toolTip = whole
         }
     }
 

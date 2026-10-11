@@ -27,7 +27,7 @@
                 let written = try app.main { _ in window().map { Snapshot.capture($0, to: url) } ?? false }
                 try app.expect(written, "\(name) captured")
             }
-            /// The right column's every panel, top to bottom, on the window's background.
+            /// The right column's every panel, top to bottom, on a background of the window's appearance.
             func shootColumn(_ name: String) throws {
                 app.pause(0.8)
                 let url = folder.appending(path: "\(name).png")
@@ -45,10 +45,10 @@
                     picture.size = document.bounds.size
                     NSGraphicsContext.saveGraphicsState()
                     NSGraphicsContext.current = context
-                    window.effectiveAppearance.performAsCurrentDrawingAppearance {
-                        Palette.panelBackground.nsColor.setFill()
-                        NSRect(origin: .zero, size: picture.size).fill()
-                    }
+                    // The panels' own background is glass, which a picture of them alone doesn't show.
+                    let dark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                    NSColor(white: dark ? 0.12 : 0.94, alpha: 1).setFill()
+                    NSRect(origin: .zero, size: picture.size).fill()
                     drawn.draw(in: NSRect(origin: .zero, size: picture.size))
                     NSGraphicsContext.restoreGraphicsState()
                     return (try? picture.representation(using: .png, properties: [:])?.write(to: url)) != nil
