@@ -171,9 +171,13 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         trackers = []
         wasShown = false
         NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSColor.systemColorsDidChangeNotification, object: nil)
         guard let window else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenChanged), name: NSWindow.didChangeScreenNotification, object: window,
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(accentChanged), name: NSColor.systemColorsDidChangeNotification, object: nil,
         )
         screenChanged()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
@@ -231,6 +235,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         texts = [:]
         headerTexts = [:]
         GridBadges.prepare(scale: scale)
+    }
+
+    @objc private func accentChanged() {
+        GridCellLook.forgetAccent()
+        cells.values.forEach { $0.refreshLook() }
+        headers.values.forEach { $0.refreshLook() }
     }
 
     override func viewDidHide() {
@@ -711,7 +721,10 @@ extension LibraryGridView {
             group: group, title: title, detail: detail, open: shownGroups.isOpen(group),
             focused: !shownGroups.isOpen(group) && focusedGroup == group, frame: frame, scale: scale,
         )
-        let key = GroupHeaderText.Key(title: title, detail: detail, width: max(frame.width - 34, 1), scale: scale)
+        let key = GroupHeaderText.Key(
+            title: title, detail: detail, width: max(frame.width - 34, 1), scale: scale,
+            unpicked: picks == 0 && shownGroups.groups.key.usesMoments,
+        )
         guard cell.textKey != key else { return }
         if let image = headerTexts[key] {
             return cell.setText(image, for: key)

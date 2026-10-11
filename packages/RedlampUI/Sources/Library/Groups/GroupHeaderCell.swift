@@ -1,15 +1,18 @@
 import AppKit
 import CoreText
 import QuartzCore
+import RedlampDesign
 
-/// A group's header in the grid (LIB-41), across it: a disclosure triangle, the group's name, and how many
-/// photos and picks it has. Layers only, recycled as the grid scrolls, as its cells are; a click on it opens
-/// or closes the group. Its text is an image drawn off the main thread (`GroupHeaderText`), and its triangle
-/// one of two images every header shares, so opening or closing a group draws no text.
+/// A group's header in the grid (LIB-41), across it as Finder's groups have them: a disclosure chevron, the group's
+/// name, how many photos and picks it has, and a rule under it. Layers only, recycled as the grid scrolls, as its
+/// cells are; a click on it opens or closes the group. Its text is an image drawn off the main thread
+/// (`GroupHeaderText`), and its chevron one of two images every header shares, so opening or closing a group draws no
+/// text. While the active photo is in its closed group, it's ringed as a selected cell is.
 @MainActor
 final class GroupHeaderCell {
     let root = CALayer()
     private let background = CALayer()
+    private let rule = CALayer()
     private let triangle = CALayer()
     private let text = CALayer()
 
@@ -25,13 +28,13 @@ final class GroupHeaderCell {
     private(set) var textKey: GroupHeaderText.Key?
 
     init() {
-        background.cornerRadius = 4
-        background.backgroundColor = NSColor(white: 1, alpha: 0.06).cgColor
-        background.borderColor = NSColor(white: 1, alpha: 0.85).cgColor
-        for layer in [root, background, triangle, text] {
+        background.cornerRadius = 6
+        rule.backgroundColor = CGColor(gray: 1, alpha: 0.12)
+        for layer in [root, background, rule, triangle, text] {
             layer.actions = LibraryGridCell.noActions
         }
         root.addSublayer(background)
+        root.addSublayer(rule)
         root.addSublayer(triangle)
         root.addSublayer(text)
     }
@@ -44,8 +47,10 @@ final class GroupHeaderCell {
         root.frame = frame
         root.isHidden = false
         (self.group, self.title, self.detail) = (group, title, detail)
-        if background.frame.size != frame.size {
+        if background.frame.size != frame.size || rule.contentsScale != scale {
             background.frame = CGRect(origin: .zero, size: frame.size)
+            rule.contentsScale = scale
+            rule.frame = CGRect(x: 0, y: frame.height - 1 / scale, width: frame.width, height: 1 / scale)
         }
         if open != isOpen || triangle.contents == nil || triangle.contentsScale != scale {
             triangle.contentsScale = scale
@@ -55,7 +60,7 @@ final class GroupHeaderCell {
         isOpen = open
         if focused != isFocused {
             isFocused = focused
-            background.borderWidth = focused ? 1.5 : 0
+            refreshLook()
         }
         text.frame = CGRect(
             x: 26, y: (frame.height - GroupHeaderText.height) / 2, width: max(frame.width - 34, 1),
@@ -67,6 +72,14 @@ final class GroupHeaderCell {
     func setText(_ image: CGImage?, for key: GroupHeaderText.Key) {
         textKey = key
         text.contents = image
+    }
+
+    /// Ringed in the accent as it is now while it stands for the active photo, its rule hidden meanwhile.
+    func refreshLook() {
+        background.backgroundColor = isFocused ? GridCellLook.selected : nil
+        background.borderWidth = isFocused ? 2 : 0
+        background.borderColor = isFocused ? GridCellLook.ring : nil
+        rule.isHidden = isFocused
     }
 
     /// Out of sight, waiting to show another group.
@@ -84,18 +97,22 @@ final class GroupHeaderCell {
 /// A header's text, drawn off the main thread into an image its layer shows: the group's name, then how many
 /// photos and picks it has.
 enum GroupHeaderText {
-    static let height: CGFloat = 16
+    static let height: CGFloat = 18
 
     struct Key: Hashable, Sendable {
         var title: String
         var detail: String
         var width: CGFloat
         var scale: CGFloat
+        /// A moment without a pick: its detail is drawn brighter, as one still to cull.
+        var unpicked = false
     }
 
-    /// "42 photos · 3 picks".
+    /// "42 photos · 3 picks", or "42 photos · no pick yet".
     static func detail(count: Int, picks: Int) -> String {
-        "\(count.formatted()) \(count == 1 ? "photo" : "photos") · \(picks.formatted()) \(picks == 1 ? "pick" : "picks")"
+        let photos = "\(count.formatted()) \(count == 1 ? "photo" : "photos")"
+        guard picks > 0 else { return photos + " · no pick yet" }
+        return photos + " · \(picks.formatted()) \(picks == 1 ? "pick" : "picks")"
     }
 
     /// Drawn in `space`, the window's, so Core Animation shows it as it is.
@@ -108,26 +125,27 @@ enum GroupHeaderText {
         context.scaleBy(x: key.scale, y: key.scale)
         let string = NSMutableAttributedString()
         string.append(NSAttributedString(string: key.title, attributes: [
-            kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.emphasizedSystem, 12, nil)
+            kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.emphasizedSystem, 13, nil)
                 as Any,
             kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(gray: 0.92, alpha: 1),
         ]))
-        string.append(NSAttributedString(string: "    " + key.detail, attributes: [
-            kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.system, 11, nil) as Any,
-            kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(gray: 0.62, alpha: 1),
-        ]))
+        let detail: [NSAttributedString.Key: Any] = [
+            kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.system, 11.5, nil) as Any,
+            kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(
+                gray: key.unpicked ? 0.88 : 0.6,
+                alpha: 1,
+            ),
+        ]
+        string.append(NSAttributedString(string: "   " + key.detail, attributes: detail))
         let line = CTLineCreateWithAttributedString(string)
-        let ellipsis = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: [
-            kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.system, 11, nil) as Any,
-            kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(gray: 0.62, alpha: 1),
-        ]))
+        let ellipsis = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: detail))
         let fitted = CTLineCreateTruncatedLine(line, Double(key.width), .end, ellipsis) ?? line
-        context.textPosition = CGPoint(x: 0, y: 4)
+        context.textPosition = CGPoint(x: 0, y: 5)
         CTLineDraw(fitted, context)
         return context.makeImage()
     }
 
-    /// The disclosure triangle, pointing down while the group is open, made once for each screen's scale.
+    /// The disclosure chevron, pointing down while the group is open, made once for each screen's scale.
     @MainActor static func triangle(open: Bool, scale: CGFloat) -> CGImage? {
         let key = TriangleKey(open: open, scale: scale)
         if let image = triangles[key] {
@@ -139,15 +157,15 @@ enum GroupHeaderText {
             space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue,
         ) else { return nil }
-        context.scaleBy(x: scale, y: scale)
-        context.setFillColor(CGColor(gray: 0.8, alpha: 1))
-        if open {
-            context.addLines(between: [CGPoint(x: 2, y: 8.5), CGPoint(x: 10, y: 8.5), CGPoint(x: 6, y: 3.5)])
-        } else {
-            context.addLines(between: [CGPoint(x: 3.5, y: 2), CGPoint(x: 3.5, y: 10), CGPoint(x: 8.5, y: 6)])
-        }
-        context.closePath()
-        context.fillPath()
+        context.translateBy(x: 0, y: CGFloat(side))
+        context.scaleBy(x: scale, y: -scale)
+        let previous = NSGraphicsContext.current
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        Symbol.draw(
+            open ? "chevron.down" : "chevron.right", pointSize: 9.5, weight: .bold, color: RGBA(white: 0.7),
+            centeredAt: CGPoint(x: 6, y: 6), scale: scale,
+        )
+        NSGraphicsContext.current = previous
         let image = context.makeImage()
         triangles[key] = image
         return image
