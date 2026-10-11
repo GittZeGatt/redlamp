@@ -25,6 +25,7 @@
             + MissingPhotosScenarios.all
             + CollectionScenarios.all
             + JudgingScenarios.all
+            + SoftFrameScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
             + MoveEditsScenarios.all
