@@ -94,19 +94,27 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         bar.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
         let divider = NSBox()
         divider.boxType = .separator
-        // Sized as the window sizes it, so the grid has its cells as soon as it's given a frame.
+        // The grid sized as the window sizes it, so it has its cells as soon as it's given a frame.
         let size = NSSize(width: 600, height: 400)
         let column = NSView(frame: NSRect(origin: .zero, size: size))
         let height = Self.barHeight
-        bar.frame = NSRect(x: 0, y: size.height - height, width: size.width, height: height)
-        bar.autoresizingMask = [.width, .minYMargin]
-        divider.frame = NSRect(x: 0, y: size.height - height - 1, width: size.width, height: 1)
-        divider.autoresizingMask = [.width, .minYMargin]
         scrollView.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height - height - 1)
         scrollView.autoresizingMask = [.width, .height]
         for part in [bar, divider, scrollView] {
             column.addSubview(part)
         }
+        for part in [bar, divider] {
+            part.translatesAutoresizingMaskIntoConstraints = false
+        }
+        NSLayoutConstraint.activate([
+            bar.topAnchor.constraint(equalTo: column.topAnchor),
+            bar.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            bar.heightAnchor.constraint(equalToConstant: height),
+            divider.topAnchor.constraint(equalTo: bar.bottomAnchor),
+            divider.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+        ])
         view = column
         (shownGroups, shownIDs) = (model.groups, model.photos.map(\.id))
         showSource()
@@ -424,7 +432,7 @@ final class ImportGridCell: NSView {
     var isSelected = false {
         didSet {
             if isSelected != oldValue {
-                needsDisplay = true
+                showSelection()
             }
         }
     }
@@ -439,6 +447,7 @@ final class ImportGridCell: NSView {
         imageView.layer?.cornerRadius = 4
         imageView.layer?.cornerCurve = .continuous
         imageView.layer?.masksToBounds = true
+        showSelection()
         name.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         name.lineBreakMode = .byTruncatingMiddle
         badges.font = .systemFont(ofSize: 11)
@@ -455,16 +464,19 @@ final class ImportGridCell: NSView {
         fatalError("init(coder:) is not supported")
     }
 
-    override var wantsUpdateLayer: Bool {
-        true
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        showSelection()
     }
 
     /// Selected, the cell is ringed in the accent colour on a tint of it, as the system's grids ring a selection.
-    override func updateLayer() {
-        layer?.borderWidth = isSelected ? 3 : 0
-        layer?.borderColor = NSColor.controlAccentColor.cgColor
-        layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor : nil
-        imageView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+    private func showSelection() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.borderWidth = isSelected ? 3 : 0
+            layer?.borderColor = NSColor.controlAccentColor.cgColor
+            layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor : nil
+            imageView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        }
     }
 
     override func layout() {
