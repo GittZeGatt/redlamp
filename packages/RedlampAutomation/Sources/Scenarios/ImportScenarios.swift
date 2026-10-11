@@ -9,7 +9,47 @@
     /// The import window (LIB-27), from copies of the run's raws in a folder of the run's own: never a
     /// card, and never this Mac's volumes, which the window is told to leave alone.
     enum ImportScenarios {
-        static let all: [Scenario] = [fromFolder, performance]
+        static let all: [Scenario] = [fromFolder, cardMoments, performance]
+
+        static let cardMoments = Scenario(
+            "import.card-moments",
+            "A card's photos show in the import window in moments, the newest first, each under its header, and "
+                + "Group By shows them ungrouped and in moments again",
+            claims: [.feature("library.import")],
+        ) { app in
+            try app.openWorking()
+            let card = try ImportCardScratch(app)
+            defer { card.remove(app) }
+            try app.main { _ in ImportWindowController.ignoresVolumes = true }
+            try app.choose(.importPhotos)
+            try app.waitForImportWindow()
+            try app.run("adding the card") { _ in try? await ImportWindowController.current?.add(card: card.root) }
+            try app.wait("the card browsed", timeout: 60) { _ in
+                ImportWindowController.current.map { $0.isBrowsed && $0.photoCount == card.count } == true
+            }
+            // Each raw's copies were taken together, and the raws apart: a moment for each, as the heads say.
+            let raws = Set(card.originals.values).count
+            try app.wait("a moment for each raw's copies", timeout: 30) { _ in
+                guard let window = ImportWindowController.current, window.grouping == "Moment" else { return false }
+                let groups = window.groups
+                return groups.count == raws && groups.allSatisfy { group in
+                    !group.name.isEmpty && Set(group.photos.compactMap { card.originals[$0] }).count == 1
+                }
+            }
+            let order = try app.inImportWindow { window in window.groups.flatMap(\.photos) }
+            try app.chooseInImportWindow("None", inPopUp: "import.group-by")
+            try app.wait("the photos ungrouped") { _ in
+                ImportWindowController.current.map { $0.groups.count == 1 && $0.groups[0].name.isEmpty } == true
+            }
+            try app.chooseInImportWindow("Moment", inPopUp: "import.group-by")
+            try app.wait("in moments again") { _ in
+                ImportWindowController.current.map { $0.groups.count == raws } == true
+            }
+            try app.expect(
+                try app.inImportWindow { window in window.groups.flatMap(\.photos) } == order, "the same order",
+            )
+            app.covered(.feature("library.import"), via: .mouse)
+        }
 
         static let fromFolder = Scenario(
             "import.from-folder",

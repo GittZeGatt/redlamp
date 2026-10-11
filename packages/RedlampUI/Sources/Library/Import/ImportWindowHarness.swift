@@ -98,8 +98,19 @@ import AppKit
 
     /// Selects the photos at these places in the grid, and gives the grid the keys.
     func select(_ items: [Int]) {
-        grid.collectionView.selectionIndexPaths = Set(items.map { IndexPath(item: $0, section: 0) })
+        grid.collectionView.selectionIndexPaths = Set(items.compactMap(grid.path(of:)))
         window?.makeFirstResponder(grid.collectionView)
+    }
+
+    /// The groups the grid shows, by their names, each with its photos' names; one without a name when it isn't
+    /// grouped.
+    var groups: [(name: String, photos: [String])] {
+        model.groups.map { group in (group.name, model.photos[group.places].map(\.primary.name)) }
+    }
+
+    /// Group By, as it groups the photos shown.
+    var grouping: String {
+        model.grouping.title
     }
 
     /// The rating, flag and label given the photo at `item`, as the grid's badges write them.

@@ -4,8 +4,9 @@ import RedlampLibrary
 
 /// The import window's photos (LIB-27): the shown source's, newest first, in a plain collection view
 /// of its own, each cell its preview once browsing has made it (a large JPEG's EXIF thumbnail until
-/// then), whether it's chosen, its name, and the rating, flag and label it's given. Click, Shift-click and
-/// Command-click select as in Finder, and
+/// then), whether it's chosen, its name, and the rating, flag and label it's given; grouped as Group By
+/// says, a card's by moment until it's changed (DEC-69), each group under a header with its name and count.
+/// Click, Shift-click and Command-click select as in Finder, and
 /// Library's keys act on the selection: 0 to 5 rate, P, X and U flag, 6 to 9 label (again to take the
 /// label off), Space chooses or leaves out, Command-A selects every photo. The cells on screen are read
 /// first.
@@ -15,6 +16,14 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     let thumbnails: ImportThumbnails?
     let collectionView = ImportCollectionView()
     private let scrollView = NSScrollView()
+    private let layout = NSCollectionViewFlowLayout()
+    private let sourceName = NSTextField(labelWithString: "")
+    private let sourceDetail = NSTextField(labelWithString: "")
+    let groupBy = NSPopUpButton()
+    /// The groups and the photos' order the collection view was last given, which its index paths are in: the model
+    /// has its new ones before it says so.
+    private var shownGroups: [ImportGroup] = []
+    private var shownIDs: [String] = []
     private var prioritising: Task<Void, Never>?
     /// Previews put on screen so far, and those of them that were provisional, for the harness.
     @_spi(Harness) public private(set) var imagesShown = 0
@@ -32,11 +41,11 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     }
 
     override func loadView() {
-        let layout = NSCollectionViewFlowLayout()
         layout.itemSize = ImportGridCell.size
         layout.minimumInteritemSpacing = 6
         layout.minimumLineSpacing = 6
         layout.sectionInset = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        layout.sectionHeadersPinToVisibleBounds = true
         collectionView.collectionViewLayout = layout
         collectionView.isSelectable = true
         collectionView.allowsMultipleSelection = true
@@ -45,6 +54,10 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(ImportGridItem.self, forItemWithIdentifier: ImportGridItem.identifier)
+        collectionView.register(
+            ImportGroupHeader.self, forSupplementaryViewOfKind: NSCollectionView.elementKindSectionHeader,
+            withIdentifier: ImportGroupHeader.identifier,
+        )
         collectionView.setAccessibilityIdentifier("import.photos")
         collectionView.onKey = { [weak self] event in self?.handle(event) ?? false }
         scrollView.documentView = collectionView
@@ -55,53 +68,169 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
             self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView,
         )
-        view = scrollView
+
+        sourceName.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        sourceName.lineBreakMode = .byTruncatingMiddle
+        sourceName.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        sourceDetail.textColor = .secondaryLabelColor
+        sourceDetail.lineBreakMode = .byTruncatingTail
+        sourceDetail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        sourceDetail.setAccessibilityIdentifier("import.shown")
+        for grouping in ImportGrouping.allCases {
+            groupBy.addItem(withTitle: grouping.title)
+            groupBy.lastItem?.representedObject = grouping.rawValue
+        }
+        groupBy.target = self
+        groupBy.action = #selector(groupingChosen)
+        groupBy.setAccessibilityIdentifier("import.group-by")
+        let groupByLabel = NSTextField(labelWithString: "Group By:")
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let bar = NSStackView(views: [sourceName, sourceDetail, spacer, groupByLabel, groupBy])
+        bar.orientation = .horizontal
+        bar.alignment = .centerY
+        bar.spacing = 8
+        bar.setCustomSpacing(6, after: groupByLabel)
+        bar.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+        let divider = NSBox()
+        divider.boxType = .separator
+        // Sized as the window sizes it, so the grid has its cells as soon as it's given a frame.
+        let size = NSSize(width: 600, height: 400)
+        let column = NSView(frame: NSRect(origin: .zero, size: size))
+        let height = Self.barHeight
+        bar.frame = NSRect(x: 0, y: size.height - height, width: size.width, height: height)
+        bar.autoresizingMask = [.width, .minYMargin]
+        divider.frame = NSRect(x: 0, y: size.height - height - 1, width: size.width, height: 1)
+        divider.autoresizingMask = [.width, .minYMargin]
+        scrollView.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height - height - 1)
+        scrollView.autoresizingMask = [.width, .height]
+        for part in [bar, divider, scrollView] {
+            column.addSubview(part)
+        }
+        view = column
+        (shownGroups, shownIDs) = (model.groups, model.photos.map(\.id))
+        showSource()
     }
+
+    /// The bar over the photos, as tall as a toolbar's controls and their margins.
+    static let barHeight: CGFloat = 40
 
     // MARK: - The model
 
     func modelChanged(_ change: ImportWindowModel.Change) {
+        if change == .sources || change == .status {
+            showSource()
+        }
         guard case let .photos(ids) = change else { return }
         guard let ids else {
             let selected = selectedIDs
+            (shownGroups, shownIDs) = (model.groups, model.photos.map(\.id))
+            layout.headerReferenceSize = model.grouping == .none ? .zero : NSSize(width: 0, height: 30)
             collectionView.reloadData()
-            collectionView.selectionIndexPaths = Set(selected.compactMap(model.index(of:)).map {
-                IndexPath(item: $0, section: 0)
-            })
+            collectionView.selectionIndexPaths = Set(selected.compactMap(model.index(of:)).compactMap(path(of:)))
+            showSource()
             prioritiseVisible()
             return
         }
         for path in collectionView.indexPathsForVisibleItems() {
-            guard let photo = model.photo(at: path.item), ids.contains(photo.id),
+            guard let place = place(of: path), let photo = model.photo(at: place), ids.contains(photo.id),
                   let item = collectionView.item(at: path) as? ImportGridItem
             else { continue }
-            configure(item, at: path.item)
+            configure(item, at: place)
         }
+    }
+
+    /// The bar over the photos: the source shown, its count, and Group By as it groups them.
+    private func showSource() {
+        let source = model.shown.flatMap(model.source)
+        let name = source?.source.name ?? "No Source"
+        if sourceName.stringValue != name {
+            sourceName.stringValue = name
+        }
+        let detail = source.map { model.detail(of: $0) } ?? "Add a folder, or insert a card."
+        if sourceDetail.stringValue != detail {
+            sourceDetail.stringValue = detail
+        }
+        groupBy.isEnabled = source != nil
+        if let item = groupBy.itemArray.first(where: { $0.representedObject as? String == model.grouping.rawValue }),
+           groupBy.selectedItem !== item {
+            groupBy.select(item)
+        }
+    }
+
+    @objc private func groupingChosen() {
+        guard let raw = groupBy.selectedItem?.representedObject as? String,
+              let grouping = ImportGrouping(rawValue: raw)
+        else { return }
+        model.setGrouping(grouping)
     }
 
     /// The photos selected, in the grid's order.
     var selectedIDs: [String] {
-        collectionView.selectionIndexPaths.map(\.item).sorted().compactMap { model.photo(at: $0)?.id }
+        collectionView.selectionIndexPaths.compactMap(place(of:)).sorted().compactMap { place in
+            shownIDs.indices.contains(place) ? shownIDs[place] : nil
+        }
+    }
+
+    /// The place among the model's photos of the cell at `path`.
+    func place(of path: IndexPath) -> Int? {
+        guard shownGroups.indices.contains(path.section) else { return nil }
+        let places = shownGroups[path.section].places
+        let place = places.lowerBound + path.item
+        return places.contains(place) ? place : nil
+    }
+
+    /// The cell of the photo at `place` among the model's photos.
+    func path(of place: Int) -> IndexPath? {
+        let groups = shownGroups
+        var (low, high) = (0, groups.count - 1)
+        while low <= high {
+            let middle = (low + high) / 2
+            let places = groups[middle].places
+            if place < places.lowerBound {
+                high = middle - 1
+            } else if place >= places.upperBound {
+                low = middle + 1
+            } else {
+                return IndexPath(item: place - places.lowerBound, section: middle)
+            }
+        }
+        return nil
     }
 
     // MARK: - Cells
 
     func numberOfSections(in _: NSCollectionView) -> Int {
-        1
+        shownGroups.count
     }
 
-    func collectionView(_: NSCollectionView, numberOfItemsInSection _: Int) -> Int {
-        model.photos.count
+    func collectionView(_: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
+        shownGroups.indices.contains(section) ? shownGroups[section].places.count : 0
     }
 
     func collectionView(
         _ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath,
     ) -> NSCollectionViewItem {
         let item = collectionView.makeItem(withIdentifier: ImportGridItem.identifier, for: indexPath)
-        if let item = item as? ImportGridItem {
-            configure(item, at: indexPath.item)
+        if let item = item as? ImportGridItem, let place = place(of: indexPath) {
+            configure(item, at: place)
         }
         return item
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        viewForSupplementaryElementOfKind kind: NSCollectionView.SupplementaryElementKind,
+        at indexPath: IndexPath,
+    ) -> NSView {
+        let view = collectionView.makeSupplementaryView(
+            ofKind: kind, withIdentifier: ImportGroupHeader.identifier, for: indexPath,
+        )
+        if let header = view as? ImportGroupHeader, shownGroups.indices.contains(indexPath.section) {
+            let group = shownGroups[indexPath.section]
+            header.show(group.name, count: group.places.count)
+        }
+        return view
     }
 
     private func configure(_ item: ImportGridItem, at index: Int) {
@@ -116,8 +245,8 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     }
 
     private func loaded(_ id: String, _ image: CGImage, isProvisional: Bool) {
-        guard let index = model.index(of: id),
-              let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? ImportGridItem
+        guard let path = model.index(of: id).flatMap(path(of:)),
+              let item = collectionView.item(at: path) as? ImportGridItem
         else { return }
         item.setImage(image)
         imagesShown += 1
@@ -178,7 +307,8 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
 
     /// The cells on screen are read first, top first.
     private func prioritiseVisible() {
-        let ids = collectionView.indexPathsForVisibleItems().map(\.item).sorted().compactMap { model.photo(at: $0)?.id }
+        let ids = collectionView.indexPathsForVisibleItems().compactMap(place(of:)).sorted()
+            .compactMap { model.photo(at: $0)?.id }
         model.prioritise(ids)
     }
 
@@ -207,6 +337,46 @@ final class ImportCollectionView: NSCollectionView {
             return onKey?(event) ?? false
         }
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+/// A group's header over its photos, pinned at the top while they scroll under it: its name, and how many photos
+/// it holds.
+final class ImportGroupHeader: NSVisualEffectView, NSCollectionViewElement {
+    static let identifier = NSUserInterfaceItemIdentifier("import.group")
+    private let name = NSTextField(labelWithString: "")
+    private let count = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        material = .headerView
+        blendingMode = .withinWindow
+        name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        name.lineBreakMode = .byTruncatingTail
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        count.textColor = .secondaryLabelColor
+        let row = NSStackView(views: [name, count])
+        row.orientation = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            row.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            row.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    func show(_ title: String, count photos: Int) {
+        name.stringValue = title
+        count.stringValue = ImportWindowModel.count(photos, "photo")
+        setAccessibilityIdentifier("import.group.\(title)")
     }
 }
 

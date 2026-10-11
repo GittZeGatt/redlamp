@@ -9,8 +9,9 @@ import Synchronization
 ///   browsed in an `ImportSession` of its own from its embedded previews before anything is copied, and
 ///   each counted, the photos the library has already apart: they're left out. Several go at once.
 /// - **The photos:** the source shown, newest first, listed at once and filled in as their heads and
-///   previews are read. The choices (which go, the rating, flag and label each gets) are kept in its
-///   session, and written in each photo's `.redlamp` at the destination.
+///   previews are read; a card's in moments until Group By says otherwise (DEC-69, `ImportGrouping`). The
+///   choices (which go, the rating, flag and label each gets) are kept in its session, and written in each
+///   photo's `.redlamp` at the destination.
 /// - **To:** the destination, the folder and name templates with a live example and their errors in
 ///   words, a backup, raw only, keywords and a metadata preset, kept from one import to the next
 ///   (`ImportPreferences`).
@@ -95,9 +96,14 @@ final class ImportWindowModel {
     var sources: [Source] = []
     /// The source whose photos are shown.
     private(set) var shown: String?
-    /// The shown source's photos, in its listing's order.
+    /// The shown source's photos, in its listing's order, or in its groups' when it's grouped.
     private(set) var photos: [ImportPhoto] = []
+    /// The shown source's groups, each a run of `photos`: one without a name when it isn't grouped.
+    private(set) var groups: [ImportGroup] = []
     private var positions: [String: Int] = [:]
+    /// Group By as chosen for each source, by its ID; the others are grouped as their kind is by default.
+    private var groupings: [String: ImportGrouping] = [:]
+    private var regroupDue = false
     /// Photos this window has copied: shown as imported, and no longer counted as chosen.
     var copied: Set<String> = []
 
@@ -398,25 +404,78 @@ extension ImportWindowModel {
     }
 
     private func loadShownPhotos() {
-        let session = shown.flatMap(source)?.session
-        let ids = shown.flatMap(source)?.photos ?? []
-        photos = session.map { session in ids.compactMap(session.photo) } ?? []
-        positions = Dictionary(photos.enumerated().map { ($1.id, $0) }) { first, _ in first }
+        arrangeShownPhotos()
         notify(.photos(ids: nil))
+    }
+
+    /// The shown source's photos taken from its session as it lists them, and put in their groups.
+    private func arrangeShownPhotos() {
+        let source = shown.flatMap(source)
+        let listed = source.map { source in source.photos.compactMap(source.session.photo) } ?? []
+        (photos, groups) = grouping.arrange(listed)
+        positions = Dictionary(photos.enumerated().map { ($1.id, $0) }) { first, _ in first }
     }
 
     /// Takes `ids`' photos again from their session.
     private func refresh(_ ids: Set<String>) {
         guard let session = shown.flatMap(source)?.session, !ids.isEmpty else { return }
         var shownChanged = Set<String>()
+        var recaptured = false
         for id in ids {
             if let place = positions[id], let photo = session.photo(id) {
+                recaptured = recaptured || photo.captured != photos[place].captured
                 photos[place] = photo
                 shownChanged.insert(id)
             }
         }
         if !shownChanged.isEmpty {
             notify(.photos(ids: shownChanged))
+        }
+        if recaptured, grouping != .none {
+            regroupSoon()
+        }
+    }
+
+    // MARK: - Groups
+
+    /// How the shown source's photos are grouped.
+    var grouping: ImportGrouping {
+        shown.flatMap(source).map(grouping(of:)) ?? .none
+    }
+
+    func grouping(of source: Source) -> ImportGrouping {
+        groupings[source.id] ?? ImportGrouping.standard(for: source.source.kind)
+    }
+
+    /// Group By: the shown source's photos grouped by `grouping`, which it keeps while the window is open.
+    func setGrouping(_ grouping: ImportGrouping) {
+        guard let shown, grouping != self.grouping else { return }
+        groupings[shown] = grouping
+        loadShownPhotos()
+    }
+
+    /// Groups the shown source's photos again as browsing reads their capture times: at most every `countsInterval`,
+    /// the grid told only when the groups or their order changed.
+    private func regroupSoon() {
+        guard !regroupDue else { return }
+        regroupDue = true
+        let interval = Self.countsInterval
+        Task { [weak self] in
+            try? await Task.sleep(for: interval)
+            guard let self else { return }
+            regroupDue = false
+            let (before, order) = (groups, photos.map(\.id))
+            arrangeShownPhotos()
+            if groups != before || photos.map(\.id) != order {
+                notify(.photos(ids: nil))
+            }
+        }
+    }
+
+    /// Returns once the regrouping browsing asked for is done.
+    func regrouped() async {
+        while regroupDue {
+            try? await Task.sleep(for: .milliseconds(20))
         }
     }
 
