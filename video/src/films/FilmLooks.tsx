@@ -125,7 +125,7 @@ function Label({ frame, look, start, end, size }: { frame: number; look: Look; s
         style={{ width: ICON, height: ICON, display: "block", marginLeft: -ICON * 0.06, transformOrigin: "30% 80%", transform: `scale(${(0.6 + 0.4 * s) * (1 + flash)})`, opacity: Math.min(1, s * 2), filter: "drop-shadow(0 6px 14px rgba(10,7,7,0.5))" }}
       />
       <div style={{ ...text, fontSize: size, marginTop: 14, transform: `translateY(${(1 - s) * 24}px)`, opacity: Math.min(1, s * 2) }}>{look.name}</div>
-      <div style={{ ...text, fontSize: 42, fontWeight: 500, letterSpacing: "0.04em", color: color.ring, marginTop: 10, opacity: Math.min(1, s * 2) }}>{look.kind}</div>
+      <div style={{ ...text, fontSize: 60, fontWeight: 500, letterSpacing: "0.02em", color: color.ring, marginTop: 10, opacity: Math.min(1, s * 2) }}>{look.kind}</div>
     </div>
   );
 }
