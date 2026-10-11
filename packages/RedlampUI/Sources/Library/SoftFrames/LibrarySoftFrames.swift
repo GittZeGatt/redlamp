@@ -28,6 +28,8 @@ public final class LibrarySoftFrames {
     @ObservationIgnored private var listObservation: LibraryObservation?
     @ObservationIgnored private var observers: [UUID: @MainActor () -> Void] = [:]
     @ObservationIgnored private var refreshing: Task<Void, Never>?
+    /// The verdicts asked for again once the measurer's batches have gathered (`measuredSettle`).
+    @ObservationIgnored private var measuredRefresh: Task<Void, Never>?
     @ObservationIgnored private var measurer: (engine: ObjectIdentifier, measurer: SharpnessMeasurer)?
     /// The source and setting the measurer was last given the photos of.
     @ObservationIgnored private var measuring: (source: PhotoSource, setting: MomentSetting)?
@@ -40,6 +42,10 @@ public final class LibrarySoftFrames {
 
     /// How long changes to the list are gathered before the verdicts are asked for again.
     static let settle = Duration.milliseconds(120)
+    /// How long the measurer's batches are gathered before the verdicts are asked for again: a batch comes every
+    /// fraction of a second, and judging a large source takes a few hundred milliseconds (276 ms for a million
+    /// photos), which would otherwise run back to back for as long as the measurer does.
+    static let measuredSettle = Duration.seconds(2)
 
     init(model: EditorModel, defaults: UserDefaults?) {
         self.model = model
@@ -167,11 +173,21 @@ public final class LibrarySoftFrames {
         let made = SharpnessMeasurer(
             index: index, engine: engine, scheduler: model?.library.scheduler ?? .shared,
             mayRun: { !updating.isUpdating }, measured: { [weak self] _ in
-                Task { @MainActor in self?.refresh() }
+                Task { @MainActor in self?.measuredBatch() }
             },
         )
         measurer = (ObjectIdentifier(engine), made)
         return made
+    }
+
+    /// Asks for the verdicts again once the batches the measurer records have gathered for `measuredSettle`.
+    private func measuredBatch() {
+        guard measuredRefresh == nil else { return }
+        measuredRefresh = Task { [weak self] in
+            try? await Task.sleep(for: Self.measuredSettle)
+            self?.measuredRefresh = nil
+            self?.refresh()
+        }
     }
 
     /// How many photos the measurer has measured, for the regression suite.
