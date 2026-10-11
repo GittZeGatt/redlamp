@@ -18,6 +18,8 @@ import SwiftUI
 ///   the photos that come or go wait for the groups or the stacks.
 /// - The selection is followed: the active photo's cell is highlighted and scrolled to the middle,
 ///   and the others selected with it (⌘- and ⇧-click, in the grid's order) are marked.
+/// - Photos drag as the grid's do, and move within their open stack when dropped on another of its photos in the strip
+///   (`FilmstripStripView+Drag`).
 final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSCollectionViewPrefetching {
     static let height: CGFloat = 82
@@ -26,7 +28,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     let collectionView = NSCollectionView()
     let scrollView = FilmstripScrollView()
-    private let model: EditorModel
+    let model: EditorModel
     private var observation: LibraryObservation?
     private var editObservation: LibraryObservation?
     private var stacksObservation: LibraryObservation?
@@ -64,6 +66,10 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var pausing: Task<Void, Never>?
     /// How long a centering animates.
     private static let centeringTime = Duration.milliseconds(250)
+    /// The press on a photo a drag would take along, until it's released or dragged.
+    var press: FilmstripPress?
+    /// The photo ringed under a drag of photos that would move to its place in their stack.
+    var dropTarget: Int64?
 
     init(model: EditorModel) {
         self.model = model
@@ -91,6 +97,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView,
         )
+        registerForDraggedTypes([LibraryDrags.photos])
     }
 
     @available(*, unavailable)
@@ -207,6 +214,28 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             shownOrder = order
             itemPhotos = order.cells
         }
+    }
+
+    // MARK: - Photos dragged in their stack (`FilmstripStripView+Drag`)
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        dropOperation(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        dropOperation(sender)
+    }
+
+    override func draggingExited(_: (any NSDraggingInfo)?) {
+        showDropTarget(nil)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        dropped(sender)
+    }
+
+    override func concludeDragOperation(_: (any NSDraggingInfo)?) {
+        showDropTarget(nil)
     }
 
     /// The row of item `index`'s photo; nil for one the photos no longer have.
@@ -367,11 +396,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         item.cell.isFocusSuggested = suggestedFrames.contains(photo.url)
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[row])
-        item.cell.onClick = { [weak self] modifiers in
-            self?.model.clickInGrid(
-                photo.url, toggling: modifiers.contains(.command), extending: modifiers.contains(.shift),
-            )
-        }
+        item.cell.isDropTarget = dropTarget != nil && model.library.photoIDs[row] == dropTarget
+        item.cell.onClick = { [weak self] modifiers in self?.click(photo.url, holding: modifiers) }
+        item.cell.onPress = { [weak self] event in self?.pressed(event, on: photo.url) }
+        item.cell.onDrag = { [weak self] event in self?.dragged(event) }
+        item.cell.onRelease = { [weak self] event in self?.released(event) }
         item.cell.onMenu = { [weak self] in
             self.flatMap { FilmstripMenu.menu(for: photo.url, model: $0.model, culling: true) }
         }

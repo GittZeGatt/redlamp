@@ -50,8 +50,13 @@ final class FilmstripCellView: NSView {
         }
     }
 
-    /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
+    /// A click, with the modifier keys held (⌘ and ⇧ select several photos): VoiceOver's press.
     var onClick: ((NSEvent.ModifierFlags) -> Void)?
+    /// A press on the cell, with the modifier keys held, and the drag and release that follow it, which the strip
+    /// makes a click or a drag of photos (`FilmstripStripView+Drag`).
+    var onPress: ((NSEvent) -> Void)?
+    var onDrag: ((NSEvent) -> Void)?
+    var onRelease: ((NSEvent) -> Void)?
     /// The photo's context menu (`FilmstripMenu`).
     var onMenu: (() -> NSMenu?)?
     private let background = CALayer()
@@ -78,6 +83,14 @@ final class FilmstripCellView: NSView {
     private(set) var isMenuTarget = false {
         didSet {
             guard isMenuTarget != oldValue else { return }
+            updateBackground()
+        }
+    }
+
+    /// Ringed while photos dragged over it would move to its place in their open stack.
+    var isDropTarget = false {
+        didSet {
+            guard isDropTarget != oldValue else { return }
             updateBackground()
         }
     }
@@ -122,6 +135,7 @@ final class FilmstripCellView: NSView {
         }
         if changedPhoto {
             isMenuTarget = false
+            isDropTarget = false
         }
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
@@ -157,7 +171,7 @@ final class FilmstripCellView: NSView {
 
     private func updateBackground() {
         background.backgroundColor = NSColor(white: isSelected ? 0.22 : isInSelection ? 0.19 : 0.14, alpha: 1).cgColor
-        if isMenuTarget {
+        if isMenuTarget || isDropTarget {
             background.borderWidth = 2
             background.borderColor = Palette.accent.cgColor
         } else {
@@ -183,7 +197,15 @@ final class FilmstripCellView: NSView {
             NSMenu.popUpContextMenu(menu, with: event, for: self)
             return
         }
-        onClick?(event.modifierFlags)
+        onPress?(event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        onDrag?(event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onRelease?(event)
     }
 
     override func menu(for _: NSEvent) -> NSMenu? {
@@ -213,6 +235,12 @@ final class FilmstripCellView: NSView {
 
     override func accessibilityRole() -> NSAccessibility.Role? {
         .button
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard let onClick else { return false }
+        onClick([])
+        return true
     }
 }
 
