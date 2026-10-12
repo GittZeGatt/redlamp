@@ -364,7 +364,67 @@
     }
 
     enum ExportScenarios {
-        static let all: [Scenario] = [formats, sizes, metadata, previous, shortWindow, chooseFolder]
+        static let all: [Scenario] = [formats, sizes, metadata, previous, shortWindow, chooseFolder, jpegXL]
+
+        /// EDT-30 (#373): JPEG XL is under both of the Format menu's sections, with Quality under
+        /// Lossy and without it under Lossless, and each writes a JPEG XL file of its kind.
+        static let jpegXL = Scenario(
+            "export.jpeg-xl",
+            "JPEG XL, chosen under Lossy or under Lossless in the Export dialog's Format menu, exports a JPEG XL file",
+            claims: [.feature("export.formats"), .feature("export.dialog")],
+        ) { app in
+            try app.openWorking()
+            for (section, format) in [("Lossy", ExportFormat.jxl), ("Lossless", .jxlLossless)] {
+                let folder = try app.host.flatMap { host in
+                    try app.main { _ in host.exports.initialSettings.destinationFolder }
+                } ?? app.photos
+                let before = Set((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
+                try app.choose(Menus.title(of: .export))
+                try app.waitForSheet("the Export dialog")
+                app.pause(0.5)
+                let shown = try app.main { _ in
+                    ExportFormat.allCases.map(\.name).first { Views.popUpButton(showing: $0) != nil }
+                }
+                guard let shown else { throw ScenarioFailure("The Export dialog's Format menu shows no format") }
+                let menu = try app.choose("JPEG XL", inSection: section, inPopUpButtonShowing: shown)
+                try app.wait("the Format menu to close") { _ in menu.closed }
+                try app.main { _ in menu.stop() }
+                try app.wait("the Format menu to show JPEG XL") { _ in Views.popUpButton(showing: "JPEG XL") != nil }
+                let quality = try app.main { _ in
+                    Views.editorWindow?.attachedSheet?.contentView.map { !Views.all(NSSlider.self, in: $0).isEmpty }
+                }
+                try app.expect(
+                    quality == !format.isLossless,
+                    "JPEG XL under \(section) \(quality == true ? "shows" : "doesn't show") Quality",
+                )
+                try app.expect(
+                    try app.pressInSheet(KeyCombo(.character("\r"))),
+                    "The Export dialog's Export button didn't take Return",
+                )
+                @Sendable func newFile() -> String? {
+                    let now = Set((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
+                    return now.subtracting(before).first { !$0.hasPrefix(".") && !$0.hasSuffix(".redlamp") }
+                }
+                try app
+                    .wait("the exported file", timeout: 60) { model in newFile() != nil && model.exportStatus == nil }
+                guard let exported = newFile() else { return }
+                let url = folder.appending(path: exported)
+                let type = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap(CGImageSourceGetType) as String?
+                try app.expect(
+                    type == format.typeIdentifier && url.pathExtension == format.fileExtension,
+                    "Exporting JPEG XL under \(section) wrote \(exported), \(type ?? "unreadable")",
+                )
+                if let host = app.host {
+                    let recorded = try app.main { _ in host.exports.previous?.format }
+                    try app.expect(
+                        recorded == format,
+                        "JPEG XL under \(section) exported as \(recorded?.rawValue ?? "nothing")",
+                    )
+                }
+                try? FileManager.default.removeItem(at: url)
+            }
+            app.covered([.feature("export.formats"), .feature("export.dialog")], via: .mouse)
+        }
 
         /// #290: on the editor window at its smallest, the dialog was taller than the window and
         /// its settings didn't scroll, so the last ones were out of reach.

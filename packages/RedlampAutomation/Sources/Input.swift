@@ -399,8 +399,10 @@
         /// mouse does, and chooses `title` in the menu that opens with the keyboard, which ends the
         /// menu's tracking with the item chosen, as a click on it does. The item may open a dialog,
         /// so this doesn't wait for what it does; the menu returned says when it stopped tracking,
-        /// until `stop()`.
-        func choose(_ title: String, inPopUpButtonShowing shown: String) throws -> OpenedMenu {
+        /// until `stop()`. `section` names the section the item is in, where another section has an
+        /// item of the same title.
+        func choose(_ title: String, inSection section: String? = nil, inPopUpButtonShowing shown: String) throws
+            -> OpenedMenu {
             let location = try main { _ -> NSPoint in
                 guard let button = Views.popUpButton(showing: shown) else {
                     throw ScenarioFailure("No pop-up button in the sheet shows \(shown)")
@@ -410,7 +412,7 @@
             }
             let opened = OpenedMenu()
             try main { _ in
-                opened.watch { menu in opened.chose = Menus.chooseByKeys(title, in: menu) }
+                opened.watch { menu in opened.chose = Menus.chooseByKeys(title, inSection: section, in: menu) }
             }
             // The menu tracks inside the press. A sheet that isn't key spends a press on becoming
             // key unless the view under it accepts first mouse, so the press goes to the view then.
@@ -1005,6 +1007,23 @@
         /// nothing else on the main thread. Without the item it closes the menu. Whether it chose.
         static func chooseByKeys(_ title: String, in menu: NSMenu) -> Bool {
             chooseByKeys([title], in: menu)
+        }
+
+        /// `chooseByKeys` for the item titled `title` under the section header `section` (SwiftUI's
+        /// `Section` in a menu), or anywhere without one.
+        static func chooseByKeys(_ title: String, inSection section: String?, in menu: NSMenu) -> Bool {
+            guard let section else { return chooseByKeys(title, in: menu) }
+            let items = steps(in: menu)
+            let item = menu.items.firstIndex { $0.isSectionHeader && $0.title == section }.flatMap { header in
+                menu.items[(header + 1)...].prefix { !$0.isSectionHeader }.first { $0.title == title }
+            }
+            let keys = item.flatMap { items.firstIndex(of: $0) }.map { position in
+                Array(repeating: KeyCombo(.up), count: items.count) + Array(repeating: KeyCombo(.down), count: position)
+                    + [KeyCombo(.character("\r"))]
+            }
+            guard let events = try? (keys ?? [KeyCombo(.escape)]).map(Keyboard.event) else { return false }
+            events.forEach { NSApp.postEvent($0, atStart: false) }
+            return keys != nil
         }
 
         /// `chooseByKeys` for the item at `path`: a title, or a submenu's and then its item's.
