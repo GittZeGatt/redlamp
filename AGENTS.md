@@ -43,6 +43,7 @@ Tokens are a budget: agent work is moving to fixed subscriptions with no on-dema
 
 - **Don't wait inside a long conversation.** Run the push gate, full suites and anything else that takes minutes in the background, and check on them at intervals under four minutes (`block_until_ms` of 240000 or less in Cursor), or end the turn and say what's still running.
 - **One task per chat.** When the task is done, leave the handover in the tracker, the workstream canvas or the plan, and suggest a new chat for the next task rather than carrying on in this one.
+- **Say when a chat has grown long, without being asked.** Once a conversation is past about 200K tokens (often after 50 or so tool calls), or a second task starts in it, tell the owner before going on, and give the handover brief for a new chat: where things stand, where that's recorded (the tracker row, the canvas, the plan), what's next, and a prompt to start it with.
 - **Read what you need.** Search the long files (the README, the tracker) before reading them, and don't read a file again unless it has changed.
 - **Subagents:** at most three at a time, each with a brief complete enough that it doesn't need the parent's context.
 
