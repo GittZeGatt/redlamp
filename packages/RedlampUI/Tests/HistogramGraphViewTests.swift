@@ -12,12 +12,15 @@ import Testing
 /// sRGB, whatever the screen's and the system's: CI's runner is in Light mode, on a display of
 /// its own. Symbol images are sized for the sharpest screen attached, so the clipping triangles
 /// come out a little differently on a Mac whose screens are all at a scale of 1, such as the
-/// runner, which has references of its own in Golden/1x. To record the Mac's set again, run with
-/// `TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1`.
+/// runner, which has references of its own in Golden/1x. Each macOS draws text a little
+/// differently, so these are macOS 26's, and a later version's are in a folder of its own
+/// (Golden/macos-27). To record the Mac's set again, run with `TEST_RUNNER_REDLAMP_RECORD_HISTOGRAM=1`.
 @MainActor @Suite(.serialized)
 struct HistogramGraphViewTests {
     static var goldenFolder: String {
-        NSScreen.screens.contains { $0.backingScaleFactor > 1 } ? "Golden" : "Golden/1x"
+        let scale = NSScreen.screens.contains { $0.backingScaleFactor > 1 } ? "Golden" : "Golden/1x"
+        let macOS = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        return macOS > 26 ? "\(scale)/macos-\(macOS)" : scale
     }
 
     static var goldenURL: URL {
@@ -227,6 +230,7 @@ struct HistogramGraphViewTests {
         let (image, pixels) = try await snapshot(view)
         let url = Self.goldenURL.appending(path: "\(name).png")
         if Self.recording {
+            try FileManager.default.createDirectory(at: Self.goldenURL, withIntermediateDirectories: true)
             try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: url)
             return
         }
