@@ -2019,6 +2019,10 @@ public final class EditorModel {
                 if let action = ShortcutAction(rawValue: value) {
                     perform(action)
                 }
+            case "painter":
+                // The keyword painter out, painting the keywords given as if typed in its field.
+                keywordPainter.text = value
+                _ = keywordPainter.setOn(true)
             case "judge":
                 // `histogram`, `peaking` and `af`, joined by `+`: the judging bar's tools on, as its buttons turn them.
                 let tools = Set(value.split(separator: "+").map(String.init))

@@ -49,7 +49,11 @@
     ///   by its key (`all-photographs`, `marked`), a collection (`collection:<path>`) or a folder
     ///   (`folder:<path>`). A command's value is everything after its first `=`, so `find=rating>=4` types
     ///   `rating>=4`. `judge=<tools>` turns on the judging bar's `histogram`, `peaking` and `af`, joined by
-    ///   `+`. While Develop is shown, every command but `wait`, `scroll`, `find`, `source` and `quit` waits for
+    ///   `+`; `painter=<keywords>` takes the keyword painter out to paint them, and `click=<file name>` clicks a
+    ///   photo in the Library grid, as a press and release on its cell do, so the painter paints it;
+    ///   `settings=<tab>` opens Settings on the tab with that label (`Shortcuts`); and `import=start` imports
+    ///   what the import window has chosen and waits for it to finish. While Develop is shown, every command but
+    /// `wait`, `scroll`, `find`, `source` and `quit` waits for
     ///   its photo to open first; in the Library, which may have none open, no command waits.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
@@ -144,6 +148,18 @@
                 flashScrollers()
             case "settings" where value == "open":
                 await openSettings()
+            case "settings":
+                await openSettings()
+                await showSettingsTab(value)
+            case "click":
+                guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+                      let grid = LibraryGridViews.grid(in: window),
+                      let item = model.items.first(where: { $0.url.lastPathComponent == value })
+                else { return true }
+                LibraryGridViews.click(grid, photo: item.url)
+                try? await Task.sleep(for: .milliseconds(200))
+            case "import" where value == "start":
+                await ImportWindowController.current?.importAndWait()
             case "type":
                 await beginTyping(in: value)
             case "scroll":
@@ -425,6 +441,21 @@
             let end = document.isFlipped ? max(0, document.bounds.height - clip.bounds.height) : 0
             clip.scroll(to: NSPoint(x: clip.bounds.minX, y: end))
             inspector.reflectScrolledClipView(clip)
+        }
+
+        /// Settings' tab labelled `label`, chosen as a click on its toolbar item does.
+        private static func showSettingsTab(_ label: String) async {
+            for _ in 0 ..< 20 {
+                for window in NSApp.windows where window.isVisible {
+                    if let toolbar = window.toolbar, let item = toolbar.items.first(where: { $0.label == label }),
+                       let action = item.action {
+                        toolbar.selectedItemIdentifier = item.itemIdentifier
+                        NSApp.sendAction(action, to: item.target, from: item)
+                        return
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
         }
 
         /// The Library grid scrolled as `<to>[:<seconds>]` says, where it should be at each frame a capture records.

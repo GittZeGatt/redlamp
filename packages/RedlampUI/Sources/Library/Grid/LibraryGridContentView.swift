@@ -130,6 +130,26 @@ final class LibraryGridContentView: NSView {
         return (clip.bounds.minY / height, row / height)
     }
 
+    /// Clicks the photo at `url` in a grid made by `make` or found by `grid(in:)`, as a press and release on its cell
+    /// do, scrolled into view first; false when the grid doesn't show it.
+    @MainActor @discardableResult
+    public static func click(_ view: NSView, photo url: URL) -> Bool {
+        guard let grid = view as? LibraryGridView, let window = grid.window, let index = grid.item(of: url) else {
+            return false
+        }
+        let frame = grid.gridLayout.frame(forItem: index)
+        grid.content.scrollToVisible(frame)
+        let location = grid.content.convert(CGPoint(x: frame.midX, y: frame.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(
+                with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+            ) else { return false }
+            type == .leftMouseDown ? grid.content.mouseDown(with: event) : grid.content.mouseUp(with: event)
+        }
+        return true
+    }
+
     /// The grid's thumbnails in memory, in bytes.
     @MainActor public static func memoryUsed(_ view: NSView) -> Int {
         (view as? LibraryGridView)?.thumbnails.memoryUsed ?? 0
