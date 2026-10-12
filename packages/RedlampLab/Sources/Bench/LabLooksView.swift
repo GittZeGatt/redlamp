@@ -220,16 +220,17 @@ struct LookDetailView: View {
     }
 
     private func parts(_ s: LookScore) -> String {
-        [
-            s.photoMean
-                .map { String(format: "ΔE %.2f (p90 %.2f) on %@", $0, s.photoP90 ?? 0, s.basis) } ??
-                "scored on \(s.basis)",
+        let photos: String = s.photoMean
+            .map { String(format: "ΔE %.2f (p90 %.2f) on %@", $0, s.photoP90 ?? 0, s.basis) } ?? "scored on \(s.basis)"
+        let parts: [String?] = [
+            photos,
             s.grain.map { String(format: "grain %+.4f", $0) },
             s.sharpness.map { String(format: "sharpness %.2f", $0) },
             s.glow.map { String(format: "glow %+.3f", $0) },
             String(format: "%.2f from the charts", s.chartDeparture),
             s.heldOut ? "each photo held out" : nil,
-        ].compactMap(\.self).joined(separator: " · ")
+        ]
+        return parts.compactMap(\.self).joined(separator: " · ")
     }
 
     // MARK: - Compare
