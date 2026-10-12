@@ -72,6 +72,24 @@
             return nil
         }
 
+        /// The view carrying `identifier` that's on screen: not hidden, and not in the module not shown, which is left
+        /// in place, transparent.
+        static func shown(_ identifier: String, in window: NSWindow) -> NSView? {
+            func search(_ view: NSView) -> NSView? {
+                guard !view.isHidden, view.alphaValue > 0 else { return nil }
+                if view.accessibilityIdentifier() == identifier {
+                    return view
+                }
+                for child in view.subviews {
+                    if let found = search(child) {
+                        return found
+                    }
+                }
+                return nil
+            }
+            return (window.contentView?.superview ?? window.contentView).flatMap(search)
+        }
+
         /// Every view of type `T` in the window, in the order a person reads them.
         static func all<T: NSView>(_: T.Type, in view: NSView) -> [T] {
             var found: [T] = []
@@ -142,6 +160,27 @@
             }
             events.append((.leftMouseUp, NSPoint(x: from.x + offset.dx, y: from.y + offset.dy), 1))
             try mouse(events, in: window, modifiers: modifiers)
+        }
+
+        /// Drags the knob of the horizontal scroller of the scroll view `target` is in to `fraction` (0 ... 1) of
+        /// the way along its slot, as the mouse does (`Views.dragKnob`). The target isn't scrolled into view first.
+        func dragScroller(of target: Target, to fraction: Double) throws {
+            let identifier = target.identifier
+            let outcome = KnobDrag()
+            post { _ in
+                defer { outcome.isOver = true }
+                guard let window = Views.editorWindow, let view = Views.shown(identifier, in: window),
+                      let scroller = view.enclosingScrollView?.horizontalScroller, !scroller.isHidden
+                else {
+                    outcome.problem = "it has no horizontal scroller on screen"
+                    return
+                }
+                outcome.problem = Views.dragKnob(of: scroller, to: fraction)
+            }
+            try wait("the drag of \(target)'s scroller", timeout: 30) { _ in outcome.isOver }
+            if let problem = try main({ _ in outcome.problem }) {
+                throw ScenarioFailure("Dragging \(target)'s scroller: \(problem)")
+            }
         }
 
         /// Clicks the control carrying `target`'s identifier, as the mouse does: a button, a
@@ -290,6 +329,12 @@
     /// The view a press went to straight, for its drags and release; only touched on main.
     private final class PressedView: @unchecked Sendable {
         var view: NSView?
+    }
+
+    /// How a drag of a scroller's knob went; only touched on main.
+    private final class KnobDrag: @unchecked Sendable {
+        var isOver = false
+        var problem: String?
     }
 
     extension NSPoint {
@@ -863,6 +908,85 @@
                 straight.mouseUp(with: release)
             } else {
                 window.sendEvent(release)
+            }
+        }
+
+        /// A drag of `scroller`'s knob from its middle to `fraction` (0 ... 1) of the way along its slot, in
+        /// `steps` moves, as the mouse makes one. An overlay scroller that has faded out lets a press through to
+        /// what's under it, and the pointer coming near it, which shows it again, can't be sent: two fingers rest
+        /// on the trackpad and lift first, which shows it too. A scroller tracks its knob inside the press, taking
+        /// the drags and the release from the queue, so they're queued before the press; whatever the press leaves
+        /// there goes after it, as `tap`'s release does, and in a window that isn't key both go to the view under
+        /// the pointer. Nil when the press reached the scroller, else what it found.
+        static func dragKnob(of scroller: NSScroller, to fraction: Double, steps: Int = 8) -> String? {
+            guard let window = scroller.window else { return "the scroller isn't in a window" }
+            if scroller.scrollerStyle == .overlay, let scrollView = scroller.superview as? NSScrollView {
+                let knob = scroller.convert(scroller.rect(for: .knob), to: nil)
+                touchTrackpad(over: scrollView, at: NSPoint(x: knob.midX, y: knob.midY))
+            }
+            let knob = scroller.convert(scroller.rect(for: .knob), to: nil)
+            let slot = scroller.convert(scroller.rect(for: .knobSlot), to: nil)
+            let from = NSPoint(x: knob.midX, y: knob.midY)
+            let to = NSPoint(x: slot.minX + knob.width / 2 + (slot.width - knob.width) * fraction, y: from.y)
+            func event(_ type: NSEvent.EventType, at location: NSPoint) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: type, location: location, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                )
+            }
+            let moves = (1 ... steps).compactMap { step in
+                event(
+                    .leftMouseDragged,
+                    at: NSPoint(x: from.x + (to.x - from.x) * CGFloat(step) / CGFloat(steps), y: from.y),
+                )
+            }
+            guard let press = event(.leftMouseDown, at: from), let release = event(.leftMouseUp, at: to),
+                  moves.count == steps else { return "no events for the drag" }
+            let hit = window.contentView?.superview?.hitTest(from)
+            let straight = window.isKeyWindow || hit?.acceptsFirstMouse(for: press) == true ? nil : hit
+            lastPress = Press(
+                kind: "knob drag", location: from, window: describe(window),
+                found: ancestry(hit).joined(separator: " in "),
+                sentTo: straight.map(describe) ?? "the window", time: Date(),
+            )
+            for queued in moves + [release] {
+                NSApp.postEvent(queued, atStart: false)
+            }
+            if let straight {
+                straight.mouseDown(with: press)
+            } else {
+                window.sendEvent(press)
+            }
+            while let left = NSApp.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp], until: .distantPast, inMode: .default, dequeue: true,
+            ) {
+                if let straight {
+                    if left.type == .leftMouseUp {
+                        straight.mouseUp(with: left)
+                    } else {
+                        straight.mouseDragged(with: left)
+                    }
+                } else {
+                    window.sendEvent(left)
+                }
+            }
+            return hit === scroller ? nil : "the press found \(ancestry(hit).joined(separator: " in ")), not its scroller"
+        }
+
+        /// Two fingers resting on the trackpad over `scrollView` at `location` (in its window) and lifting again,
+        /// which shows its overlay scrollers without scrolling it.
+        static func touchTrackpad(over scrollView: NSScrollView, at location: NSPoint) {
+            guard let window = scrollView.window else { return }
+            for phase in [CGScrollPhase.mayBegin, .cancelled] {
+                guard let cgEvent = CGEvent(
+                    scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: 0, wheel3: 0,
+                ) else { continue }
+                cgEvent.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue))
+                cgEvent.location = window.convertPoint(toScreen: location).flippedOnScreen
+                if let event = NSEvent(cgEvent: cgEvent) {
+                    scrollView.scrollWheel(with: event)
+                }
             }
         }
     }

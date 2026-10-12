@@ -78,7 +78,8 @@
             try app.expect(saved == false, "The preference saved is \(String(describing: saved))")
             app.covered(.feature("library.filmstrip"), via: .menu)
 
-            // A photo keeps its menu; beside it, the filmstrip's own has the item, unchecked, and turns it on.
+            // A photo keeps its menu; beside it, the filmstrip's own has the item, unchecked, and turns it on, above
+            // Show Info Line and the thumbnails' sizes (UX-42).
             try app.focus()
             let photoMenu = try app.rightClick(.filmstrip(first)).map(\.title)
             try app.expect(
@@ -89,7 +90,8 @@
             let beside = CGPoint(x: 1 + 3 / cell.width, y: 0.5)
             let stripMenu = try app.rightClick(.filmstrip(first), at: beside, choosing: item)
             try app.expect(
-                stripMenu.map(\.title) == [item] && stripMenu.first?.on == false,
+                stripMenu.map(\.title) == [item, "Show Info Line"] + FilmstripSize.allCases.map(\.title)
+                    && stripMenu.first?.on == false,
                 "The filmstrip's menu has \(stripMenu)",
             )
             try app.wait("the filmstrip floating again, its room given back", until: floats)

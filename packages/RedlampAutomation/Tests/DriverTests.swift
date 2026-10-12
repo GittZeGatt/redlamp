@@ -320,6 +320,40 @@ struct DriverTests {
         #expect(state.presses.last == "Second")
     }
 
+    /// A scroller tracks its knob inside the press, from the drags and release queued before it: one drag of the
+    /// knob crosses the whole scroll view, as the filmstrip's crosses a long folder (UX-42). Its overlay scroller
+    /// has faded out, and takes no press until it shows again.
+    @Test(.enabled(
+        if: Displays.whyClicksWontArrive == nil,
+        "No click arrives while the displays are asleep or the screen is locked",
+    ))
+    func `a drag of a scroller's knob scrolls as far as it goes, in a window that isn't key`() throws {
+        let window = NSWindow(
+            contentRect: CGRect(x: 200, y: 200, width: 600, height: 120), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        let scrollView = OverlayOnlyScrollView(frame: CGRect(x: 0, y: 0, width: 600, height: 120))
+        scrollView.hasHorizontalScroller = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.horizontalScroller?.controlSize = .small
+        scrollView.documentView = NSView(frame: CGRect(x: 0, y: 0, width: 20000, height: 100))
+        window.contentView?.addSubview(scrollView)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        scrollView.tile()
+        let scroller = try #require(scrollView.horizontalScroller)
+        let clip = scrollView.contentView
+        #expect(!window.isKeyWindow && clip.bounds.minX == 0)
+        let knob = scroller.convert(scroller.rect(for: .knob), to: nil)
+        #expect(window.contentView?.superview?.hitTest(NSPoint(x: knob.midX, y: knob.midY)) !== scroller)
+
+        #expect(Views.dragKnob(of: scroller, to: 1) == nil)
+        #expect(abs(clip.bounds.maxX - 20000) < 1, "\(clip.bounds)")
+        #expect(Views.dragKnob(of: scroller, to: 0.5) == nil)
+        #expect(abs(clip.bounds.midX - 10000) < 40, "\(clip.bounds)")
+    }
+
     /// The Masks panel's picker opens in a popover, which takes no clicks until it has finished
     /// opening, though its window is up: the driver finds it from then.
     @Test(.enabled(
@@ -512,6 +546,16 @@ private final class TapState {
     var presses: [String] = []
     var checked = false
     var open = false
+}
+
+/// Its scrollers stay the overlay kind, as the filmstrip's do: AppKit sets a plain scroll view's back to the
+/// system's style, which is the legacy kind with a mouse connected.
+private final class OverlayOnlyScrollView: NSScrollView {
+    override var scrollerStyle: NSScroller.Style {
+        get { .overlay }
+        // swiftlint:disable:next unused_setter_value
+        set { super.scrollerStyle = .overlay }
+    }
 }
 
 /// A button that opens a popover, as New Mask opens its picker, with a tile-like button in it.

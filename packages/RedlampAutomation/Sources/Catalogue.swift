@@ -15,6 +15,7 @@
             + GroupScenarios.all
             + LibraryStackScenarios.all
             + LibraryFollowUpScenarios.all
+            + FilmstripScenarios.all
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + ImportScenarios.all

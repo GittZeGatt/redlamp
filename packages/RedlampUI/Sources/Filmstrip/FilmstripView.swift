@@ -125,7 +125,7 @@ struct FilmstripStatus: View {
             .background(ThemeColors(themeTokens).panelBackground.opacity(theme.panelOpacity), in: Capsule())
             .glassEffect(.regular, in: Capsule())
             .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("filmstrip.status")
+            .automationIdentifier("filmstrip.status")
         }
     }
 
@@ -188,6 +188,7 @@ private struct FilmstripSync: View {
             Button("Sync…") { model.chooseSettingsToSync() }
                 .buttonStyle(.link)
                 .help("This photo's settings onto the other selected photos (⇧⌘S)")
+                .automationIdentifier("filmstrip.sync")
             Toggle("Auto Sync", isOn: Bindable(model.settingsSync).isAutoSyncing)
                 .toggleStyle(.checkbox)
                 .controlSize(.mini)
