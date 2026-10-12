@@ -48,8 +48,8 @@ struct ShortcutsSheet: View {
             }
             .padding(24)
             .frame(maxWidth: 1080, maxHeight: 720)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color(white: 0.1)))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 18).fill(Palette.panelBackground.color))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.divider))
             .shadow(color: .black.opacity(0.5), radius: 30)
             .padding(40)
         }

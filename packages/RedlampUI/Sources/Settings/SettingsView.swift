@@ -54,7 +54,6 @@ public struct SettingsView: View {
             }
         }
         .frame(width: 500)
-        .preferredColorScheme(theme.selection.appearance == .dark ? .dark : .light)
     }
 }
 

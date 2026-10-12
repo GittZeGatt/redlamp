@@ -21,7 +21,7 @@ struct StackWorkspaceView: View {
             frameStrip
         }
         .frame(minWidth: 960, minHeight: 680)
-        .background(Color(white: 0.09))
+        .background(Palette.panelBackground.color)
         .task {
             if workspace.preview == nil {
                 await workspace.merge()
