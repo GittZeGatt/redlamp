@@ -70,10 +70,14 @@ import AppKit
         model.photos.filter { $0.choices.rating == rating }.map(\.primary.name)
     }
 
-    /// Imports the photos chosen, as the Import button does, and returns once the import is over, or after a minute.
+    /// Imports the photos chosen, as the Import button does, once every source is browsed, and returns once the
+    /// import is over, or after a minute.
     func importAndWait() async {
-        model.startImport()
         let started = ContinuousClock.now
+        while !isBrowsed, ContinuousClock.now - started < .seconds(30) {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        model.startImport()
         while model.phase != .finished, ContinuousClock.now - started < .seconds(60) {
             try? await Task.sleep(for: .milliseconds(100))
         }
