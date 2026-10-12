@@ -95,8 +95,14 @@ fi
 # Mac is left alone. The release takes that run's passing report, or one for the commit before a
 # version bump that changes nothing else, as when a release that pushed its bump is run again.
 # SKIP_E2E="<why>" skips it and the black-box check, and the reason goes in the log.
+# mise run release-checks runs the release tier, then every test suite, on the build Mac when it
+# answers (ARC-15).
 E2E_TIER="${E2E_TIER:-release}"
-E2E_RUN="mise run e2e -- --tier $E2E_TIER --focus"
+if [ "$E2E_TIER" = release ]; then
+    E2E_RUN="mise run release-checks"
+else
+    E2E_RUN="mise run e2e -- --tier $E2E_TIER --focus"
+fi
 E2E_COMMITS=("$SOURCE")
 if git rev-parse -q --verify "$SOURCE^" >/dev/null \
     && git diff --quiet "$SOURCE^" "$SOURCE" -- . ':(exclude)Version.xcconfig'; then
@@ -110,8 +116,8 @@ elif [ "$DRY_RUN" = 1 ]; then
     echo "==> Regression suite: no passing $E2E_TIER run with focus for $(git rev-parse --short "$SOURCE"), which a release needs ($E2E_RUN)"
 else
     fail "no passing $E2E_TIER run of the regression suite with focus for $(git rev-parse --short "$SOURCE").
-       Run it before approving the release, in this checkout at that commit, and leave the Mac alone
-       while it takes focus: $E2E_RUN"
+       Run it before approving the release, in this checkout at that commit, and leave the Mac it runs
+       on alone while it takes focus: $E2E_RUN"
 fi
 
 rm -rf "$OUT"
