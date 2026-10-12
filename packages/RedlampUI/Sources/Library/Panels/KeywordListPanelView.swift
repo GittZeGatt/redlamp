@@ -282,6 +282,10 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         remove.isEnabled = selectedKeyword != nil
     }
 
+    func outlineView(_: NSOutlineView, rowViewForItem _: Any) -> NSTableRowView? {
+        ThemedRowView()
+    }
+
     // MARK: - Menus
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -434,7 +438,8 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
 }
 
 /// The keyword list's outline in a box, as the system draws a list with its buttons: a hairline edge with rounded
-/// corners on the list's own background, and under the list, past a divider, the bar of its buttons.
+/// corners, and under the list, past a divider, the bar of its buttons; in the theme's colours, a well edged with its
+/// divider colour, as Develop's lists are.
 final class KeywordListBox: NSView {
     init(list: NSScrollView, bar: NSView) {
         super.init(frame: .zero)
@@ -444,7 +449,10 @@ final class KeywordListBox: NSView {
         layer?.borderWidth = 1
         layer?.masksToBounds = true
         let divider = NSBox()
-        divider.boxType = .separator
+        divider.boxType = .custom
+        divider.borderWidth = 0
+        divider.fillColor = Palette.divider.nsColor
+        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
         for view in [list, divider, bar] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
@@ -474,8 +482,8 @@ final class KeywordListBox: NSView {
     }
 
     override func updateLayer() {
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.backgroundColor = Palette.well.cgColor
+        layer?.borderColor = Palette.divider.cgColor
     }
 }
 
@@ -508,7 +516,7 @@ final class KeywordRowView: NSTableCellView {
         check.action = #selector(checked)
         arrow.image = NSImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: "Show Photos")
         arrow.isBordered = false
-        arrow.contentTintColor = .secondaryLabelColor
+        arrow.contentTintColor = Palette.secondaryLabel.nsColor
         arrow.target = self
         arrow.action = #selector(showPhotos)
         arrow.toolTip = "Show its photos"

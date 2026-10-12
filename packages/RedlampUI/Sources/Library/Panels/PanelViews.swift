@@ -78,8 +78,9 @@ class PanelStackView: NSView, HeightProviding {
     }
 }
 
-/// The Library panels' controls as a Mac inspector has them (LIB-45): the system's controls at their regular size,
-/// its fonts and label colours, and forms laid out as the system lays out a form.
+/// The Library panels' controls as a Mac inspector has them (LIB-45): the system's controls at their regular size and
+/// its fonts, the theme's colours as Develop's panels have them (values `value`, a form's labels `label`, notes
+/// `secondaryLabel`), and forms laid out as the system lays out a form.
 @MainActor
 enum PanelControls {
     /// The text of the panels' controls and labels.
@@ -93,7 +94,7 @@ enum PanelControls {
     static func label(_ text: String, secondary: Bool = false) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = font
-        label.textColor = secondary ? .secondaryLabelColor : .labelColor
+        label.textColor = (secondary ? Palette.secondaryLabel : Palette.value).nsColor
         label.lineBreakMode = .byTruncatingMiddle
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
@@ -103,7 +104,7 @@ enum PanelControls {
     static func note(_ text: String) -> NSTextField {
         let note = NSTextField(labelWithString: text)
         note.font = noteFont
-        note.textColor = .secondaryLabelColor
+        note.textColor = Palette.secondaryLabel.nsColor
         note.lineBreakMode = .byTruncatingTail
         note.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return note
@@ -113,7 +114,7 @@ enum PanelControls {
     static func formLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text + ":")
         label.font = font
-        label.textColor = .secondaryLabelColor
+        label.textColor = Palette.label.nsColor
         label.alignment = .right
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
         label.setContentHuggingPriority(.required, for: .horizontal)

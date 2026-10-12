@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampLibrary
 
 /// The keywords of the photos selected in the Keywording panel (LIB-21), as the system draws a token field's tokens
@@ -83,7 +84,8 @@ final class KeywordTokensView: NSView {
     }
 }
 
-/// A keyword as a token: its name on the accent colour's tint when every photo selected has it, or on grey with how
+/// A keyword as a token: its name on the theme's selection colour when every photo selected has it, or outlined with
+/// how
 /// many do when only some do, and a button that takes it off them all.
 final class KeywordToken: NSView {
     static let height: CGFloat = 22
@@ -103,15 +105,16 @@ final class KeywordToken: NSView {
     init() {
         super.init(frame: CGRect(x: 0, y: 0, width: 60, height: Self.height))
         name.font = PanelControls.font
+        name.textColor = Palette.value.nsColor
         name.lineBreakMode = .byTruncatingMiddle
         partial.font = PanelControls.noteFont
-        partial.textColor = .secondaryLabelColor
+        partial.textColor = Palette.secondaryLabel.nsColor
         let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
         remove.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove")?
             .withSymbolConfiguration(configuration)
         remove.isBordered = false
         remove.imagePosition = .imageOnly
-        remove.contentTintColor = .secondaryLabelColor
+        remove.contentTintColor = Palette.secondaryLabel.nsColor
         remove.target = self
         remove.action = #selector(removeClicked)
         for view in [name, partial, remove] {
@@ -187,18 +190,15 @@ final class KeywordToken: NSView {
     }
 
     override func draw(_: NSRect) {
-        let fill: NSColor = isPartial ? .quaternaryLabelColor : Self.tint
-        fill.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
-    }
-
-    /// A token field's tokens' colour: the accent colour, lightened in light mode and greyed in dark mode.
-    private static let tint = NSColor(name: nil) { appearance in
-        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        return dark
-            ? NSColor.controlAccentColor.blended(withFraction: 0.55, of: NSColor(white: 0.45, alpha: 1))
-            ?? .controlAccentColor
-            : NSColor.controlAccentColor.blended(withFraction: 0.7, of: .white) ?? .controlAccentColor
+        guard isPartial else {
+            Palette.selection.nsColor.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+            return
+        }
+        let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 4.5, yRadius: 4.5)
+        outline.lineWidth = 1
+        Palette.track.nsColor.setStroke()
+        outline.stroke()
     }
 
     @objc private func removeClicked() {
@@ -256,8 +256,8 @@ final class KeywordCompletionList: NSView {
     }
 
     override func updateLayer() {
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.backgroundColor = Palette.well.cgColor
+        layer?.borderColor = Palette.divider.cgColor
     }
 
     override var intrinsicContentSize: NSSize {
@@ -337,11 +337,11 @@ final class KeywordCompletionRow: NSButton {
     override func draw(_: NSRect) {
         guard let match else { return }
         if isReached {
-            NSColor.selectedContentBackgroundColor.setFill()
+            Palette.selection.nsColor.setFill()
             NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
         }
-        let primary: NSColor = isReached ? .alternateSelectedControlTextColor : .labelColor
-        let secondary: NSColor = isReached ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        let primary = (isReached ? Palette.value : Palette.label).nsColor
+        let secondary = Palette.secondaryLabel.nsColor
         let count = NSAttributedString(string: match.count.formatted(), attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular),
             .foregroundColor: secondary,

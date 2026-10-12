@@ -12,7 +12,7 @@ final class KeywordDragLabel: NSTextField, NSDraggingSource, LibraryDragSource {
     static func make() -> KeywordDragLabel {
         let label = KeywordDragLabel(labelWithString: "")
         label.font = PanelControls.font
-        label.textColor = .labelColor
+        label.textColor = Palette.label.nsColor
         label.lineBreakMode = .byTruncatingMiddle
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
@@ -35,7 +35,7 @@ final class KeywordDragLabel: NSTextField, NSDraggingSource, LibraryDragSource {
         item.setDraggingFrame(
             CGRect(origin: CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2), size: size),
             contents: NSImage(size: size, flipped: false) { rect in
-                NSColor.controlAccentColor.withAlphaComponent(0.85).setFill()
+                Palette.accent.withAlphaComponent(0.85).setFill()
                 NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
                 text.draw(in: rect.insetBy(dx: 6, dy: 2))
                 return true
