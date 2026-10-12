@@ -902,7 +902,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Photos library integration and a Photos editing extension <!-- tracker: EXT-04 -->
 - [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
 - [x] The filmstrip hidden automatically or kept up, as a setting, with the photo fitted above it <!-- tracker: UX-19 -->
-- [ ] The filmstrip: a scroll bar, thumbnails you can resize, Home and End for the first and last photo, and its line of text made optional <!-- tracker: UX-42 -->
+- [x] The filmstrip: a scroll bar, thumbnails you can resize, Home and End for the first and last photo, and its line of text made optional <!-- tracker: UX-42 -->
 - [x] The pixel under the pointer under the histogram: its RGB percentages or L*a*b* values <!-- tracker: UX-32 -->
 - [x] Masks: reorder masks and components, every overlay mode and its opacity <!-- tracker: MSK-21 -->
 - [x] Masks: a Color swatch <!-- tracker: MSK-23 -->
