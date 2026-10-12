@@ -35,7 +35,7 @@ redlamp recipe export <recipe> -o look.redrecipe [--cube look.cube]
 redlamp recipe fingerprint ref1.jpg ref2.jpg
 redlamp recipe fit --references ref*.jpg [--lut] -o fitted.redrecipe
 redlamp recipe build-pack                    # regenerate the bundled film-style Base Looks
-redlamp recipe golden [--record]
+redlamp recipe golden [--record]             # this GPU's set of golden renders
 ```
 
 A `<recipe>` is a path, an id, a bundled slug (`street/gritty`) or a name.
@@ -116,7 +116,11 @@ A recipe that deliberately fails a check (a toned black and white, a warm cross-
 
 1. Add it to `packages/RedlampRecipes/Sources/StarterPack.swift` with an original name. Never use a photographer's, brand's or film stock's name.
 2. `redlamp recipe lint all` must not fail.
-3. `redlamp recipe golden --record` records its golden render in `tests/golden/recipes/process-<n>/`. Existing golden renders are never overwritten, and the tests compare every bundled recipe against its own.
+3. `redlamp recipe golden --record` records its golden render in the set of the GPU it runs on: `tests/golden/recipes/process-<n>/` on the M1 Ultra, and on any other GPU a folder within it named for that GPU, such as `apple-m4-max/` for the build Mac's. Two GPUs round a few values differently, so each keeps its own set. Existing golden renders are never overwritten, and the tests compare every bundled recipe against its own in the set of the GPU they run on. The build Mac records its own once a gate of the commit has run there (`scripts/build-mac.py gate`); from this Mac's Terminal, this line records what its set lacks, a new process version's whole set included, and copies it into this checkout, to commit with the recipe:
+
+   ```bash
+   ssh build-mac 'cd ~/src/build-mac/redlamp-push-gate && build/DerivedData/Build/Products/Debug/redlamp recipe golden --record | grep RECORDED >&2; tar -cf - tests/golden/recipes/process-*/apple-m4-max' | tar -C ~/src/darkroom -xf -
+   ```
 4. A published recipe never changes. To improve one, publish the same id with `version + 1` and record a golden render for the new version.
 
 The bundled film-style Base Looks are `LookDesign`s in `StarterPackLooks.swift`, turned into 25-point tables by `redlamp recipe build-pack`. A test checks that the shipped tables still match their designs; a changed design must bump the look's version.

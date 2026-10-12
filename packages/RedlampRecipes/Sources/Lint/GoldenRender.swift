@@ -1,12 +1,24 @@
 import CoreGraphics
 import Foundation
+import Metal
 import simd
 
 /// Golden renders: every bundled recipe on the lint chart, recorded once per process
 /// version and never regenerated, so no engine change can silently alter a shipped look.
+///
+/// Each GPU that runs the tests has a set recorded on it. Another GPU computes some values a hair
+/// differently, so a value near a rounding boundary lands on the next level (on the M4 Max, in 2 to
+/// 12% of a render's pixels), and near black one level is more than the max allows.
 public enum GoldenRender {
     /// Renders are this wide (the chart's aspect), small enough to commit.
     public static let width = 256
+
+    /// The GPU whose set sits in each process version's folder itself; any other's is in a folder
+    /// named for it.
+    public static let referenceGPU = "Apple M1 Ultra"
+
+    /// The GPU renders run on, as Metal names it ("Apple M4 Max").
+    public static let gpu = MTLCreateSystemDefaultDevice()?.name ?? "no GPU"
 
     public struct Comparison: Sendable {
         public var meanDeltaE: Double
@@ -18,8 +30,15 @@ public enum GoldenRender {
         }
     }
 
-    public static func directory(root: URL, processVersion: Int) -> URL {
-        root.appendingPathComponent("tests/golden/recipes/process-\(processVersion)", isDirectory: true)
+    /// `gpu`'s golden renders for a process version: `process-15` for the M1 Ultra's,
+    /// `process-15/apple-m4-max` for the M4 Max's.
+    public static func directory(root: URL, processVersion: Int, gpu: String) -> URL {
+        let folder = root.appendingPathComponent("tests/golden/recipes/process-\(processVersion)", isDirectory: true)
+        guard gpu != referenceGPU else { return folder }
+        return folder.appendingPathComponent(
+            gpu.lowercased().replacingOccurrences(of: " ", with: "-"),
+            isDirectory: true,
+        )
     }
 
     public static func fileName(for recipe: Recipe) -> String {

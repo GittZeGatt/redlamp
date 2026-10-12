@@ -122,22 +122,32 @@ struct RenderedRecipeTests {
         #expect(first.recipe.settings == second.recipe.settings)
     }
 
-    /// Every bundled recipe matches its golden render (tests/golden/recipes), recorded once
-    /// with `redlamp recipe golden --record` and never regenerated.
+    /// Every bundled recipe matches its golden render in this GPU's set (tests/golden/recipes),
+    /// recorded once with `redlamp recipe golden --record` and never regenerated.
     @Test(.enabled(if: canRender))
     func `bundled recipes match their golden renders`() async throws {
         let tools = try renderer()
-        let folder = GoldenRender.directory(root: Self.repositoryRoot, processVersion: EditRecipe.currentProcessVersion)
+        let folder = GoldenRender.directory(
+            root: Self.repositoryRoot, processVersion: EditRecipe.currentProcessVersion, gpu: GoldenRender.gpu,
+        )
         for recipe in BuiltInRecipes.all {
             let url = folder.appendingPathComponent(GoldenRender.fileName(for: recipe))
             let golden = try #require(
                 try? LookTableImport.readImage(url),
-                "no golden render for \(recipe.id); record it",
+                "no golden render for \(recipe.id) on the \(GoldenRender.gpu); record it on this Mac with `redlamp recipe golden --record`",
             )
             let rendered = try await GoldenRender.render(recipe, with: tools)
             let comparison = try #require(GoldenRender.compare(golden, rendered))
             #expect(comparison.passes, "\(recipe.id): mean ΔE \(comparison.meanDeltaE), max \(comparison.maxDeltaE)")
         }
+    }
+
+    @Test func `each GPU's golden renders have a folder of their own`() {
+        let root = URL(fileURLWithPath: "/repository")
+        #expect(GoldenRender.directory(root: root, processVersion: 15, gpu: "Apple M1 Ultra").path
+            == "/repository/tests/golden/recipes/process-15")
+        #expect(GoldenRender.directory(root: root, processVersion: 15, gpu: "Apple M4 Max").path
+            == "/repository/tests/golden/recipes/process-15/apple-m4-max")
     }
 
     @Test func `bundled film looks match their designs`() throws {

@@ -31,7 +31,7 @@ enum RecipeCommands {
                                                the default) or srgb
       export <recipe> -o <out.redrecipe> [--cube <out.cube>]
       build-pack [--out <dir>]                 regenerate the bundled LUT Base Looks
-      golden [--record]                        compare (or record) golden renders of bundled recipes
+      golden [--record]                        compare (or record) this GPU's golden renders of bundled recipes
       fingerprint <image>… [--json]            the style fingerprint of images
       fit --references <image>… [--images <raw>…] [--lut] [--name <name>] [-o <out.redrecipe>]
           [--evaluations <n>]

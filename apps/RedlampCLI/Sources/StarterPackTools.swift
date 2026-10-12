@@ -28,11 +28,17 @@ enum StarterPackBuilder {
     }
 }
 
-/// `redlamp recipe golden`: checks (or records) the bundled recipes' golden renders.
+/// `redlamp recipe golden`: checks (or records) the bundled recipes' golden renders, in the set of
+/// the GPU it runs on.
 enum GoldenRenders {
     static func run(record: Bool, renderer: RecipeRenderer) async throws {
-        let folder = GoldenRender.directory(root: Repository.root, processVersion: EditRecipe.currentProcessVersion)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let folder = GoldenRender.directory(
+            root: Repository.root, processVersion: EditRecipe.currentProcessVersion, gpu: GoldenRender.gpu,
+        )
+        if record {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        print("The \(GoldenRender.gpu)'s golden renders: \(folder.path)")
         var failures = 0
         for recipe in BuiltInRecipes.all {
             let url = folder.appendingPathComponent(GoldenRender.fileName(for: recipe))
