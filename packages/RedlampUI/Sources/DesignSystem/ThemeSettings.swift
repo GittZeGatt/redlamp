@@ -38,9 +38,28 @@ public final class ThemeSettings {
 
     public static let lightPanelMinimumOpacity = 0.85
 
+    /// The theme's appearance, as AppKit names it.
+    public var appearanceName: NSAppearance.Name {
+        selection.appearance == .dark ? .darkAqua : .aqua
+    }
+
     private var reducesTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var accessibilityObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var appAppearance: Tracker?
+
+    /// Gives `app` the theme's appearance, now and whenever the theme changes: every window, sheet, popover and alert
+    /// takes it, and one left to the system's draws the other appearance's scrollers and controls. The app calls it
+    /// as it launches; nothing else sets the app's appearance, so a test that builds windows leaves it as it was.
+    public func applyAppearance(to app: NSApplication) {
+        appAppearance = Tracker { [weak self, weak app] in
+            guard let self, let app else { return }
+            let name = appearanceName
+            if app.appearance?.name != name {
+                app.appearance = NSAppearance(named: name)
+            }
+        }
+    }
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

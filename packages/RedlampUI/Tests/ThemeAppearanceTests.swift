@@ -11,12 +11,15 @@ import Testing
 struct ThemeAppearanceTests {
     @Test func `the windows' scroll views take the theme's appearance, not the system's`() async throws {
         _ = NSApplication.shared
+        let found = NSApp.appearance
         NSApp.appearance = nil
         let system = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
         let suite = "theme-appearance-\(UUID().uuidString)"
         let theme = try ThemeSettings(defaults: #require(UserDefaults(suiteName: suite)))
         theme.selection.appearance = system == .darkAqua ? .light : .dark
-        let expected: NSAppearance.Name = theme.selection.appearance == .dark ? .darkAqua : .aqua
+        let expected = theme.appearanceName
+        // As the app does as it launches.
+        theme.applyAppearance(to: NSApp)
 
         let folder = RenameTests.RenameFolder()
         try await folder.open()
@@ -45,7 +48,7 @@ struct ThemeAppearanceTests {
             editor.endSheet(rename)
             imports.remove()
             folder.cleanUp()
-            NSApp.appearance = nil
+            NSApp.appearance = found
             UserDefaults().removePersistentDomain(forName: suite)
         }
         try await Task.sleep(for: .milliseconds(600))
@@ -68,6 +71,31 @@ struct ThemeAppearanceTests {
             !($0 is OverlayScrollView) && !($0 is FilmstripScrollView)
         }
         #expect(!shortcuts.isEmpty, "the Shortcuts sheet's scroll view isn't in the editor window")
+    }
+
+    /// The app gives itself the theme's appearance as it launches; an editor window built without it, as a test builds
+    /// one, takes the theme's for itself and leaves the app's as it was, so the tests after it run as their authors
+    /// expected, on the system's.
+    @Test func `an editor window built without the app leaves the app's appearance as it found it`() async throws {
+        _ = NSApplication.shared
+        let found = NSApp.appearance
+        let suite = "theme-appearance-\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suite) }
+        let theme = try ThemeSettings(defaults: #require(UserDefaults(suiteName: suite)))
+        let controller = EditorWindowController(
+            model: EditorModel(engine: StubEngine()), theme: theme, onOpen: {}, onExport: {},
+            onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        for appearance in [ThemeAppearance.light, .dark, .light] {
+            theme.selection.appearance = appearance
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(NSApp.appearance === found, "the app's appearance, with the theme \(appearance)")
+            let expected: NSAppearance.Name = appearance == .dark ? .darkAqua : .aqua
+            #expect(window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == expected)
+        }
     }
 
     private static func scrollViews(in view: NSView?) -> [NSScrollView] {

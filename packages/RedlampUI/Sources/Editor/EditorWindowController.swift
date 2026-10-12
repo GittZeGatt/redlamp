@@ -105,14 +105,11 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
                 window.title = model.info?.fileName ?? "Redlamp"
                 window.subtitle = model.info?.cameraName ?? ""
             },
-            // The app's rather than this window's: every window, sheet, popover and alert takes it, and one left to
-            // the system's draws the other appearance's scrollers and controls.
+            // The app has the theme's appearance too (`ThemeSettings.applyAppearance(to:)`), which a window built
+            // without it, as tests build one, doesn't.
             Tracker { [weak self] in
                 guard let self else { return }
-                let name: NSAppearance.Name = theme.selection.appearance == .dark ? .darkAqua : .aqua
-                if NSApp.appearance?.name != name {
-                    NSApp.appearance = NSAppearance(named: name)
-                }
+                window?.appearance = NSAppearance(named: theme.appearanceName)
             },
             Tracker { [weak self] in
                 guard let self else { return }

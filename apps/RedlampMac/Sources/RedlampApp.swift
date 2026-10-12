@@ -89,6 +89,7 @@ struct RedlampApp: App {
             #if DEBUG || REDLAMP_PROFILING
                 DebugDrawCounter.startIfRequested()
             #endif
+            theme.applyAppearance(to: NSApp)
             let editor = EditorWindowController(
                 model: model, theme: theme,
                 onOpen: { Self.openPanel(model: model) },
