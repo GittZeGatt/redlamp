@@ -1,12 +1,15 @@
 import AppKit
 import RedlampDesign
 import RedlampLibrary
+import SwiftUI
 import Testing
+@testable import RedlampCanvas
 @_spi(Harness) @testable import RedlampUI
 
 /// The Library in the theme's colours, as Develop's panels are (LIB-45): a theme chosen while the Library is shown
 /// reaches its grid's cells' text, its Keyword List's rows and its panels' labels, each in the token Develop's panels
-/// draw the same role in.
+/// draw the same role in. Its photos are on Develop's canvas grey in every theme, and no field shows the desktop's
+/// tint.
 @MainActor
 @Suite(.serialized)
 struct LibraryThemeTests {
@@ -18,7 +21,7 @@ struct LibraryThemeTests {
         let theme = ThemeSettings(defaults: defaults)
         defer {
             theme.selection = ThemeSelection()
-            LibraryLook.follow()
+            LibraryLook.follow(theme.selection)
             defaults.removePersistentDomain(forName: suite)
             fixture.cleanUp()
         }
@@ -76,7 +79,131 @@ struct LibraryThemeTests {
         #expect(Self.matches(value.textColor, tokens.value), "its values in the value colour")
     }
 
+    @Test func `the loupe, Compare and Survey are on Develop's canvas grey in a dark theme and a light one`(
+    ) async throws {
+        let fixture = ModuleFixture()
+        // Develop's canvas in a window of its own, for a model of its own: one canvas to a model.
+        let developing = ModuleFixture()
+        let suite = "redlamp-tests-surround-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let theme = ThemeSettings(defaults: defaults)
+        defer {
+            fixture.model.lightsOut = 0
+            theme.selection = ThemeSelection()
+            LibraryLook.follow(theme.selection)
+            defaults.removePersistentDomain(forName: suite)
+            fixture.cleanUp()
+            developing.cleanUp()
+        }
+        try await fixture.open(count: 4)
+        try await developing.open(count: 1)
+        let model = fixture.model
+        model.showLibrary(.loupe)
+        let library = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        library.contentViewController = ModuleViews.make(model: model, theme: theme)
+        let develop = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        develop.contentView = NSHostingView(
+            rootView: CanvasArea(onOpen: {}).environment(developing.model).environment(theme),
+        )
+        defer {
+            library.contentViewController = nil
+            develop.contentView = nil
+        }
+        let module = try #require(Self.find(LibraryModuleView.self, in: library.contentView))
+        try await Self.eventually { Self.find(CanvasMetalView.self, in: develop.contentView) != nil }
+        let canvas = try #require(Self.find(CanvasMetalView.self, in: develop.contentView))
+        let views: [(String, NSView)] = [
+            ("loupe", module.loupe),
+            ("Compare", module.compare),
+            ("Survey", module.survey),
+        ]
+
+        for (family, appearance) in [("kanagawa", ThemeAppearance.dark), ("solarized", .light)] {
+            theme.selection = ThemeSelection(familyID: family, appearance: appearance)
+            for level in 0 ... 2 {
+                model.lightsOut = level
+                developing.model.lightsOut = level
+                try await Self.eventually {
+                    Self.srgb(Self.behind(module.loupe)) == Self.srgb(Self.canvasGrey(canvas.surround))
+                        && LibraryLook.tokens == theme.selection.tokens
+                }
+                let grey = try #require(Self.srgb(Self.canvasGrey(canvas.surround)))
+                for (name, view) in views {
+                    let behind = try #require(Self.srgb(Self.behind(view)))
+                    #expect(Self.close(behind, grey), "\(family) \(appearance), Lights Out \(level): \(name)")
+                }
+            }
+            model.lightsOut = 0
+            try await Self.eventually { Self.srgb(Self.behind(module.loupe)) != Self.srgb(LibraryLook.background) }
+            #expect(Self.srgb(Self.behind(module.loupe)) != Self.srgb(LibraryLook.background), "not the grid's")
+
+            // What's drawn on the grey takes the family's dark colours, the theme's own in a dark theme.
+            let dark = ThemeSelection(familyID: family, appearance: .dark).tokens
+            let semibold = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            let name = try #require(Self.labels(in: module.loupe).first { $0.font == semibold })
+            #expect(Self.matches(name.textColor, dark.value), "\(family) \(appearance): the loupe's name")
+        }
+    }
+
+    /// The tint is drawn by the window server on screen, never in a view rendered off it, so this checks what AppKit
+    /// reads: the preference behind "Allow wallpaper tinting in windows", in the argument domain, which every other
+    /// domain (the app's own, the user's global one) is below.
+    @Test func `the app takes the desktop's tint off every field, above the user's own setting, writing nothing`() {
+        let key = "AppleReduceDesktopTinting"
+        let standard = UserDefaults.standard
+        let arguments = standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        defer { standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain) }
+        var launched = arguments
+        launched["redlamp.test.argument"] = true
+        launched[key] = nil
+        standard.setVolatileDomain(launched, forName: UserDefaults.argumentDomain)
+
+        ThemeSettings.turnOffDesktopTinting()
+        #expect(standard.volatileDomain(forName: UserDefaults.argumentDomain)[key] as? Bool == true)
+        #expect(standard.bool(forKey: key), "AppKit reads the tint off")
+        #expect(standard.bool(forKey: "redlamp.test.argument"), "the launch's other arguments kept")
+        let own = Bundle.main.bundleIdentifier.flatMap { standard.persistentDomain(forName: $0) }
+        #expect(own?[key] == nil, "nothing written to the app's defaults")
+    }
+
     // MARK: - Helpers
+
+    /// The colour drawn behind `view`: its layer's, or the nearest view's under it that has one.
+    static func behind(_ view: NSView) -> CGColor? {
+        var current: NSView? = view
+        while let shown = current {
+            if let color = shown.layer?.backgroundColor {
+                return color
+            }
+            current = shown.superview
+        }
+        return nil
+    }
+
+    /// The grey Develop's canvas clears to, `level` linear in the canvas's colour space (`CanvasMetalView`'s layer's).
+    static func canvasGrey(_ level: Double) -> CGColor? {
+        CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3).flatMap {
+            CGColor(colorSpace: $0, components: [level, level, level, 1])
+        }
+    }
+
+    /// A colour's sRGB components, to the nearest 1/1000.
+    static func srgb(_ color: CGColor?) -> [Double]? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let components = color?.converted(to: space, intent: .defaultIntent, options: nil)?.components
+        else { return nil }
+        return components.map { ($0 * 1000).rounded() / 1000 }
+    }
+
+    static func close(_ color: [Double], _ other: [Double]) -> Bool {
+        color.count == other.count && zip(color, other).allSatisfy { abs($0 - $1) < 0.004 }
+    }
 
     /// The keywords `paths` as the library reads them, each on one photo.
     static func keywords(_ paths: [String]) -> PanelKeywords {
