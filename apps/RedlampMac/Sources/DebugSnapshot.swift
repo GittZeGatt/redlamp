@@ -48,8 +48,9 @@
     ///   every 120 ms, showing the bar first; and `source=<source>` shows one of the Library section's entries
     ///   by its key (`all-photographs`, `marked`), a collection (`collection:<path>`) or a folder
     ///   (`folder:<path>`). A command's value is everything after its first `=`, so `find=rating>=4` types
-    ///   `rating>=4`. Every command but `wait`, `scroll`, `find`, `source` and `quit` waits for the photo
-    ///   open in Develop first, which a source shown in the Library may leave none of.
+    ///   `rating>=4`. `judge=<tools>` turns on the judging bar's `histogram`, `peaking` and `af`, joined by
+    ///   `+`. While Develop is shown, every command but `wait`, `scroll`, `find`, `source` and `quit` waits for
+    ///   its photo to open first; in the Library, which may have none open, no command waits.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
@@ -107,7 +108,7 @@
                 for (key, value) in commands {
                     // Edits only stick once the image has finished opening, or failed to; the Library's
                     // sources open none in Develop.
-                    while !libraryCommands.contains(key),
+                    while !libraryCommands.contains(key), model.module != .library,
                           (model.info == nil && model.errorMessage == nil) || model.isLoading {
                         try? await Task.sleep(for: .milliseconds(100))
                     }

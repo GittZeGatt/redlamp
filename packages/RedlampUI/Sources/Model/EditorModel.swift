@@ -2019,6 +2019,18 @@ public final class EditorModel {
                 if let action = ShortcutAction(rawValue: value) {
                     perform(action)
                 }
+            case "judge":
+                // `histogram`, `peaking` and `af`, joined by `+`: the judging bar's tools on, as its buttons turn them.
+                let tools = Set(value.split(separator: "+").map(String.init))
+                if tools.contains("histogram"), !libraryJudging.showsHistogram {
+                    toggleRawHistogram()
+                }
+                if tools.contains("peaking"), !libraryJudging.showsPeaking {
+                    toggleFocusPeaking()
+                }
+                if tools.contains("af"), !libraryJudging.showsAFPoints {
+                    toggleAFPoints()
+                }
             case "source":
                 // `all-photographs`, `marked` and the Library section's other entries as their keys name them,
                 // `collection:<path>`, or `folder:<path>`.
