@@ -1,11 +1,13 @@
 import AppKit
 import RedlampDesign
 
-/// An SF Symbol drawn in the frame SwiftUI gives it, at the image's full size; `NSImageView`
-/// fits it to its (smaller) alignment rect. Clickable when given an action, as a plain
+/// An SF Symbol in the frame SwiftUI gives it, drawn at its own shape on whole pixels at the frame's centre
+/// (`PixelSymbol`); `NSImageView` fits it to its (smaller) alignment rect. Clickable when given an action, as a plain
 /// SwiftUI button would be.
 final class SymbolImageView: LayerDrawnView {
-    private let image: NSImage
+    private let name: String
+    private let pointSize: CGFloat
+    private let weight: FontSpec.Weight
     private let size: CGSize
     private let color: NSColor
     var onClick: (() -> Void)?
@@ -14,9 +16,9 @@ final class SymbolImageView: LayerDrawnView {
     }
 
     init(_ name: String, pointSize: CGFloat, weight: FontSpec.Weight = .regular, color: NSColor) {
-        image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight.nsWeight))
-            ?? NSImage()
+        self.name = name
+        self.pointSize = pointSize
+        self.weight = weight
         size = Symbol.layoutSize(name, pointSize: pointSize, weight: weight)
         self.color = color
         super.init(frame: .zero)
@@ -33,10 +35,11 @@ final class SymbolImageView: LayerDrawnView {
 
     override func drawContent(in _: CGRect) {
         let resolved = color.usingColorSpace(.sRGB) ?? color
-        let tinted = image.withSymbolConfiguration(
-            NSImage.SymbolConfiguration(paletteColors: [resolved.withAlphaComponent(1)]),
-        ) ?? image
-        Symbol.draw(tinted, in: bounds, alpha: resolved.alphaComponent * (isEnabled ? 1 : 0.5))
+        PixelSymbol.draw(
+            name, pointSize: pointSize, weight: weight.nsWeight, color: resolved.withAlphaComponent(1),
+            alpha: resolved.alphaComponent * (isEnabled ? 1 : 0.5), centeredAt: CGPoint(x: bounds.midX, y: bounds.midY),
+            scale: backingScale,
+        )
     }
 
     override func mouseDown(with _: NSEvent) {

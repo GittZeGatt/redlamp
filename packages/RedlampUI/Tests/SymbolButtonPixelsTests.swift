@@ -1,7 +1,9 @@
 import AppKit
 import Foundation
+import RedlampDesign
+import RedlampLibrary
 import Testing
-@testable import RedlampUI
+@_spi(Harness) @testable import RedlampUI
 
 /// The small symbol buttons of the sidebars' headers and of the Library's filter field (LIB-45): each glyph drawn at
 /// the symbol's own size and shape, its strokes on whole pixels, at 1x as well as 2x. For a 1x screen AppKit draws a
@@ -69,6 +71,31 @@ struct SymbolButtonPixelsTests {
             return ((xx / total - mx * mx).squareRoot() / scale, (yy / total - my * my).squareRoot() / scale)
         }
 
+        /// Its columns `range`, their alpha as a share of their most opaque pixel's.
+        func columns(_ range: Range<Int>) -> Glyph {
+            let range = max(range.lowerBound, 0) ..< min(range.upperBound, width)
+            let values = (0 ..< height).flatMap { y in range.map { self[$0, y] } }
+            let most = max(values.max() ?? 0, 0.0001)
+            return Glyph(width: range.count, height: height, scale: scale, values: values.map { $0 / most })
+        }
+
+        /// The runs of columns with ink in them, apart by two empty columns or more, from the left.
+        var inkedColumns: [Range<Int>] {
+            var runs: [Range<Int>] = []
+            var run: (first: Int, last: Int)?
+            for x in 0 ..< width where column(x).contains(where: { $0 > 0.02 }) {
+                if let current = run, x - current.last > 2 {
+                    runs.append(current.first ..< current.last + 1)
+                    run = nil
+                }
+                run = (run?.first ?? x, x)
+            }
+            if let run {
+                runs.append(run.first ..< run.last + 1)
+            }
+            return runs
+        }
+
         /// Where its ink is centred, in pixels from its top left corner.
         var centroid: (x: Double, y: Double) {
             var total = 0.0, x = 0.0, y = 0.0
@@ -94,6 +121,12 @@ struct SymbolButtonPixelsTests {
                 }
             }
             return Glyph(width: columns, height: rows, scale: scale / 2, values: values)
+        }
+
+        /// Its coverage as a share of its most opaque pixel's, as a drawing's is measured.
+        var normalized: Glyph {
+            let most = max(values.max() ?? 0, 0.0001)
+            return Glyph(width: width, height: height, scale: scale, values: values.map { $0 / most })
         }
 
         /// The mean coverage of its ink, weighted by coverage: 1 when every pixel it touches is whole.
@@ -156,51 +189,92 @@ struct SymbolButtonPixelsTests {
         layer.sublayers?.forEach(display)
     }
 
-    /// `view`'s drawing at its window's scale, each pixel's alpha as a share of its most opaque one's.
-    private func glyph(of view: NSView) throws -> Glyph {
-        let scale = try #require(view.window).backingScaleFactor
-        view.superview?.layoutSubtreeIfNeeded()
-        if let layer = view.layer {
-            display(layer)
+    /// A bitmap's alpha, as a share of its most opaque pixel's.
+    private func glyph(_ rep: NSBitmapImageRep, scale: CGFloat) throws -> Glyph {
+        let alphas = (0 ..< rep.pixelsHigh).flatMap { y in
+            (0 ..< rep.pixelsWide).map { x in Double(rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) }
         }
-        let size = view.bounds.size
+        let most = alphas.max() ?? 0
+        try #require(most > 0, "the glyph is drawn")
+        return Glyph(
+            width: rep.pixelsWide, height: rep.pixelsHigh, scale: Double(scale), values: alphas.map { $0 / most },
+        )
+    }
+
+    /// A bitmap of `size` points at `scale`, drawn into by `body` in a flipped context.
+    private func drawing(size: CGSize, scale: CGFloat, _ body: () -> Void) throws -> NSBitmapImageRep {
         let rep = try #require(NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: Int((size.width * scale).rounded()),
             pixelsHigh: Int((size.height * scale).rounded()), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
             isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0,
         ))
         rep.size = size
-        view.cacheDisplay(in: view.bounds, to: rep)
-        let alphas = (0 ..< rep.pixelsHigh).flatMap { y in
-            (0 ..< rep.pixelsWide).map { x in Double(rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) }
-        }
-        let most = alphas.max() ?? 0
-        try #require(most > 0, "\(view) draws its glyph")
-        return Glyph(
-            width: rep.pixelsWide, height: rep.pixelsHigh, scale: Double(scale), values: alphas.map { $0 / most },
-        )
+        let context = try #require(NSGraphicsContext(bitmapImageRep: rep)).cgContext
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        body()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
     }
 
-    /// The symbol as AppKit draws it at 2x, where it keeps its shape.
-    private func symbol(_ name: String, pointSize: CGFloat, weight: NSFont.Weight) throws -> Glyph {
-        let image = try #require(NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)))
-        let size = CGSize(width: ceil(image.size.width) + 4, height: ceil(image.size.height) + 4)
+    /// `view`'s drawing at its window's scale.
+    private func glyph(of view: NSView) throws -> Glyph {
+        let scale = try #require(view.window).backingScaleFactor
+        view.superview?.layoutSubtreeIfNeeded()
+        if let layer = view.layer {
+            display(layer)
+        }
         let rep = try #require(NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2), bitsPerSample: 8,
+            bitmapDataPlanes: nil, pixelsWide: Int((view.bounds.width * scale).rounded()),
+            pixelsHigh: Int((view.bounds.height * scale).rounded()), bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0,
+        ))
+        rep.size = view.bounds.size
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return try glyph(rep, scale: scale)
+    }
+
+    /// The image `button`'s cell draws, where it draws it, at its window's scale: without the bezel.
+    private func glyph(ofImageIn button: NSButton) throws -> Glyph {
+        let scale = try #require(button.window).backingScaleFactor
+        let cell = try #require(button.cell as? NSButtonCell)
+        let image = try #require(button.image)
+        let rep = try drawing(size: button.bounds.size, scale: scale) {
+            cell.drawImage(image, withFrame: cell.imageRect(forBounds: button.bounds), in: button)
+        }
+        return try glyph(rep, scale: scale)
+    }
+
+    /// The symbol as AppKit draws it at 2x, where it keeps its shape, turned clockwise by `degrees`.
+    private func symbol(
+        _ name: String, pointSize: CGFloat, weight: NSFont.Weight, scale: NSImage.SymbolScale? = nil,
+        turned degrees: CGFloat = 0, palette: [NSColor]? = nil,
+    ) throws -> Glyph {
+        var configuration = scale.map { NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight, scale: $0) }
+            ?? NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
+        if let palette {
+            configuration = configuration.applying(NSImage.SymbolConfiguration(paletteColors: palette))
+        }
+        let image = try #require(NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration))
+        let side = ceil(hypot(image.size.width, image.size.height)) + 4
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(side * 2), pixelsHigh: Int(side * 2), bitsPerSample: 8,
             samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0,
             bitsPerPixel: 0,
         ))
-        rep.size = size
+        rep.size = CGSize(width: side, height: side)
+        let context = try #require(NSGraphicsContext(bitmapImageRep: rep))
+        context.cgContext.translateBy(x: side / 2, y: side / 2)
+        context.cgContext.rotate(by: -degrees * .pi / 180)
         NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        image.draw(in: CGRect(origin: CGPoint(x: 2, y: 2), size: image.size))
+        NSGraphicsContext.current = context
+        let origin = CGPoint(x: -image.size.width.rounded() / 2, y: -image.size.height.rounded() / 2)
+        image.draw(in: CGRect(origin: origin, size: image.size))
         NSGraphicsContext.restoreGraphicsState()
-        let alphas = (0 ..< rep.pixelsHigh).flatMap { y in
-            (0 ..< rep.pixelsWide).map { x in Double(rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) }
-        }
-        let most = try #require(alphas.max())
-        return Glyph(width: rep.pixelsWide, height: rep.pixelsHigh, scale: 2, values: alphas.map { $0 / most })
+        return try glyph(rep, scale: 2)
     }
 
     /// Whether a stroke's coverage across it is on whole pixels: a run of pixels it covers whole, or nearly, with
@@ -216,11 +290,8 @@ struct SymbolButtonPixelsTests {
         values.map { String(format: "%.2f", $0) }.joined(separator: " ")
     }
 
-    /// Checks `control`'s glyph against the symbol's own: the same size and shape (its spread within a tenth of a
-    /// point) and the same pixels as the symbol's drawing (at 2x as AppKit draws it, at 1x that drawing averaged 2 by
-    /// 2 from whichever of its half-point offsets leaves the most of it on whole pixels); a + with arms of equal
-    /// length and both strokes on whole pixels and the same width; and the control itself on whole pixels in its
-    /// window.
+    /// Checks `control`'s glyph against the symbol's own, as `check(_:against:)` does, and the control itself on
+    /// whole pixels in its window.
     private func check(
         _ control: NSView, _ name: String, pointSize: CGFloat, weight: NSFont.Weight,
         sourceLocation: SourceLocation = #_sourceLocation,
@@ -233,8 +304,20 @@ struct SymbolButtonPixelsTests {
             edges.allSatisfy { $0.rounded() == $0 }, "\(label): the control, \(frame), is on whole pixels",
             sourceLocation: sourceLocation,
         )
-        let drawn = try glyph(of: control)
-        let symbol = try symbol(name, pointSize: pointSize, weight: weight)
+        try check(
+            glyph(of: control), against: symbol(name, pointSize: pointSize, weight: weight), label: label,
+            plus: name == "plus", sourceLocation: sourceLocation,
+        )
+    }
+
+    /// Checks a glyph against the symbol's own: the same size and shape (its spread within a tenth of a point) and
+    /// the same pixels as the symbol's drawing (at 2x as AppKit draws it, at 1x that drawing averaged 2 by 2 from
+    /// whichever of its half-point offsets leaves the most of it on whole pixels); and a + with arms of equal length,
+    /// both strokes the same width and, at 1x, on whole pixels (at 2x they're where AppKit's drawing has them).
+    private func check(
+        _ drawn: Glyph, against symbol: Glyph, label: String, plus isPlus: Bool = false,
+        sourceLocation: SourceLocation = #_sourceLocation,
+    ) {
         let (spread, own) = (drawn.spread, symbol.spread)
         let spreads = "\(text([spread.across, spread.down])) points, the symbol's own \(text([own.across, own.down]))"
         #expect(
@@ -244,13 +327,14 @@ struct SymbolButtonPixelsTests {
         let offsets: [(Int, Int)] = [(0, 0), (1, 0), (0, 1), (1, 1)]
         let halves = offsets.map { symbol.halved(movedBy: $0.0, $0.1) }
         let sharpest = halves.map(\.sharpness).max() ?? 0
-        let references = scale == 2 ? [symbol] : halves.filter { $0.sharpness >= sharpest - 0.005 }
+        let references = drawn.scale == 2
+            ? [symbol] : halves.filter { $0.sharpness >= sharpest - 0.005 }.map(\.normalized)
         let difference = references.map { drawn.difference(from: $0) }.min() ?? 1
         #expect(
             difference <= 0.05, "\(label): \(text([difference])) of a pixel off the symbol's own drawing",
             sourceLocation: sourceLocation,
         )
-        guard name == "plus" else { return }
+        guard isPlus else { return }
         let plus = drawn.plus
         let (upright, bar) = (plus.upright.reduce(0.0, +), plus.bar.reduce(0.0, +))
         #expect(
@@ -262,7 +346,7 @@ struct SymbolButtonPixelsTests {
             sourceLocation: sourceLocation,
         )
         #expect(
-            isWhole(plus.upright) && isWhole(plus.bar),
+            drawn.scale > 1 || isWhole(plus.upright) && isWhole(plus.bar),
             "\(label): upright [\(text(plus.upright))], bar [\(text(plus.bar))]", sourceLocation: sourceLocation,
         )
     }
@@ -325,12 +409,150 @@ struct SymbolButtonPixelsTests {
         }
     }
 
+    /// Every symbol the app draws through `Symbol.draw`, at its size, weight and turn: the panels' and rows'
+    /// chevrons, eyes and symbols, the histogram's and tone curve's triangles, the tool strip's tools, and the grid's
+    /// and filmstrip's badges.
+    private static let drawnSymbols: [(String, CGFloat, FontSpec.Weight, CGFloat)] = [
+        ("chevron.right", 9, .bold, 0), ("chevron.right", 9, .bold, 90), ("chevron.right", 9.5, .bold, 0),
+        ("chevron.down", 9.5, .bold, 0), ("eye", 12, .regular, 0), ("eye.slash", 12, .regular, 0),
+        ("map", 11, .regular, 0), ("folder", 11, .regular, 0), ("camera", 11, .regular, 0),
+        ("sun.max", 11, .regular, 0), ("magnifyingglass", 11, .regular, 0), ("perspective", 11, .regular, 0),
+        ("swatchpalette", 11, .regular, 0), ("sparkles", 11, .regular, 0),
+        ("point.bottomleft.forward.to.point.topright.scurvepath", 11, .regular, 0),
+        ("arrowtriangle.up.fill", 8, .regular, 45), ("arrowtriangle.up.fill", 8, .regular, -45),
+        ("arrowtriangle.up.fill", 9, .regular, 0), ("crop", 13, .regular, 0), ("bandage", 13, .regular, 0),
+        ("eye", 13, .regular, 0), ("flag.fill", 8.5, .regular, 0), ("xmark", 8.5, .bold, 0),
+        ("star.fill", 7.5, .regular, 0), ("star", 7.5, .regular, 0), ("circle.fill", 7.5, .regular, 0),
+        ("circle", 8.5, .regular, 0), ("flag", 7, .semibold, 0), ("xmark", 7, .semibold, 0),
+        ("slider.horizontal.3", 8.5, .semibold, 0), ("square.stack.3d.down.right.fill", 8, .regular, 0),
+        ("ellipsis", 8, .bold, 0), ("star.fill", 6, .regular, 0), ("icloud.and.arrow.down", 14, .regular, 0),
+        ("trash.fill", 8, .semibold, 0), ("hand.raised.fill", 8, .semibold, 0), ("star.fill", 9, .regular, 0),
+        ("cube", 9, .regular, 0), ("questionmark.circle", 10, .regular, 0),
+    ]
+
+    @Test func `every symbol drawn through Symbol.draw is its own shape, on whole pixels, at 1x and 2x`() throws {
+        for (name, size, weight, degrees) in Self.drawnSymbols {
+            let own = try symbol(name, pointSize: size, weight: weight.nsWeight, turned: degrees)
+            for scale in [1, 2] as [CGFloat] {
+                let rep = try drawing(size: CGSize(width: 40, height: 40), scale: scale) {
+                    Symbol.draw(
+                        name, pointSize: size, weight: weight, color: RGBA(white: 1, alpha: 0.6),
+                        centeredAt: CGPoint(x: 20.3, y: 19.6), rotation: degrees, scale: scale,
+                    )
+                }
+                let label = "\(name) \(size) pt turned \(Int(degrees)) at \(Int(scale))x"
+                try check(glyph(rep, scale: scale), against: own, label: label)
+            }
+        }
+    }
+
+    @Test func `the panel headers' chevrons, symbols and eyes are their own shape, on whole pixels, at 1x and 2x`(
+    ) async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = EditorModel(engine: StubEngine())
+        model.select(folder.appending(path: "IMG_0001.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        model.expandedPanels = [.basic]
+        for scale in [1, 2] as [CGFloat] {
+            let column = NSView(frame: CGRect(x: 0, y: 0, width: 316, height: 1000))
+            let inspector = [PanelID.basic, .detail].map { PanelSectionView(
+                panel: $0,
+                model: model,
+                rows: [NSView()],
+            ) }
+            for (index, panel) in inspector.enumerated() {
+                panel.frame = CGRect(x: 0, y: CGFloat(index) * 60, width: 316, height: 40)
+                column.addSubview(panel)
+            }
+            let sidebar = SidebarListView(model: model)
+            sidebar.frame = CGRect(x: 0, y: 120, width: 260, height: 700)
+            column.addSubview(sidebar)
+            let window = window(column, size: column.frame.size, scale: scale)
+            defer { window.contentView = nil }
+            column.layoutSubtreeIfNeeded()
+            let headers = views(in: column).filter { String(describing: type(of: $0)) == "PanelHeaderView" }
+            let expected: [(String, Bool)] = [PanelID.basic, .detail].map { (
+                $0.symbol,
+                model.expandedPanels.contains($0),
+            ) }
+                + [SidebarSection.folders, .recipes, .snapshots, .history].map {
+                    ($0.symbol, model.expandedSidebarSections.contains($0))
+                }
+            try #require(headers.count == expected.count, "\(headers.count) panel headers")
+            for (header, (name, open)) in zip(headers, expected) {
+                let label = "\(name)'s header at \(Int(scale))x"
+                let drawn = try glyph(of: header)
+                let runs = drawn.inkedColumns
+                try #require(runs.count >= 2, "\(label): a chevron and a symbol, in \(runs)")
+                let chevron = try symbol("chevron.right", pointSize: 9, weight: .bold, turned: open ? 90 : 0)
+                check(drawn.columns(runs[0].lowerBound - 2 ..< runs[0].upperBound + 2), against: chevron, label: label)
+                let own = try symbol(name, pointSize: 11, weight: .regular)
+                check(drawn.columns(runs[1].lowerBound - 2 ..< runs[1].upperBound + 2), against: own, label: label)
+            }
+            // Detail's eye, on and then, clicked, off.
+            let eye = try #require(views(in: inspector[1])
+                .first { $0.accessibilityIdentifier() == "panel.detail.switch" })
+            for on in [true, false] {
+                if !on {
+                    try eye.mouseDown(with: #require(NSEvent.mouseEvent(
+                        with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+                    )))
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+                try check(
+                    glyph(of: eye), against: symbol(on ? "eye" : "eye.slash", pointSize: 12, weight: .regular),
+                    label: "Detail's eye, \(on ? "on" : "off"), at \(Int(scale))x",
+                )
+            }
+            model.setPanel(.detail, on: true)
+        }
+    }
+
+    @Test func `a row's icon and chevron are their own shape, on whole pixels, at 1x and 2x, in both looks`() throws {
+        let model = EditorModel(engine: StubEngine())
+        for scale in [1, 2] as [CGFloat] {
+            for look in [SidebarOutlineView.Look.panel, .sourceList] {
+                let cell = SidebarCellView(
+                    node: SidebarNode(.group("Favorites")),
+                    model: model,
+                    look: look,
+                    rowSize: .medium,
+                )
+                let window = window(cell, size: CGSize(width: 220, height: look == .panel ? 24 : 28), scale: scale)
+                defer { window.contentView = nil }
+                let label = "the \(look) row at \(Int(scale))x"
+                if look == .panel {
+                    let icon = try #require(views(in: cell).first { $0 is SymbolImageView })
+                    try check(icon, "folder", pointSize: 11, weight: .regular)
+                } else {
+                    let icon = try #require(views(in: cell).compactMap { $0 as? NSImageView }.first)
+                    try check(
+                        glyph(of: icon), against: symbol("folder", pointSize: 13, weight: .regular, scale: .large),
+                        label: "\(label): its icon",
+                    )
+                }
+                let chevron = try #require(views(in: cell).first { String(describing: type(of: $0)) == "ChevronView" })
+                try check(
+                    glyph(of: chevron), against: symbol("chevron.right", pointSize: 9, weight: .bold),
+                    label: "\(label): its chevron",
+                )
+            }
+        }
+    }
+
     private func views(in root: NSView) -> [NSView] {
         root.subviews.flatMap { [$0] + views(in: $0) }
     }
 
-    /// Writes the source list's header under the pointer, the panel look's sidebar and the filter field at 1x and
-    /// 2x as PNGs to the folder in `REDLAMP_POLISH_SHOTS`, each called `REDLAMP_POLISH_SHOTS_PREFIX`-name-scale.png.
+    /// Writes the source list's header under the pointer, the panel look's sidebar, the filter field, the inspector's
+    /// headers, rows in both looks, the filter bar's toggles and buttons and a strip of the symbols drawn through
+    /// `Symbol.draw`, at 1x and 2x, as PNGs to the folder in `REDLAMP_POLISH_SHOTS`, each called
+    /// `REDLAMP_POLISH_SHOTS_PREFIX`-name-scale.png.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_POLISH_SHOTS"] != nil))
     func `pictures of the buttons`() throws {
         let folder = try #require(ProcessInfo.processInfo.environment["REDLAMP_POLISH_SHOTS"])
@@ -378,6 +600,70 @@ struct SymbolButtonPixelsTests {
             let fieldWindow = window(root, size: root.frame.size, scale: scale)
             defer { fieldWindow.contentView = nil }
             try save(root, "filter-field")
+
+            let model = EditorModel(engine: StubEngine())
+            let inspector = NSView(frame: CGRect(x: 0, y: 0, width: 316, height: 80))
+            for (index, panel) in [PanelID.basic, .detail].enumerated() {
+                let view = PanelSectionView(panel: panel, model: model, rows: [NSView()])
+                view.frame = CGRect(x: 0, y: CGFloat(index) * 40, width: 316, height: 40)
+                inspector.addSubview(view)
+            }
+            let inspectorWindow = window(inspector, size: inspector.frame.size, scale: scale)
+            defer { inspectorWindow.contentView = nil }
+            try save(inspector, "inspector-headers")
+
+            let rows = NSView(frame: CGRect(x: 0, y: 0, width: 220, height: 52))
+            for (index, look) in [SidebarOutlineView.Look.panel, .sourceList].enumerated() {
+                let cell = SidebarCellView(
+                    node: SidebarNode(.group("Favorites")),
+                    model: model,
+                    look: look,
+                    rowSize: .medium,
+                )
+                cell.frame = CGRect(x: 0, y: CGFloat(index) * 24, width: 220, height: look == .panel ? 24 : 28)
+                rows.addSubview(cell)
+            }
+            let rowsWindow = window(rows, size: rows.frame.size, scale: scale)
+            defer { rowsWindow.contentView = nil }
+            try save(rows, "rows")
+
+            let bar = NSView(frame: CGRect(x: 0, y: 0, width: 330, height: 40))
+            let toggles = [
+                FilterToggle(symbol: "flag.fill", identifier: "pictures.flag", tip: "Picked"),
+                FilterToggle(symbol: "star", identifier: "pictures.star", tip: "Star"),
+                FilterToggle(symbol: "circle.fill", color: .systemRed, identifier: "pictures.red", tip: "Red"),
+                FilterToggle(symbol: "circle.slash", identifier: "pictures.none", tip: "No Label"),
+            ]
+            for (index, toggle) in toggles.enumerated() {
+                toggle.frame = CGRect(x: 10 + CGFloat(index) * 28, y: 9, width: 24, height: 22)
+                bar.addSubview(toggle)
+            }
+            let direction = FilterBarButton(identifier: "pictures.direction", symbol: "arrow.up", tip: "Ascending")
+            direction.frame = CGRect(x: 130, y: 6, width: 32, height: 28)
+            let judging = ToolbarButton(symbol: "camera.aperture", identifier: "pictures.judging")
+            judging.frame = CGRect(x: 170, y: 9, width: 26, height: 22)
+            let survey = ToolbarButton(
+                symbol: "xmark.circle.fill", identifier: "pictures.survey",
+                palette: [NSColor(white: 0.1, alpha: 0.9), NSColor(white: 0.72, alpha: 0.9)],
+            )
+            survey.frame = CGRect(x: 200, y: 10, width: 22, height: 20)
+            let slider = ToolbarSlider(identifier: "pictures.slider")
+            slider.frame = CGRect(x: 226, y: 9, width: 100, height: 22)
+            [direction, judging, survey, slider].forEach(bar.addSubview)
+            let barWindow = window(bar, size: bar.frame.size, scale: scale)
+            defer { barWindow.contentView = nil }
+            try save(bar, "filter-bar")
+
+            let symbols = try drawing(size: CGSize(width: 330, height: 24), scale: scale) {
+                for (index, (name, size, weight, degrees)) in Self.drawnSymbols.prefix(24).enumerated() {
+                    Symbol.draw(
+                        name, pointSize: size, weight: weight, color: RGBA(white: 1, alpha: 0.85),
+                        centeredAt: CGPoint(x: 10 + CGFloat(index) * 13.5, y: 12), rotation: degrees, scale: scale,
+                    )
+                }
+            }
+            let url = URL(fileURLWithPath: folder).appending(path: "\(prefix)-symbols-\(Int(scale))x.png")
+            try symbols.representation(using: .png, properties: [:])?.write(to: url)
         }
     }
 }

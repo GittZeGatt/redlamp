@@ -28,8 +28,8 @@ final class SidebarCellView: NSTableCellView {
         }
 
         /// AppKit's sidebar symbols: at the title's size, in the large scale.
-        static func symbolConfiguration(_ size: NSTableView.RowSizeStyle) -> NSImage.SymbolConfiguration {
-            NSImage.SymbolConfiguration(pointSize: textSize(size), weight: .regular, scale: .large)
+        static func icon(_ symbol: String, _ size: NSTableView.RowSizeStyle) -> NSImage {
+            PixelSymbol.image(symbol, pointSize: textSize(size), scale: .large)
         }
 
         static let iconGap: CGFloat = 6
@@ -314,8 +314,7 @@ final class SidebarCellView: NSTableCellView {
             return
         }
         let image = NSImageView()
-        image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        image.symbolConfiguration = SourceListLayout.symbolConfiguration(rowSize)
+        image.image = SourceListLayout.icon(symbol, rowSize)
         image.imageScaling = .scaleNone
         image.contentTintColor = color(of: tone)
         image.setAccessibilityElement(false)
