@@ -22,7 +22,8 @@ goes straight through.
 
 When the build Mac doesn't answer, or its Xcode isn't this Mac's, gate says so in one line and runs
 the same check here; a different macOS is reported and allowed, since only Xcode has to match.
---there waits for the build Mac instead, and --here doesn't try it.
+--there waits for the build Mac instead, and checks a commit there even when it passed here; --here
+doesn't try it.
 
 The build Mac is the host build-mac in ~/.ssh/config; REDLAMP_BUILD_MAC names another. Under its
 ~/src/build-mac: the clone, the push gate's worktree beside it (redlamp-push-gate), and jobs/, with
@@ -350,11 +351,14 @@ def gate(args: argparse.Namespace) -> int:
     flags = ["--full"] if args.full else ["--suite"] if args.suite else []
     asked = "full" if args.full else "suite" if args.suite else "reference"
     record = covered(git("rev-parse", f"{commit}^{{tree}}"), asked)
-    if record:
-        on = " on the build Mac" if record.get("machine") == "build-mac" else ""
+    there = record is not None and record.get("machine") == "build-mac"
+    if record and (there or not args.there):
+        on = " on the build Mac" if there else ""
         say(f"Its files passed the gate ({record['level']}){on} on {record['at'][:16].replace('T', ' at ')} "
             f"({record['commit'][:7]}); nothing to check")
         return 0
+    if record:
+        say(f"Its files passed the gate here ({record['level']}); --there checks them on the build Mac too")
     if where(args) is None:
         command = [str(ROOT / "scripts/push-gate.py"), commit, *flags]
         os.execve(command[0], command, ENV)
@@ -714,7 +718,8 @@ def main() -> int:
     level.add_argument("--suite", action="store_true", help="the whole test suite, not only the reference tests")
     level.add_argument("--full", action="store_true", help="the whole suite and CI's Release builds")
     place = checking.add_mutually_exclusive_group()
-    place.add_argument("--there", action="store_true", help="wait for the build Mac rather than check here")
+    place.add_argument("--there", action="store_true",
+                       help="wait for the build Mac rather than check here, and check there what passed here")
     place.add_argument("--here", action="store_true", help="check here, without trying the build Mac")
     checking.add_argument("--detach", action="store_true", help="start it there and return; attach follows it")
     following = commands.add_parser("attach", help="follow a job there again")
