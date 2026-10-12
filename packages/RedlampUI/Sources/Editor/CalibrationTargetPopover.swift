@@ -86,27 +86,10 @@ struct CalibrationTargetPopover: View {
         .font(Theme.labelFont)
         .padding(14)
         .frame(width: 360)
-        .background(KeyWindow())
+        .takesKeys()
         .onAppear {
             DispatchQueue.main.async { focused = true }
         }
-    }
-
-    /// The popover opens from a click on the photo, which leaves the editor window key; its window
-    /// takes the keys as it appears, so the field can be typed in at once.
-    private struct KeyWindow: NSViewRepresentable {
-        final class View: NSView {
-            override func viewDidMoveToWindow() {
-                super.viewDidMoveToWindow()
-                window?.makeKey()
-            }
-        }
-
-        func makeNSView(context _: Context) -> View {
-            View()
-        }
-
-        func updateNSView(_: View, context _: Context) {}
     }
 
     private func submit(calibrating: Bool) {

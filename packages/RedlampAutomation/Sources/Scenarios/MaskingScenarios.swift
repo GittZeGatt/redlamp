@@ -453,7 +453,9 @@
         static let all: [Scenario] = [cropTool]
 
         static let cropTool = Scenario(
-            "crop.tool", "Crop: every aspect, the lock, the angle, straighten, rotate, flip and the overlays",
+            "crop.tool",
+            "Crop: every aspect and one typed in, the lock, the swap between portrait and landscape, the angle, "
+                + "straighten, rotate, flip and the overlays",
             claims: [
                 .tool(.crop),
                 .tool(.edit),
@@ -463,15 +465,35 @@
                 .feature("crop.overlays"),
                 .parameter(.cropAngle),
             ],
+            needsFocus: true,
         ) { app in
             try app.openWorking()
             try app.click(.tool(.crop))
             try app.wait("the Crop tool") { $0.activeTool == .crop }
             app.covered(.tool(.crop), via: .mouse)
-            for aspect in CropAspect.allCases {
+            for aspect in CropAspect.builtIn {
                 try app.main { $0.setCropAspect(aspect) }
                 try app.wait("the \(aspect.title) aspect") { $0.cropAspect == aspect }
             }
+            // Typed into Enter Custom…, a ratio crops as typed and stays in the Aspect menu until cleared.
+            try app.choose("Enter Custom…", inMenuOf: .identifier("crop.aspect"))
+            try app.wait("the popover asking for an aspect") { _ in Views.popoverWindow != nil }
+            app.pause(0.5)
+            try app.typeInPopover("21x9\r")
+            try app.wait("the crop at 21 × 9, kept in the menu") { model in
+                model.customCropAspects.map(\.title) == ["21 × 9"]
+                    && abs(model.pixelAspect(of: model.recipe.crop) - 21.0 / 9) < 0.01
+            }
+            // SwiftUI's buttons take no click while the app isn't active.
+            if try app.focus() {
+                try app.tap(.identifier("crop.aspect.swap"))
+            } else {
+                try app.main { $0.swapCropOrientation() }
+            }
+            try app.wait("the crop swapped to portrait") { $0.pixelAspect(of: $0.recipe.crop) < 1 }
+            try app.choose("Clear Custom Aspects", inMenuOf: .identifier("crop.aspect"))
+            try app.wait("the aspects typed in cleared") { $0.customCropAspects.isEmpty && $0.cropAspect == .free }
+            app.covered(.feature("crop.crop"), via: .mouse)
             try app.press(.cropAspectLock)
             try app.press(.cropAspectLock)
             try app.set(.cropAngle, 4)

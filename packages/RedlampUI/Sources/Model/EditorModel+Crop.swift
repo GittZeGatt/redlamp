@@ -2,9 +2,15 @@ import AppKit
 import CoreGraphics
 import RedlampEngineAPI
 
-/// The crop's aspect ratio presets, Lightroom's.
-public enum CropAspect: Hashable, Sendable, CaseIterable {
+/// The crop's aspect ratio presets, Lightroom's, and those typed in (Enter Custom…).
+public enum CropAspect: Hashable, Sendable {
     case free, original, square, fourByFive, fiveBySeven, twoByThree, sixteenByNine
+    case custom(CustomCropAspect)
+
+    /// The presets, in the Aspect menu's order; the aspects typed in follow them.
+    public static let builtIn: [CropAspect] = [
+        .free, .original, .square, .fourByFive, .fiveBySeven, .twoByThree, .sixteenByNine,
+    ]
 
     public var title: String {
         switch self {
@@ -15,19 +21,21 @@ public enum CropAspect: Hashable, Sendable, CaseIterable {
         case .fiveBySeven: "5 × 7"
         case .twoByThree: "2 × 3 / 4 × 6"
         case .sixteenByNine: "16 × 9"
+        case let .custom(aspect): aspect.title
         }
     }
 
-    /// Width over height for a landscape frame; nil when free.
+    /// Width over height for a landscape frame (a typed aspect's as typed); nil when free.
     func ratio(original: PixelSize) -> Double? {
         switch self {
         case .free: nil
-        case .original: original.aspectRatio
+        case .original: max(original.aspectRatio, 1 / original.aspectRatio)
         case .square: 1
         case .fourByFive: 5.0 / 4
         case .fiveBySeven: 7.0 / 5
         case .twoByThree: 3.0 / 2
         case .sixteenByNine: 16.0 / 9
+        case let .custom(aspect): aspect.ratio
         }
     }
 }
@@ -127,8 +135,13 @@ public extension EditorModel {
         guard let ratio = aspect.ratio(original: info?.pixelSize ?? cropFrameSize) else { return }
         let frame = cropFrameSize
         let current = recipe.crop
-        // Keep the crop's orientation: a portrait crop stays portrait.
-        let wanted = pixelAspect(of: current) >= 1 ? ratio : 1 / ratio
+        // A preset keeps the crop's orientation, so a portrait crop stays portrait; an aspect typed
+        // in crops as typed.
+        let wanted = if case .custom = aspect {
+            ratio
+        } else {
+            pixelAspect(of: current) >= 1 ? ratio : 1 / ratio
+        }
         let frameAspect = Double(frame.width) / max(Double(frame.height), 1)
         var width = 1.0, height = 1.0
         if wanted > frameAspect {

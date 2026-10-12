@@ -6,10 +6,12 @@ import Testing
 /// The Crop & Straighten tool's editing: aspects, Constrain to Image, turns and flips.
 @MainActor
 struct CropToolTests {
-    private func openModel() async throws -> EditorModel {
+    private func openModel(_ size: PixelSize = PixelSize(width: 600, height: 400)) async throws -> EditorModel {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let model = EditorModel(engine: StubEngine())
+        let engine = StubEngine()
+        engine.pixelSize = size
+        let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0001.ARW"))
         for _ in 0 ..< 200 where model.info == nil {
             try await Task.sleep(for: .milliseconds(5))
@@ -33,6 +35,57 @@ struct CropToolTests {
         expectNear(crop.height, 1, "the 600 x 400 frame's full height")
         expectNear(crop.center.x, 0.5)
         #expect(model.history.last?.name == "Crop Aspect: \(CropAspect.square.title)")
+    }
+
+    @Test func `Original keeps a photo shot in portrait portrait, at its own ratio`() async throws {
+        let model = try await openModel(PixelSize(width: 400, height: 600))
+        model.setCropAspect(.fiveBySeven)
+        expectNear(model.pixelAspect(of: model.recipe.crop), 5.0 / 7)
+        model.setCropAspect(.original)
+        expectNear(model.pixelAspect(of: model.recipe.crop), 400.0 / 600)
+        #expect(model.recipe.crop.isFull)
+    }
+
+    @Test func `an aspect typed in crops as typed, and comes first among them in the Aspect menu`() async throws {
+        let model = try await openModel()
+        model.customCropAspects = []
+        defer { model.customCropAspects = [] }
+        let size = try #require(CustomCropAspect("1080 × 1350"))
+        model.enterCropAspect(size)
+        expectNear(model.pixelAspect(of: model.recipe.crop), 0.8, "portrait on a landscape photo, as typed")
+        expectNear(model.recipe.crop.height, 1, "the 600 x 400 frame's full height")
+        expectNear(model.recipe.crop.center.x, 0.5)
+        #expect(model.cropAspect == .custom(size))
+        #expect(model.history.last?.name == "Crop Aspect: 1080 × 1350")
+
+        let wide = try #require(CustomCropAspect("21:9"))
+        model.enterCropAspect(wide)
+        expectNear(model.pixelAspect(of: model.recipe.crop), 21.0 / 9, "landscape from a portrait crop, as typed")
+        #expect(model.customCropAspects == [wide, size])
+
+        model.swapCropOrientation()
+        model.setCropAspect(.fourByFive)
+        expectNear(model.pixelAspect(of: model.recipe.crop), 4.0 / 5, "a preset keeps the crop's orientation")
+    }
+
+    @Test func `the Aspect menu keeps the five aspects typed in last, and clearing them leaves the crop`() async throws {
+        let model = try await openModel()
+        model.customCropAspects = []
+        defer { model.customCropAspects = [] }
+        let typed = ["2 × 1", "3 × 1", "4 × 1", "5 × 1", "6 × 1", "7 × 1"].compactMap { CustomCropAspect($0) }
+        for aspect in typed {
+            model.enterCropAspect(aspect)
+        }
+        #expect(model.customCropAspects == Array(typed.suffix(5).reversed()), "the oldest gave way")
+        model.enterCropAspect(typed[3])
+        #expect(model.customCropAspects.first == typed[3], "entered again, it moves up")
+        #expect(model.customCropAspects.count == 5)
+
+        let crop = model.recipe.crop
+        model.clearCustomCropAspects()
+        #expect(model.customCropAspects.isEmpty)
+        #expect(model.cropAspect == .free, "the menu shows Custom")
+        #expect(model.recipe.crop == crop)
     }
 
     @Test func `straightening keeps the crop inside the photo, and straightening back restores it`() async throws {
