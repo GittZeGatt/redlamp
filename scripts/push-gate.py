@@ -28,7 +28,8 @@ read their configuration from parent folders would find the main checkout's (Swi
 excludes build/, and would lint nothing). The lock, the logs and the passes it remembers are in
 the main checkout's build/push-gate.
 
-A pass is remembered by the commit's tree, so the same files aren't checked twice. One gate runs
+A pass is remembered by the commit's tree, so the same files aren't checked twice; a pass on the
+build Mac (scripts/build-mac.py gate) is remembered here the same way. One gate runs
 at a time: a second push waits for the first, and gives up if origin's main moved meanwhile,
 since git would refuse it then. Tests stop at the first bundle that fails.
 
@@ -405,7 +406,8 @@ def check(commit: str, theirs: str | None, asked: str, remote: str | None) -> bo
         level = max("reference" if read else "checks", asked, key=LEVELS.index)
     record = covered(tree, level)
     if record:
-        say(f"Its files passed the gate ({record['level']}) on {record['at'][:16].replace('T', ' at ')} "
+        on = " on the build Mac" if record.get("machine") == "build-mac" else ""
+        say(f"Its files passed the gate ({record['level']}){on} on {record['at'][:16].replace('T', ' at ')} "
             f"({record['commit'][:7]}); nothing to check")
         return True
     files = f"{len(paths)} file{'' if len(paths) == 1 else 's'} changed"
