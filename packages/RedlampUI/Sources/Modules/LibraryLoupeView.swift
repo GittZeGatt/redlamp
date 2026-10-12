@@ -14,7 +14,7 @@ import RedlampLibrary
 /// draw over the photo, their buttons in the caption row; with the following loupe on, the photo itself is decoded
 /// as for 1:1, for the lens to magnify. The caption row also shows the loupe's own Auto Advance, on until it's turned
 /// off there (DEC-68), and turns it on or off.
-final class LibraryLoupeView: NSView {
+final class LibraryLoupeView: NSView, ThemeFollowing {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
     private static let captionFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -64,9 +64,8 @@ final class LibraryLoupeView: NSView {
         mark.isHidden = true
         layer?.addSublayer(mark)
         name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-        name.textColor = Palette.value.nsColor
         caption.font = Self.captionFont
-        caption.textColor = Palette.label.nsColor
+        followTheme()
         for label in [name, caption] {
             label.lineBreakMode = .byTruncatingMiddle
             addSubview(label)
@@ -98,6 +97,11 @@ final class LibraryLoupeView: NSView {
     }
 
     override func updateLayer() {}
+
+    func followTheme() {
+        name.textColor = LibraryLook.tokens.value.nsColor
+        caption.textColor = LibraryLook.tokens.label.nsColor
+    }
 
     /// The image on screen, for the tests.
     var image: CGImage? {
@@ -472,7 +476,7 @@ final class LibraryLoupeView: NSView {
 }
 
 /// The loupe's rating, flag, label and mark, drawn as a grid cell's are, and said to VoiceOver.
-final class LoupeBadgesView: NSView {
+final class LoupeBadgesView: NSView, ThemeFollowing {
     static let size = CGSize(width: 104, height: 16)
     private let rating = CALayer()
     private let flag = CALayer()
@@ -505,6 +509,11 @@ final class LoupeBadgesView: NSView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    /// Its rating's places are drawn in the theme's colours.
+    func followTheme() {
+        show()
     }
 
     override var isFlipped: Bool {

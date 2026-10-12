@@ -73,6 +73,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     init(model: EditorModel) {
         self.model = model
+        // Made again for each theme (`.id(theme.selection)`), maybe before the Library module has taken it.
+        LibraryLook.follow()
         super.init(frame: CGRect(x: 0, y: 0, width: 600, height: Self.height))
         collectionView.collectionViewLayout = FilmstripLayout(
             itemSize: FilmstripCellView.size, spacing: Self.spacing, insets: Self.insets,

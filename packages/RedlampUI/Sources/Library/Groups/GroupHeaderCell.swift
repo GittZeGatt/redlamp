@@ -29,7 +29,7 @@ final class GroupHeaderCell {
 
     init() {
         background.cornerRadius = 6
-        rule.backgroundColor = CGColor(gray: 1, alpha: 0.12)
+        rule.backgroundColor = LibraryLook.tokens.divider.cgColor
         for layer in [root, background, rule, triangle, text] {
             layer.actions = LibraryGridCell.noActions
         }
@@ -54,7 +54,11 @@ final class GroupHeaderCell {
         }
         if open != isOpen || triangle.contents == nil || triangle.contentsScale != scale {
             triangle.contentsScale = scale
-            triangle.contents = GroupHeaderText.triangle(open: open, scale: scale)
+            triangle.contents = GroupHeaderText.triangle(
+                open: open,
+                scale: scale,
+                color: LibraryLook.headerText.chevron,
+            )
             triangle.frame = CGRect(x: 8, y: (frame.height - 12) / 2, width: 12, height: 12)
         }
         isOpen = open
@@ -76,10 +80,21 @@ final class GroupHeaderCell {
 
     /// Ringed in the accent as it is now while it stands for the active photo, its rule hidden meanwhile.
     func refreshLook() {
-        background.backgroundColor = isFocused ? GridCellLook.selected : nil
+        background.backgroundColor = isFocused ? LibraryLook.selectedTile : nil
         background.borderWidth = isFocused ? 2 : 0
-        background.borderColor = isFocused ? GridCellLook.ring : nil
+        background.borderColor = isFocused ? LibraryLook.ring : nil
         rule.isHidden = isFocused
+    }
+
+    /// Takes the theme's colours as they are now: its rule's, its chevron's and the focus's.
+    func followTheme() {
+        rule.backgroundColor = LibraryLook.tokens.divider.cgColor
+        if triangle.contents != nil {
+            triangle.contents = GroupHeaderText.triangle(
+                open: isOpen, scale: triangle.contentsScale, color: LibraryLook.headerText.chevron,
+            )
+        }
+        refreshLook()
     }
 
     /// Out of sight, waiting to show another group.
@@ -99,6 +114,22 @@ final class GroupHeaderCell {
 enum GroupHeaderText {
     static let height: CGFloat = 18
 
+    /// The theme's colours for a header: its name the value colour, its detail the secondary label colour or, for a
+    /// moment still to cull, the label colour, and its chevron the panels' chevrons' colour.
+    struct Colors: Hashable, Sendable {
+        var title: RGBA
+        var detail: RGBA
+        var unpicked: RGBA
+        var chevron: RGBA
+
+        init(_ tokens: PaletteTokens) {
+            title = tokens.value
+            detail = tokens.secondaryLabel
+            unpicked = tokens.label
+            chevron = tokens.secondaryLabel
+        }
+    }
+
     struct Key: Hashable, Sendable {
         var title: String
         var detail: String
@@ -106,6 +137,7 @@ enum GroupHeaderText {
         var scale: CGFloat
         /// A moment without a pick: its detail is drawn brighter, as one still to cull.
         var unpicked = false
+        var colors: Colors
     }
 
     /// "42 photos · 3 picks", or "42 photos · no pick yet".
@@ -127,14 +159,12 @@ enum GroupHeaderText {
         string.append(NSAttributedString(string: key.title, attributes: [
             kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.emphasizedSystem, 13, nil)
                 as Any,
-            kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(gray: 0.92, alpha: 1),
+            kCTForegroundColorAttributeName as NSAttributedString.Key: key.colors.title.cgColor,
         ]))
         let detail: [NSAttributedString.Key: Any] = [
             kCTFontAttributeName as NSAttributedString.Key: CTFontCreateUIFontForLanguage(.system, 11.5, nil) as Any,
-            kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(
-                gray: key.unpicked ? 0.88 : 0.6,
-                alpha: 1,
-            ),
+            kCTForegroundColorAttributeName as NSAttributedString.Key:
+                (key.unpicked ? key.colors.unpicked : key.colors.detail).cgColor,
         ]
         string.append(NSAttributedString(string: "   " + key.detail, attributes: detail))
         let line = CTLineCreateWithAttributedString(string)
@@ -145,9 +175,9 @@ enum GroupHeaderText {
         return context.makeImage()
     }
 
-    /// The disclosure chevron, pointing down while the group is open, made once for each screen's scale.
-    @MainActor static func triangle(open: Bool, scale: CGFloat) -> CGImage? {
-        let key = TriangleKey(open: open, scale: scale)
+    /// The disclosure chevron, pointing down while the group is open, made once for each screen's scale and colour.
+    @MainActor static func triangle(open: Bool, scale: CGFloat, color: RGBA) -> CGImage? {
+        let key = TriangleKey(open: open, scale: scale, color: color)
         if let image = triangles[key] {
             return image
         }
@@ -162,7 +192,7 @@ enum GroupHeaderText {
         let previous = NSGraphicsContext.current
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
         Symbol.draw(
-            open ? "chevron.down" : "chevron.right", pointSize: 9.5, weight: .bold, color: RGBA(white: 0.7),
+            open ? "chevron.down" : "chevron.right", pointSize: 9.5, weight: .bold, color: color,
             centeredAt: CGPoint(x: 6, y: 6), scale: scale,
         )
         NSGraphicsContext.current = previous
@@ -174,6 +204,7 @@ enum GroupHeaderText {
     private struct TriangleKey: Hashable {
         var open: Bool
         var scale: CGFloat
+        var color: RGBA
     }
 
     @MainActor private static var triangles: [TriangleKey: CGImage] = [:]

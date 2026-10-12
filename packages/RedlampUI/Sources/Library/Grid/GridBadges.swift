@@ -35,6 +35,15 @@ enum GridBadges {
         /// A soft frame's sharpness against its burst's sharpest ("38% softer"), or "Soft" in a cell too small.
         case softness(String, compact: Bool)
 
+        /// Drawn on the cell's tile rather than over its photo, so in the theme's colours: an expanded cell's footer
+        /// slots, and the cloud of a photo without a thumbnail.
+        var isOnTile: Bool {
+            switch self {
+            case .ratingSlots, .flagSlot, .cloud: true
+            default: false
+            }
+        }
+
         /// The badge's size in points.
         var size: CGSize {
             switch self {
@@ -171,6 +180,11 @@ enum GridBadges {
         return image
     }
 
+    /// The theme changed: the badges on the tiles are drawn again, in its colours, as cells next ask for them.
+    static func forgetThemed() {
+        images = images.filter { !$0.key.kind.isOnTile }
+    }
+
     /// Draws the badges a culling change can show on every cell at once, so the change itself sets layers'
     /// contents and draws nothing.
     static func prepare(scale: CGFloat) {
@@ -234,7 +248,7 @@ enum GridBadges {
             Symbol.draw(
                 "icloud.and.arrow.down",
                 pointSize: 14,
-                color: white.opacity(0.6),
+                color: LibraryLook.tokens.secondaryLabel,
                 centeredAt: middle,
                 scale: scale,
             )
@@ -255,15 +269,18 @@ enum GridBadges {
             drawDisc(size, in: context)
             Symbol.draw("circle.fill", pointSize: 7.5, color: white.opacity(0.95), centeredAt: middle, scale: scale)
         case let .ratingSlots(stars):
+            let tokens = LibraryLook.tokens
             for index in 0 ..< 5 {
                 Symbol.draw(
                     index < stars ? "star.fill" : "star", pointSize: 7.5,
-                    color: white.opacity(index < stars ? 0.92 : 0.35),
+                    color: index < stars ? tokens.value : tokens.tertiaryLabel,
                     centeredAt: CGPoint(x: starInset + CGFloat(index) * starPitch, y: size.height / 2), scale: scale,
                 )
             }
         case .flagSlot:
-            Symbol.draw("flag", pointSize: 8.5, color: white.opacity(0.35), centeredAt: middle, scale: scale)
+            Symbol.draw(
+                "flag", pointSize: 8.5, color: LibraryLook.tokens.tertiaryLabel, centeredAt: middle, scale: scale,
+            )
         case .markSlot:
             Symbol.draw("circle", pointSize: 8.5, color: white.opacity(0.35), centeredAt: middle, scale: scale)
         case let .stackCount(count, open):

@@ -83,7 +83,9 @@ extension LibraryGridView {
         guard gridLayout.style == .expanded else { return }
         let details = details.details(for: item.url)
         let lines = GridText.Lines(name: item.name, date: details?.date ?? "", settings: details?.settings ?? "")
-        let key = GridText.Key(lines: lines, width: gridLayout.geometry.text.width, scale: scale)
+        let key = GridText.Key(
+            lines: lines, width: gridLayout.geometry.text.width, scale: scale, colors: LibraryLook.cellText,
+        )
         guard cell.textKey != key || cell.textKey == nil else { return }
         if let image = texts[key] {
             return cell.setText(image, for: key)

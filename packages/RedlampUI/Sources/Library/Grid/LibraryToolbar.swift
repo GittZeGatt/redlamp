@@ -10,7 +10,7 @@ import RedlampLibrary
 /// own controls until the library's polish phase (LIB-45), as are the painter's field (LIB-21), shown while
 /// it's out, and the progress of a batch with its Stop (LIB-26): photos dropped on a folder, moving or copying,
 /// and the Undo or Redo of a rename, move or copy.
-final class LibraryToolbarView: NSView, NSTextFieldDelegate {
+final class LibraryToolbarView: NSView, NSTextFieldDelegate, ThemeFollowing {
     static let height: CGFloat = 30
 
     private let model: EditorModel
@@ -95,7 +95,7 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         paints.setAccessibilityLabel("Keywords to Paint")
         paints.setAccessibilityIdentifier("library.toolbar.paints")
         moving.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        moving.textColor = .secondaryLabelColor
+        moving.textColor = LibraryLook.tokens.secondaryLabel.nsColor
         moving.lineBreakMode = .byTruncatingMiddle
         moving.setAccessibilityIdentifier("library.toolbar.moving")
         movingBar.style = .bar
@@ -144,6 +144,14 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         "\(action.title) (\(action.combos.first?.display ?? ""))"
     }
 
+    func followTheme() {
+        ToolbarLook.follow([viewGroup, styleGroup, zoomGroup])
+        for label in [moving, tighter, looser] {
+            label.textColor = LibraryLook.tokens.secondaryLabel.nsColor
+        }
+        looseness.trackFillColor = LibraryLook.tokens.nativeTint?.nsColor
+    }
+
     private func setUpGroups() {
         let model = model
         groupBy.controlSize = .small
@@ -161,6 +169,7 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
             model.setGroupKey(key)
         }
         looseness.controlSize = .small
+        looseness.trackFillColor = LibraryLook.tokens.nativeTint?.nsColor
         looseness.numberOfTickMarks = MomentSetting.loosest - MomentSetting.tightest + 1
         looseness.allowsTickMarkValuesOnly = true
         looseness.isContinuous = true
@@ -176,7 +185,7 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         }
         for label in [tighter, looser] {
             label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-            label.textColor = .secondaryLabelColor
+            label.textColor = LibraryLook.tokens.secondaryLabel.nsColor
         }
         unpicked.controlSize = .small
         unpicked.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -409,7 +418,7 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
 
 /// A toolbar button: a symbol or a title, acting as it's pressed. On, it's lit as a segmented control's chosen
 /// segment is; bordered, it has a push button's bezel at rest too, for an action that ends something (Done).
-final class ToolbarButton: NSView {
+final class ToolbarButton: NSView, ThemeFollowing {
     var onPress: (() -> Void)?
     var isOn = false {
         didSet {
@@ -438,21 +447,26 @@ final class ToolbarButton: NSView {
     private let image = NSImageView()
     private let label = NSTextField(labelWithString: "")
     /// The symbol's own colours, which the button's state doesn't tint (Survey's ×).
-    private let keepsColors: Bool
+    var palette: [NSColor]? {
+        didSet {
+            if palette != oldValue {
+                configureSymbol()
+            }
+        }
+    }
 
     /// `palette` draws the symbol in its own colours; `small` sets a title in the system's small size.
     init(
         symbol: String? = nil, title: String? = nil, identifier: String, palette: [NSColor]? = nil,
         small: Bool = false,
     ) {
-        keepsColors = palette != nil
+        self.palette = palette
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
         if let symbol {
             image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            let size = NSImage.SymbolConfiguration(pointSize: palette == nil ? 13 : 15, weight: .regular)
-            image.symbolConfiguration = palette.map { size.applying(.init(paletteColors: $0)) } ?? size
+            configureSymbol()
             addSubview(image)
         }
         if let title {
@@ -477,15 +491,25 @@ final class ToolbarButton: NSView {
     }
 
     private func update() {
-        let color = (isEnabled ? (isOn ? Palette.value : Palette.label) : Palette.tertiaryLabel).nsColor
-        if !keepsColors {
+        let tokens = LibraryLook.tokens
+        let color = (isEnabled ? (isOn ? tokens.value : tokens.label) : tokens.tertiaryLabel).nsColor
+        if palette == nil {
             image.contentTintColor = color
         }
         image.alphaValue = isEnabled ? 1 : 0.4
         label.textColor = color
-        layer?.backgroundColor = isOn ? ToolbarLook.chosen : isBordered ? ToolbarLook.bezel : nil
+        layer?.backgroundColor = isOn ? ToolbarLook.on : isBordered ? ToolbarLook.bezel : nil
         setAccessibilityValue(isOn ? "on" : nil)
         setAccessibilityEnabled(isEnabled)
+    }
+
+    func followTheme() {
+        update()
+    }
+
+    private func configureSymbol() {
+        let size = NSImage.SymbolConfiguration(pointSize: palette == nil ? 13 : 15, weight: .regular)
+        image.symbolConfiguration = palette.map { size.applying(.init(paletteColors: $0)) } ?? size
     }
 
     override func layout() {
@@ -518,8 +542,8 @@ final class ToolbarButton: NSView {
 
 /// The thumbnail size's slider, drawn as the system's: a track filled in the accent up to a round knob, which follows
 /// the pointer from the press to the release, between a small photo and a large one, as Finder's icon size slider
-/// has them.
-final class ToolbarSlider: NSView {
+/// has them. Its track and knob are the theme's, as Develop's sliders' are.
+final class ToolbarSlider: NSView, ThemeFollowing {
     var onChange: ((Double) -> Void)?
     var range: ClosedRange<Double> = 0 ... 1
     var value: Double = 0 {
@@ -540,14 +564,11 @@ final class ToolbarSlider: NSView {
     init(identifier: String) {
         super.init(frame: .zero)
         wantsLayer = true
-        track.backgroundColor = NSColor(white: 1, alpha: 0.2).cgColor
         track.cornerRadius = 2
         filled.cornerRadius = 2
-        knob.backgroundColor = NSColor(white: 0.95, alpha: 1).cgColor
         knob.cornerRadius = 7
         knob.borderWidth = 0.5
-        knob.borderColor = NSColor(white: 0, alpha: 0.25).cgColor
-        knob.shadowOpacity = 0.35
+        knob.shadowOpacity = 1
         knob.shadowRadius = 1.5
         knob.shadowOffset = CGSize(width: 0, height: -0.5)
         knob.shadowPath = CGPath(ellipseIn: CGRect(x: 0, y: 0, width: 14, height: 14), transform: nil)
@@ -558,14 +579,26 @@ final class ToolbarSlider: NSView {
         for (view, size) in [(small, 9.0), (large, 13.0)] {
             view.image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
             view.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
-            view.contentTintColor = Palette.secondaryLabel.nsColor
             view.setAccessibilityElement(false)
             addSubview(view)
         }
+        followTheme()
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
         setAccessibilityLabel("Thumbnail Size")
         setAccessibilityIdentifier(identifier)
+    }
+
+    func followTheme() {
+        let tokens = LibraryLook.tokens
+        track.backgroundColor = tokens.track.cgColor
+        knob.backgroundColor = tokens.thumb.cgColor
+        knob.borderColor = tokens.thumbStroke.cgColor
+        knob.shadowColor = tokens.thumbShadow.cgColor
+        for view in [small, large] {
+            view.contentTintColor = tokens.secondaryLabel.nsColor
+        }
+        needsLayout = true
     }
 
     @available(*, unavailable)
@@ -585,7 +618,7 @@ final class ToolbarSlider: NSView {
         super.layout()
         let (left, width) = span
         let fraction = (value - range.lowerBound) / max(range.upperBound - range.lowerBound, 1)
-        filled.backgroundColor = GridCellLook.ring
+        filled.backgroundColor = LibraryLook.ring
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         track.frame = CGRect(x: left, y: bounds.midY - 2, width: width, height: 4)
@@ -630,15 +663,26 @@ final class ToolbarSlider: NSView {
     }
 }
 
-/// The bezels of the toolbars' buttons, as the system draws a segmented control's on a dark window.
+/// The bezels of the Library's bars' buttons, in the theme's colours as Develop's tool strip draws its own.
 @MainActor
 enum ToolbarLook {
-    /// Behind a group of buttons that go together, as a segmented control's segments do.
-    static let group = NSColor(white: 1, alpha: 0.06).cgColor
-    /// A bordered button at rest.
-    static let bezel = NSColor(white: 1, alpha: 0.1).cgColor
-    /// The chosen segment, or a button that's on.
+    /// The module picker's chosen segment, on the window's toolbar.
     static let chosen = NSColor(white: 1, alpha: 0.2).cgColor
+
+    /// Behind a group of buttons that go together, as a segmented control's segments do: a well.
+    static var group: CGColor {
+        LibraryLook.tokens.well.cgColor
+    }
+
+    /// A bordered button at rest.
+    static var bezel: CGColor {
+        LibraryLook.tokens.well.cgColor
+    }
+
+    /// The chosen segment, or a button that's on: the theme's selection colour.
+    static var on: CGColor {
+        LibraryLook.tokens.selection.cgColor
+    }
 
     /// A group's bezel, behind `views`, the union of their frames a little larger; hidden when none is shown.
     static func place(_ bezel: CALayer, behind views: [NSView]) {
@@ -650,6 +694,13 @@ enum ToolbarLook {
             bezel.frame = shown.dropFirst().reduce(first.frame) { $0.union($1.frame) }.insetBy(dx: -2, dy: -2)
         }
         CATransaction.commit()
+    }
+
+    /// Groups' bezels in the theme's colours as they are now.
+    static func follow(_ bezels: [CALayer]) {
+        for bezel in bezels {
+            bezel.backgroundColor = group
+        }
     }
 
     /// Puts a group's bezel in `view`, below the buttons it's to go behind.

@@ -333,8 +333,8 @@ struct LibraryGridTests {
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         func drawn(_ settings: String, width: CGFloat) -> Data? {
             let lines = GridText.Lines(name: "P01_AF.RAF", date: "25 Sep 2018 at 17:54", settings: settings)
-            return GridText.render(GridText.Key(lines: lines, width: width, scale: 2), in: space)?.dataProvider?
-                .data as Data?
+            let key = GridText.Key(lines: lines, width: width, scale: 2, colors: GridText.Colors(.standard))
+            return GridText.render(key, in: space)?.dataProvider?.data as Data?
         }
         var counts: Set<Int> = []
         for size in GridSize.steps {

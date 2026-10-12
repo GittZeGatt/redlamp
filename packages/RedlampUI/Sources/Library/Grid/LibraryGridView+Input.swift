@@ -108,8 +108,8 @@ extension LibraryGridView {
         if !band.isDrawn, max(rect.width, rect.height) >= 3 {
             band.isDrawn = true
             band.layer.actions = LibraryGridCell.noActions
-            band.layer.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
-            band.layer.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.8).cgColor
+            band.layer.backgroundColor = LibraryLook.ring.copy(alpha: 0.18)
+            band.layer.borderColor = LibraryLook.ring.copy(alpha: 0.8)
             band.layer.borderWidth = 1
             band.layer.zPosition = 10
             content.layer?.addSublayer(band.layer)

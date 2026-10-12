@@ -235,9 +235,34 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     @objc private func accentChanged() {
-        GridCellLook.forgetAccent()
-        cells.values.forEach { $0.refreshLook() }
-        headers.values.forEach { $0.refreshLook() }
+        if LibraryLook.follow() {
+            refreshLook()
+        }
+    }
+
+    /// The cells and headers, those on screen and those waiting to be used again, in the theme's colours as they are
+    /// now, their text drawn again in them.
+    private func refreshLook() {
+        GridBadges.forgetThemed()
+        texts = [:]
+        headerTexts = [:]
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        pool.forEach { $0.refreshLook() }
+        headerPool.forEach { $0.followTheme() }
+        for (item, cell) in cells {
+            cell.refreshLook()
+            if item < shownCount, !isStale {
+                place(item, cell, refresh: true)
+            }
+        }
+        for (item, header) in headers {
+            header.followTheme()
+            if item < shownCount, !isStale {
+                place(header: item, header)
+            }
+        }
+        CATransaction.commit()
     }
 
     override func viewDidHide() {
@@ -255,6 +280,13 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     override func layout() {
         super.layout()
         relayout()
+    }
+}
+
+extension LibraryGridView: ThemeFollowing {
+    func followTheme() {
+        LibraryLook.follow()
+        refreshLook()
     }
 }
 
@@ -720,7 +752,7 @@ extension LibraryGridView {
         )
         let key = GroupHeaderText.Key(
             title: title, detail: detail, width: max(frame.width - 34, 1), scale: scale,
-            unpicked: picks == 0 && shownGroups.groups.key.usesMoments,
+            unpicked: picks == 0 && shownGroups.groups.key.usesMoments, colors: LibraryLook.headerText,
         )
         guard cell.textKey != key else { return }
         if let image = headerTexts[key] {

@@ -1,6 +1,7 @@
 import CoreText
 import Foundation
 import ImageIO
+import RedlampDesign
 import RedlampDocument
 import RedlampLibrary
 
@@ -177,10 +178,22 @@ enum GridText {
         var settings: String
     }
 
+    /// The name's colour and the date's and settings', the theme's value and secondary label colours.
+    struct Colors: Hashable, Sendable {
+        var name: RGBA
+        var detail: RGBA
+
+        init(_ tokens: PaletteTokens) {
+            name = tokens.value
+            detail = tokens.secondaryLabel
+        }
+    }
+
     struct Key: Hashable, Sendable {
         var lines: Lines
         var width: CGFloat
         var scale: CGFloat
+        var colors: Colors
     }
 
     /// Drawn in `space`, the window's, so Core Animation shows it as it is.
@@ -193,18 +206,21 @@ enum GridText {
         ) else { return nil }
         context.scaleBy(x: key.scale, y: key.scale)
         let small = font(10)
-        let lines: [(String, CTFont, CGFloat)] = [
-            (key.lines.name, CTFontCreateUIFontForLanguage(.emphasizedSystem, 11, nil) ?? font(11), 0.92),
-            (key.lines.date, small, 0.62),
-            (PhotoDetails.settings(key.lines.settings) { width(of: $0, in: small) <= key.width }, small, 0.62),
+        let lines: [(String, CTFont, RGBA)] = [
+            (key.lines.name, CTFontCreateUIFontForLanguage(.emphasizedSystem, 11, nil) ?? font(11), key.colors.name),
+            (key.lines.date, small, key.colors.detail),
+            (
+                PhotoDetails.settings(key.lines.settings) { width(of: $0, in: small) <= key.width }, small,
+                key.colors.detail,
+            ),
         ]
         var baseline = height - 10
-        for (text, font, white) in lines {
+        for (text, font, color) in lines {
             defer { baseline -= 12.5 }
             guard !text.isEmpty else { continue }
             let attributes: [CFString: Any] = [
                 kCTFontAttributeName: font,
-                kCTForegroundColorAttributeName: CGColor(gray: white, alpha: 1),
+                kCTForegroundColorAttributeName: color.cgColor,
             ]
             guard let string = CFAttributedStringCreate(nil, text as CFString, attributes as CFDictionary) else {
                 continue

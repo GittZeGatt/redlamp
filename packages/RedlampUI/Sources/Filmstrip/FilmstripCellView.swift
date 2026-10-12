@@ -100,7 +100,6 @@ final class FilmstripCellView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         background.cornerRadius = 4
-        background.borderColor = NSColor(white: 1, alpha: 0.85).cgColor
         thumbnail.contentsGravity = .resizeAspect
         thumbnail.minificationFilter = .trilinear
         for layer in [background, thumbnail] {
@@ -169,14 +168,16 @@ final class FilmstripCellView: NSView {
         item?.hasEdits == true && rendersEdit && shownEdit == nil
     }
 
+    /// The tile and its edge as the grid's cells have theirs, in the theme's colours.
     private func updateBackground() {
-        background.backgroundColor = NSColor(white: isSelected ? 0.22 : isInSelection ? 0.19 : 0.14, alpha: 1).cgColor
+        background.backgroundColor = isSelected ? LibraryLook.activeTile : isInSelection ? LibraryLook.selectedTile
+            : LibraryLook.tile
         if isMenuTarget || isDropTarget {
             background.borderWidth = 2
-            background.borderColor = Palette.accent.cgColor
+            background.borderColor = LibraryLook.ring
         } else {
             background.borderWidth = isSelected ? 1.5 : isInSelection ? 1 : 0
-            background.borderColor = NSColor(white: 1, alpha: isSelected ? 0.85 : 0.4).cgColor
+            background.borderColor = isSelected ? LibraryLook.activeEdge : LibraryLook.selectedEdge
         }
     }
 

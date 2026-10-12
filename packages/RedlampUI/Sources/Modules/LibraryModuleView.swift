@@ -18,6 +18,9 @@ final class LibraryModuleView: NSView {
     private let problem: NSView
     private let filmstrip: NSView
     private let model: EditorModel
+    private let theme: ThemeSettings
+    /// The theme its views last took their colours from.
+    private var shownTheme: ThemeSelection
     private var trackers: [Tracker] = []
     private var withFilmstrip: [NSLayoutConstraint] = []
     private var withoutFilmstrip: [NSLayoutConstraint] = []
@@ -32,6 +35,9 @@ final class LibraryModuleView: NSView {
 
     init(model: EditorModel, theme: ThemeSettings) {
         self.model = model
+        self.theme = theme
+        shownTheme = theme.selection
+        LibraryLook.follow()
         grid = LibraryGridView(model: model)
         loupe = LibraryLoupeView(model: model)
         let images = GridThumbnails(
@@ -49,7 +55,7 @@ final class LibraryModuleView: NSView {
         problem = CullingProblemStrip(model: model)
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
+        layer?.backgroundColor = LibraryLook.background
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
         for view in [grid, loupe, compare, survey, toolbar, filmstrip, filterBar, problem] as [NSView] {
@@ -122,7 +128,21 @@ final class LibraryModuleView: NSView {
                 _ = filters?.filter.sections
                 showFilterBar(filters != nil && model.libraryView == .grid, rows: filters?.isBarShown == true)
             },
+            // Watches only the theme, which `ThemeSettings` has put in `Palette` by the time this runs.
+            Tracker { [weak self] in
+                guard let self, theme.selection != shownTheme else { return }
+                shownTheme = theme.selection
+                followTheme()
+            },
         ]
+    }
+
+    /// Its views take the theme's colours again: they're built once with the window, where Develop's panels are made
+    /// again as the theme changes. The filmstrip, in SwiftUI, is made again (`LibraryFilmstrip`).
+    private func followTheme() {
+        LibraryLook.follow()
+        layer?.backgroundColor = LibraryLook.background
+        followThemeBelow()
     }
 
     /// The filter bar above the grid while the library is on, as tall as its row and the rows open beneath it;

@@ -2,28 +2,24 @@ import AppKit
 import RedlampDesign
 
 /// Over the top of the Library's photos, a culling change some of them didn't get (`EditorModel.cullingProblem`): how
-/// many and which, and why, with Select, Try Again and Close (LIB-15). Hidden while there's none, so it takes no
-/// click meant for the photos under it.
-final class CullingProblemStrip: NSView {
+/// many and which, and why, with Select, Try Again and Close (LIB-15), on a caution notice in the theme's colours
+/// (`Palette.notice`). Hidden while there's none, so it takes no click meant for the photos under it.
+final class CullingProblemStrip: NSView, ThemeFollowing {
     private let model: EditorModel
     private var tracker: Tracker?
     private let message = NSTextField(labelWithString: "")
+    private let symbol = NSImageView(
+        image: NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil) ?? NSImage(),
+    )
+    private var buttons: [NSButton] = []
 
     init(model: EditorModel) {
         self.model = model
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.1, alpha: 0.92).cgColor
         layer?.cornerRadius = 15
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor(white: 1, alpha: 0.12).cgColor
-        let symbol = NSImageView(
-            image: NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil) ??
-                NSImage(),
-        )
-        symbol.contentTintColor = .systemYellow
         message.font = .systemFont(ofSize: 12, weight: .medium)
-        message.textColor = .white
         message.lineBreakMode = .byTruncatingMiddle
         message.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         message.setAccessibilityIdentifier("library.cullingProblem.message")
@@ -39,10 +35,11 @@ final class CullingProblemStrip: NSView {
         for (button, identifier, tip) in buttons {
             button.isBordered = false
             button.font = .systemFont(ofSize: 12, weight: .semibold)
-            button.contentTintColor = .controlAccentColor
             button.toolTip = tip
             button.setAccessibilityIdentifier("library.cullingProblem.\(identifier)")
         }
+        self.buttons = [select, retry, close]
+        followTheme()
         let stack = NSStackView(views: [symbol, message, select, retry, close])
         stack.orientation = .horizontal
         stack.spacing = 10
@@ -64,6 +61,18 @@ final class CullingProblemStrip: NSView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    func followTheme() {
+        let tokens = LibraryLook.tokens
+        let caution = tokens.notice(.caution)
+        layer?.backgroundColor = caution.fill.over(tokens.panelBackground.opacity(0.94)).cgColor
+        layer?.borderColor = caution.border.cgColor
+        symbol.contentTintColor = caution.glyph.nsColor
+        message.textColor = tokens.value.nsColor
+        for button in buttons {
+            button.contentTintColor = LibraryLook.nativeTint
+        }
     }
 
     override func viewDidMoveToWindow() {

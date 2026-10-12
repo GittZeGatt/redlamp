@@ -253,20 +253,21 @@ final class LibraryGridCell {
         return nil
     }
 
-    /// The tile a step lighter in the selection, and the selection's ring in the system's accent, as the Mac's photo
-    /// grids draw it: thicker round the active photo. A photo whose context menu is open, or that a drop would tag, is
-    /// ringed as well.
+    /// The tile a step toward the theme's selection colour in the selection, and the selection's ring in the accent, as
+    /// the Mac's photo grids draw it: thicker round the active photo. A photo whose context menu is open, or that a
+    /// drop would tag, is ringed as well.
     private func updateBackground() {
-        background.backgroundColor = isActive ? GridCellLook.active : isInSelection ? GridCellLook.selected
-            : GridCellLook.rest
+        background.backgroundColor = isActive ? LibraryLook.activeTile : isInSelection ? LibraryLook.selectedTile
+            : LibraryLook.tile
         let ring: CGFloat = isActive ? 3 : isInSelection || isMenuTarget || isDropTarget ? 2 : 0
         background.borderWidth = ring
-        background.borderColor = ring > 0 ? GridCellLook.ring : nil
+        background.borderColor = ring > 0 ? LibraryLook.ring : nil
     }
 
-    /// Draws the selection again in the accent as it is now.
+    /// Draws the tile, the selection and the badges again in the theme's colours as they are now.
     func refreshLook() {
         updateBackground()
+        showBadges(of: item)
     }
 
     // MARK: - Badges
@@ -321,7 +322,7 @@ final class LibraryGridCell {
             layer.cornerRadius = 2.5
             layer.backgroundColor = colour?.cgColor
             layer.borderWidth = colour == nil ? 1 : 0
-            layer.borderColor = NSColor(white: 1, alpha: 0.3).cgColor
+            layer.borderColor = LibraryLook.chipEdge
             layer.isHidden = false
         } else {
             chip?.isHidden = true
@@ -419,31 +420,5 @@ final class LibraryGridCell {
         root.addSublayer(layer)
         keep(layer)
         return layer
-    }
-}
-
-/// A grid cell's tile and the selection's ring, shared by every cell. The ring is the theme's accent, or the system's,
-/// read again when either changes (`forgetAccent`).
-@MainActor
-enum GridCellLook {
-    static let rest = CGColor(gray: 0.165, alpha: 1)
-    static let selected = CGColor(gray: 0.205, alpha: 1)
-    static let active = CGColor(gray: 0.27, alpha: 1)
-
-    private static var accent: (themed: RGBA?, color: CGColor)?
-
-    static var ring: CGColor {
-        let themed = Palette.current.accent
-        if let accent, accent.themed == themed {
-            return accent.color
-        }
-        let color = Palette.accent.cgColor
-        accent = (themed, color)
-        return color
-    }
-
-    /// The system's accent changed.
-    static func forgetAccent() {
-        accent = nil
     }
 }

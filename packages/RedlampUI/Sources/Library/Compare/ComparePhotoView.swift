@@ -392,7 +392,7 @@ final class ComparePhotoView: NSView {
         CATransaction.setDisableActions(true)
         outline.isHidden = !isActive || visible.isEmpty
         if !outline.isHidden {
-            outline.borderColor = Palette.accent.cgColor
+            outline.borderColor = LibraryLook.ring
             outline.frame = visible
         }
         mark.isHidden = !marked || visible.width < size.width * 3 || visible.height < size.height * 3

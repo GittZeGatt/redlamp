@@ -5,7 +5,7 @@ import RedlampDesign
 /// button, on Develop's key), the raw histogram, focus peaking, the AF point, and the following loupe with its
 /// magnifications, shown while it's on. Each button's tooltip names what it shows. The tools are one group and the
 /// magnifications another, each drawn as a segmented control.
-final class JudgingBar: NSView {
+final class JudgingBar: NSView, ThemeFollowing {
     static let height: CGFloat = 22
     private static let iconWidth: CGFloat = 26
     private static let titleWidth: CGFloat = 40
@@ -73,6 +73,10 @@ final class JudgingBar: NSView {
 
     override var isFlipped: Bool {
         true
+    }
+
+    func followTheme() {
+        ToolbarLook.follow([toolsGroup, magnificationsGroup])
     }
 
     /// The bar's width: its five buttons, and the magnifications while the following loupe is on.

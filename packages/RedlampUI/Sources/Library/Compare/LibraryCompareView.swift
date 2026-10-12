@@ -223,7 +223,7 @@ final class LibraryCompareView: NSView {
 }
 
 /// One of Compare's photos under its role and name, its date and camera settings, and its badges.
-final class CompareHalfView: NSView {
+final class CompareHalfView: NSView, ThemeFollowing {
     static let headerHeight: CGFloat = 34
 
     let side: CompareSide
@@ -256,11 +256,9 @@ final class CompareHalfView: NSView {
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
         role.stringValue = side == .select ? "Select" : "Candidate"
         role.font = .systemFont(ofSize: NSFont.systemFontSize)
-        role.textColor = Palette.label.nsColor
         name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-        name.textColor = Palette.value.nsColor
         caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        caption.textColor = Palette.label.nsColor
+        followTheme()
         for label in [name, caption] {
             label.lineBreakMode = .byTruncatingMiddle
         }
@@ -278,6 +276,13 @@ final class CompareHalfView: NSView {
 
     override var isFlipped: Bool {
         true
+    }
+
+    func followTheme() {
+        let tokens = LibraryLook.tokens
+        role.textColor = tokens.label.nsColor
+        name.textColor = tokens.value.nsColor
+        caption.textColor = tokens.label.nsColor
     }
 
     override func layout() {

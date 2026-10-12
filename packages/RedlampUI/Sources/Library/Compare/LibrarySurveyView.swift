@@ -247,15 +247,18 @@ final class LibrarySurveyView: NSView {
 
 /// One of Survey's photos, with its rating, flag, label and mark under it and the × that takes it out of the
 /// selection.
-final class SurveyCell: NSView {
+final class SurveyCell: NSView, ThemeFollowing {
     static let stripHeight: CGFloat = 22
 
     let photo: ComparePhotoView
     let badges = LoupeBadgesView()
-    let remove = ToolbarButton(
-        symbol: "xmark.circle.fill", identifier: "survey.remove",
-        palette: [NSColor(white: 0.1, alpha: 0.9), NSColor(white: 0.72, alpha: 0.9)],
-    )
+    let remove = ToolbarButton(symbol: "xmark.circle.fill", identifier: "survey.remove", palette: SurveyCell.palette)
+
+    /// The ×'s colours: the theme's background through a disc of its secondary label colour.
+    private static var palette: [NSColor] {
+        let tokens = LibraryLook.tokens
+        return [tokens.panelBackground.opacity(0.9).nsColor, tokens.secondaryLabel.nsColor]
+    }
 
     /// The photo shown.
     var url: URL? {
@@ -289,6 +292,10 @@ final class SurveyCell: NSView {
 
     override var isFlipped: Bool {
         true
+    }
+
+    func followTheme() {
+        remove.palette = Self.palette
     }
 
     override func layout() {
