@@ -60,6 +60,57 @@ struct EditorPanelsTests {
         #expect(model.leftPanelVisible && model.rightPanelVisible)
     }
 
+    /// A slide the window stops drawing (covered, on a display that sleeps, or going to or from full screen) can stop
+    /// part of the way, AppKit's slide width holding each panel across the window's edge while its item says it's
+    /// shown: three quarters of the way in, the sidebar's first letters and the inspector's values are cut off. As the
+    /// window's occlusion changes, a panel left part of the way is put where its item says, at its width.
+    @Test func `panels a slide leaves part of the way are put back as the window's occlusion changes`() async throws {
+        _ = NSApplication.shared
+        let model = EditorModel(engine: StubEngine())
+        let controller = EditorWindowController(
+            model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let bounds = try #require(window.contentView?.bounds)
+        let panels = try splitItems(of: window).filter { $0.behavior != .default }
+        try #require(panels.count == 2)
+        let widths = panels.map(\.viewController.view.bounds.width)
+        func frame(_ item: NSSplitViewItem) -> CGRect {
+            let view = item.viewController.view
+            return view.convert(view.bounds, to: nil)
+        }
+        model.leftPanelVisible = false
+        model.rightPanelVisible = false
+        for _ in 0 ..< 100 where panels.contains(where: { !$0.isCollapsed }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // As the split view slides them back in while the window can be seen.
+        for item in panels {
+            item.animator().isCollapsed = false
+        }
+        for _ in 0 ..< 50 where panels.allSatisfy({ bounds.contains(frame($0)) }) {
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        try #require(panels.contains { !bounds.contains(frame($0)) }, "the panels part of the way in")
+        NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: window)
+
+        for item in panels {
+            #expect(
+                bounds.contains(frame(item)),
+                "\(item.behavior == .sidebar ? "the sidebar" : "the inspector") at \(frame(item))",
+            )
+        }
+        try await Task.sleep(for: .milliseconds(600))
+        for (item, width) in zip(panels, widths) {
+            #expect(!item.isCollapsed && bounds.contains(frame(item)), "after the slide's time, at \(frame(item))")
+            #expect(item.viewController.view.bounds.width == width)
+        }
+        #expect(model.leftPanelVisible && model.rightPanelVisible)
+    }
+
     /// #358: Tab hides the side panels for a bigger view of the photo, as in Lightroom. At Fit the photo
     /// grows into the room they leave and is rendered again at its new size; F7 and F8 give one side's.
     @Test func `hiding the side panels gives the photo their room, rendered again at its new size`() async throws {

@@ -15,6 +15,8 @@ final class EditorSplitViewController: NSSplitViewController {
     private var tracker: Tracker?
     private var observations: [NSKeyValueObservation] = []
     private var pointer: PanelPointer?
+    /// A panel is being laid out again where its item says (`settle`): its item's changes aren't the user's.
+    private var isSettling = false
 
     init(model: EditorModel, theme: ThemeSettings, content: NSViewController) {
         self.model = model
@@ -77,19 +79,62 @@ final class EditorSplitViewController: NSSplitViewController {
             },
         ]
         pointer = PanelPointer(model: model, tracking: view, canvas: content.view)
+        for name in [
+            NSWindow.didChangeOcclusionStateNotification, NSWindow.didEnterFullScreenNotification,
+            NSWindow.didExitFullScreenNotification,
+        ] {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowChanged), name: name, object: nil)
+        }
     }
 
     /// Each item writes back only its own state: the other may be mid-way through a change
     /// the model has already made.
     private func sidebarCollapsedChanged() {
-        if model.leftPanelVisible == sidebarItem.isCollapsed {
+        if !isSettling, model.leftPanelVisible == sidebarItem.isCollapsed {
             model.leftPanelVisible = !sidebarItem.isCollapsed
         }
     }
 
     private func inspectorCollapsedChanged() {
-        if model.rightPanelVisible == inspectorItem.isCollapsed {
+        if !isSettling, model.rightPanelVisible == inspectorItem.isCollapsed {
             model.rightPanelVisible = !inspectorItem.isCollapsed
+        }
+    }
+
+    /// A slide the window stops drawing (covered, on a display that sleeps, or going to or from full screen) can
+    /// stop part of the way, AppKit's slide width holding a panel across the window's edge while its item says it's
+    /// shown, or over the canvas while it says it's hidden. Such a panel is laid out again where its item says.
+    @objc private func windowChanged(_ notification: Notification) {
+        guard let window = view.window, notification.object as? NSWindow === window,
+              let bounds = window.contentView?.bounds.insetBy(dx: -1, dy: -1) else { return }
+        for item in [sidebarItem, inspectorItem] {
+            let pane = item.viewController.view
+            let inPlace = item.isCollapsed
+                ? pane.isHiddenOrHasHiddenAncestor : bounds.contains(pane.convert(pane.bounds, to: nil))
+            if !inPlace {
+                settle(item)
+            }
+        }
+    }
+
+    /// Collapsing and expanding an item at once ends its slide, but leaves a shown panel as wide as the slide had made
+    /// it, or its minimum: its divider puts its own width back.
+    private func settle(_ item: NSSplitViewItem) {
+        let collapsed = item.isCollapsed
+        let pane = item.viewController.view
+        let width = pane.bounds.width
+        isSettling = true
+        item.isCollapsed = !collapsed
+        item.isCollapsed = collapsed
+        isSettling = false
+        guard !collapsed else { return }
+        splitView.layoutSubtreeIfNeeded()
+        let frame = splitView.convert(pane.bounds, from: pane)
+        let grow = width - frame.width
+        if item === sidebarItem {
+            splitView.setPosition(frame.maxX + grow, ofDividerAt: 0)
+        } else {
+            splitView.setPosition(frame.minX - grow, ofDividerAt: 1)
         }
     }
 
