@@ -88,6 +88,52 @@ struct CropToolTests {
         #expect(model.recipe.crop == crop)
     }
 
+    @Test func `turning keeps the crop inside the photo, shows the fine grid meanwhile, and is one step`() async throws {
+        let model = try await openModel()
+        let steps = model.history.count
+        model.beginEdit(.cropAngle)
+        #expect(model.isAdjustingAngle)
+        model.setValue(.cropAngle, 4)
+        model.setValue(.cropAngle, 6)
+        let info = try #require(model.info)
+        #expect(GeometryMap(recipe: model.recipe, imageSize: info.pixelSize, lens: nil).staysInsideImage)
+        model.endEdit()
+        #expect(!model.isAdjustingAngle)
+        #expect(model.history.count == steps + 1)
+        #expect(model.history.last?.name == "Angle: 0.00 → +6.00")
+
+        model.beginEdit(.exposure)
+        #expect(!model.isAdjustingAngle, "another slider leaves the guide as it is")
+        model.endEdit()
+    }
+
+    @Test func `a turn follows the pointer round the crop's centre, within Angle's range`() {
+        let center = CGPoint(x: 300, y: 200)
+        func point(_ degrees: Double) -> CGPoint {
+            let radians = degrees * .pi / 180
+            return CGPoint(x: center.x + 150 * cos(radians), y: center.y + 150 * sin(radians))
+        }
+        var turn = CropTurn(center: center, from: point(0), angle: 3)
+        expectNear(turn.angle(at: point(10)), 13, "clockwise on screen, as a rising Angle turns the photo")
+        expectNear(turn.angle(at: point(-20)), -17)
+        expectNear(turn.angle(at: point(60)), 45, "no further than the slider goes")
+        expectNear(turn.angle(at: point(50)), 45, "until the pointer comes back")
+        expectNear(turn.angle(at: point(41)), 44)
+
+        var across = CropTurn(center: center, from: point(170), angle: 0)
+        expectNear(across.angle(at: point(-170)), 20, "past the left, the short way round")
+    }
+
+    @Test func `the turning pointer faces away from the crop's centre, one of sixteen ways`() {
+        let center = CGPoint(x: 10, y: 10)
+        #expect(TurnPointer.direction(of: CGPoint(x: 50, y: 10), from: center) == 0, "right")
+        #expect(TurnPointer.direction(of: CGPoint(x: 10, y: 50), from: center) == 4, "below, on screen")
+        #expect(TurnPointer.direction(of: CGPoint(x: -30, y: 10), from: center) == 8, "left")
+        #expect(TurnPointer.direction(of: CGPoint(x: 10, y: -30), from: center) == 12, "above")
+        #expect(TurnPointer.direction(of: CGPoint(x: 50, y: 13), from: center) == 0, "the nearest")
+        #expect(TurnPointer.styles.count == TurnPointer.directions)
+    }
+
     @Test func `straightening keeps the crop inside the photo, and straightening back restores it`() async throws {
         let model = try await openModel()
         model.setValue(.cropAngle, 8)
@@ -418,6 +464,42 @@ struct CropOverlayTests {
                     let down = abs(arc.start.y - arc.center.y) + abs(arc.end.y - arc.center.y)
                     #expect(abs(across - down) < 1e-6, "\(across) × \(down) in \(rect), turn \(turns)")
                 }
+            }
+        }
+    }
+
+    @Test func `the fine grid is square, lined up on the crop's centre, and inside it`() {
+        for rect in Self.frames {
+            let cell = min(rect.width, rect.height) / 16
+            var verticals: [CGFloat] = [], horizontals: [CGFloat] = []
+            var start = CGPoint.zero
+            CropOverlayView.fineGrid(in: rect).cgPath.applyWithBlock { pointer in
+                let element = pointer.pointee
+                switch element.type {
+                case .moveToPoint:
+                    start = element.points[0]
+                case .addLineToPoint:
+                    let end = element.points[0]
+                    expectInside(start, rect)
+                    expectInside(end, rect)
+                    if start.x == end.x {
+                        verticals.append(end.x)
+                    } else {
+                        #expect(start.y == end.y, "\(start) to \(end) isn't level or upright")
+                        horizontals.append(end.y)
+                    }
+                default:
+                    Issue.record("\(element.type) in the fine grid")
+                }
+            }
+            // A path keeps its points in single precision.
+            #expect(verticals.contains { abs($0 - rect.midX) < 1e-3 }, "\(rect)")
+            #expect(horizontals.contains { abs($0 - rect.midY) < 1e-3 }, "\(rect)")
+            for lines in [verticals.sorted(), horizontals.sorted()] {
+                for (a, b) in zip(lines, lines.dropFirst()) {
+                    #expect(abs(b - a - cell) < 1e-3, "\(b - a) apart in \(rect), not \(cell)")
+                }
+                #expect(lines.count >= 15, "\(lines.count) lines across \(rect)")
             }
         }
     }

@@ -5,17 +5,35 @@ import SwiftUI
 /// The crop frame, drawn over the whole straightened frame while the Crop tool is active:
 /// the outside dimmed, a composition guide (`O` cycles the chosen ones), and handles on the
 /// corners and edges. Dragging a handle resizes (keeping the aspect when it is locked),
-/// dragging inside moves the crop, and ⌘-dragging (or any drag after Straighten) draws a line
-/// to level the photo along.
+/// dragging inside moves the crop, and dragging outside turns the photo as the Angle slider
+/// does, with a fine grid in the crop while Angle changes. ⌘-dragging (or any drag after
+/// Straighten) draws a line to level the photo along instead.
 struct CropOverlayView: View {
     @Environment(EditorModel.self) private var model
     @State private var dragStart: CropRect?
     @State private var level: (start: CGPoint, end: CGPoint)?
+    @State private var turn: CropTurn?
+    /// Which way the pointer outside the crop faces (`TurnPointer`).
+    @State private var turnDirection = 0
 
     /// Which edges a handle moves: x −1 left, 1 right; y −1 top, 1 bottom; both 0 moves.
     private struct Handle: Hashable {
         var x: Int
         var y: Int
+
+        /// The pointer over it shows the edges it moves.
+        var position: FrameResizePosition {
+            switch (x, y) {
+            case (-1, -1): .topLeading
+            case (0, -1): .top
+            case (1, -1): .topTrailing
+            case (-1, 0): .leading
+            case (1, 0): .trailing
+            case (-1, 1): .bottomLeading
+            case (0, 1): .bottom
+            default: .bottomTrailing
+            }
+        }
     }
 
     private static let handles = [
@@ -27,33 +45,48 @@ struct CropOverlayView: View {
         GeometryReader { geometry in
             let frame = model.canvas.imageRect(in: geometry.size)
             let rect = Self.rect(of: model.recipe.crop, in: frame)
+            let center = CGPoint(x: rect.midX, y: rect.midY)
+            let drawsLine = model.isStraightening || level != nil
             ZStack {
-                // Outside the crop a drag only draws a level line.
+                // Outside the crop a drag turns the photo, or draws a level line.
                 Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(levelGesture)
+                    .contentShape(Self.outside(rect, in: geometry.size), eoFill: true)
+                    .gesture(outsideGesture(center: center))
+                    .onContinuousHover { phase in
+                        if case let .active(location) = phase {
+                            turnDirection = TurnPointer.direction(of: location, from: center)
+                        }
+                    }
+                    .pointerStyle(drawsLine ? .rectSelection : TurnPointer.styles[turnDirection])
 
-                Path { path in
-                    path.addRect(CGRect(origin: .zero, size: geometry.size))
-                    path.addRect(rect)
-                }
-                .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
-                .allowsHitTesting(false)
-
-                Self.faintOverlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                Self.outside(rect, in: geometry.size)
+                    .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
 
-                Self.overlay(
-                    model.cropOverlay, turns: model.cropOverlayTurns, ratios: model.cropOverlayChoices.ratios, in: rect,
-                )
-                .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
-                .allowsHitTesting(false)
+                if model.isAdjustingAngle {
+                    Self.fineGrid(in: rect)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                } else {
+                    Self.faintOverlay(model.cropOverlay, turns: model.cropOverlayTurns, in: rect)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                        .allowsHitTesting(false)
 
+                    Self.overlay(
+                        model.cropOverlay, turns: model.cropOverlayTurns, ratios: model.cropOverlayChoices.ratios,
+                        in: rect,
+                    )
+                    .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+                }
+
+                // The crop's own size, with a pointer of its own, so the turning arrow stops at its edge.
                 Rectangle()
-                    .path(in: rect)
                     .stroke(Color.white.opacity(0.9), lineWidth: 1)
-                    .contentShape(Rectangle().path(in: rect))
+                    .frame(width: rect.width, height: rect.height)
+                    .contentShape(Rectangle())
+                    .pointerStyle(drawsLine ? .rectSelection : .default)
+                    .position(x: rect.midX, y: rect.midY)
                     .gesture(dragGesture(Handle(x: 0, y: 0), frame: frame))
 
                 if let level {
@@ -75,6 +108,7 @@ struct CropOverlayView: View {
                         .rotationEffect(handle.x != 0 && handle.y == 0 ? .degrees(90) : .zero)
                         .shadow(color: .black.opacity(0.5), radius: 1.5)
                         .contentShape(Rectangle().inset(by: -8))
+                        .pointerStyle(.frameResize(position: handle.position))
                         .position(
                             x: handle.x < 0 ? rect.minX : (handle.x > 0 ? rect.maxX : rect.midX),
                             y: handle.y < 0 ? rect.minY : (handle.y > 0 ? rect.maxY : rect.midY),
@@ -164,18 +198,64 @@ struct CropOverlayView: View {
         }
     }
 
+    /// The grid while Angle changes, in place of the guide: squares a sixteenth of the crop's
+    /// shorter side, lined up on its centre, for lining up horizons and verticals.
+    nonisolated static func fineGrid(in rect: CGRect) -> Path {
+        Path { path in
+            let cell = min(rect.width, rect.height) / 16
+            guard cell > 0 else { return }
+            for offset in stride(from: 0, to: rect.width / 2, by: cell) {
+                for x in offset == 0 ? [rect.midX] : [rect.midX - offset, rect.midX + offset] {
+                    path.move(to: CGPoint(x: x, y: rect.minY))
+                    path.addLine(to: CGPoint(x: x, y: rect.maxY))
+                }
+            }
+            for offset in stride(from: 0, to: rect.height / 2, by: cell) {
+                for y in offset == 0 ? [rect.midY] : [rect.midY - offset, rect.midY + offset] {
+                    path.move(to: CGPoint(x: rect.minX, y: y))
+                    path.addLine(to: CGPoint(x: rect.maxX, y: y))
+                }
+            }
+        }
+    }
+
+    /// The canvas outside the crop, filled even-odd.
+    nonisolated static func outside(_ rect: CGRect, in size: CGSize) -> Path {
+        Path { path in
+            path.addRect(CGRect(origin: .zero, size: size))
+            path.addRect(rect)
+        }
+    }
+
     private var isLevelling: Bool {
         model.isStraightening || NSEvent.modifierFlags.contains(.command)
     }
 
-    private var levelGesture: some Gesture {
+    /// Outside the crop, turns the photo round the crop's centre as the Angle slider does, as one
+    /// step; with ⌘ (or after Straighten), draws a level line.
+    private func outsideGesture(center: CGPoint) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { gesture in
-                guard level != nil || isLevelling else { return }
-                level = (gesture.startLocation, gesture.location)
+                if level != nil || (turn == nil && isLevelling) {
+                    level = (gesture.startLocation, gesture.location)
+                    return
+                }
+                if turn == nil {
+                    turn = CropTurn(center: center, from: gesture.startLocation, angle: model.recipe[.cropAngle])
+                    model.beginEdit(.cropAngle)
+                }
+                turnDirection = TurnPointer.direction(of: gesture.location, from: center)
+                if let angle = turn?.angle(at: gesture.location) {
+                    model.setValue(.cropAngle, angle)
+                }
             }
             .onEnded { _ in
-                finishLevel()
+                if turn != nil {
+                    turn = nil
+                    model.endEdit()
+                } else {
+                    finishLevel()
+                }
             }
     }
 
@@ -279,6 +359,104 @@ struct CropOverlayView: View {
             }
         }
         return EditorModel.shifted(crop, inside: .full)
+    }
+}
+
+/// A drag outside the crop turning the photo, as Lightroom's does: Angle changes by as far as the
+/// pointer has gone round the crop's centre since the drag began, within the slider's range.
+struct CropTurn {
+    let center: CGPoint
+    let startAngle: Double
+    /// Where the pointer was last, round the centre: radians, clockwise on screen.
+    private var bearing: Double
+    /// How far it has gone round since the drag began, in degrees, clockwise.
+    private var swept = 0.0
+
+    init(center: CGPoint, from point: CGPoint, angle: Double) {
+        self.center = center
+        startAngle = angle
+        bearing = Self.bearing(of: point, from: center)
+    }
+
+    /// Angle with the pointer at `point`. A rising angle turns the photo clockwise on screen, so the
+    /// photo follows the pointer round; beyond the range it waits for the pointer to come back.
+    mutating func angle(at point: CGPoint) -> Double {
+        let next = Self.bearing(of: point, from: center)
+        swept += remainder(next - bearing, 2 * .pi) * 180 / .pi
+        bearing = next
+        let range = ParameterID.cropAngle.spec.range
+        return min(max(startAngle + swept, range.lowerBound), range.upperBound)
+    }
+
+    static func bearing(of point: CGPoint, from center: CGPoint) -> Double {
+        atan2(point.y - center.y, point.x - center.x)
+    }
+}
+
+/// The pointer outside the crop: a curved arrow round the crop's centre, black with a white edge
+/// as macOS's own pointers are, facing the way it is from the centre.
+@MainActor
+enum TurnPointer {
+    /// The directions it can face, round the crop.
+    static let directions = 16
+
+    /// One for each direction, the first facing right.
+    static let styles: [PointerStyle] = (0 ..< directions).map { direction in
+        .image(Image(nsImage: arrow(facing: Double(direction) * 2 * .pi / Double(directions))), hotSpot: .center)
+    }
+
+    /// The direction nearest `point`'s from `center`.
+    static func direction(of point: CGPoint, from center: CGPoint) -> Int {
+        let step = 2 * Double.pi / Double(directions)
+        let index = Int((CropTurn.bearing(of: point, from: center) / step).rounded())
+        return (index % directions + directions) % directions
+    }
+
+    /// An arc of a circle about a point towards the crop's centre, through the hot spot, with a head
+    /// at each end; `bearing` is the pointer's from the centre, in radians clockwise on screen.
+    private static func arrow(facing bearing: Double) -> NSImage {
+        NSImage(size: NSSize(width: 24, height: 24), flipped: true) { _ in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.translateBy(x: 12, y: 12)
+            context.rotate(by: bearing)
+            let radius = 10.0, sweep = 0.75
+            let arc = CGMutablePath()
+            arc.addArc(
+                center: CGPoint(x: -radius, y: 0), radius: radius, startAngle: -sweep, endAngle: sweep,
+                clockwise: false,
+            )
+            let heads = CGMutablePath()
+            for (angle, outward) in [(-sweep, -1.0), (sweep, 1.0)] {
+                let end = CGPoint(x: -radius + radius * cos(angle), y: radius * sin(angle))
+                let along = CGPoint(x: -sin(angle) * outward, y: cos(angle) * outward)
+                let across = CGPoint(x: cos(angle), y: sin(angle))
+                let base = CGPoint(x: end.x - along.x * 1.5, y: end.y - along.y * 1.5)
+                heads.addLines(between: [
+                    CGPoint(x: end.x + along.x * 3.5, y: end.y + along.y * 3.5),
+                    CGPoint(x: base.x + across.x * 3.5, y: base.y + across.y * 3.5),
+                    CGPoint(x: base.x - across.x * 3.5, y: base.y - across.y * 3.5),
+                ])
+                heads.closeSubpath()
+            }
+            context.setLineJoin(.round)
+            context.setLineCap(.round)
+            context.setStrokeColor(NSColor.white.cgColor)
+            context.setFillColor(NSColor.white.cgColor)
+            context.setLineWidth(4.5)
+            context.addPath(arc)
+            context.strokePath()
+            context.setLineWidth(2.5)
+            context.addPath(heads)
+            context.drawPath(using: .fillStroke)
+            context.setStrokeColor(NSColor.black.cgColor)
+            context.setFillColor(NSColor.black.cgColor)
+            context.setLineWidth(2)
+            context.addPath(arc)
+            context.strokePath()
+            context.addPath(heads)
+            context.fillPath()
+            return true
+        }
     }
 }
 

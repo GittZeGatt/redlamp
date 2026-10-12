@@ -455,7 +455,7 @@
         static let cropTool = Scenario(
             "crop.tool",
             "Crop: every aspect and one typed in, the lock, the swap between portrait and landscape, the angle, "
-                + "straighten, rotate, flip and the overlays",
+                + "turning by dragging outside the crop, straighten, rotate, flip and the overlays",
             claims: [
                 .tool(.crop),
                 .tool(.edit),
@@ -498,6 +498,30 @@
             try app.press(.cropAspectLock)
             try app.set(.cropAngle, 4)
             app.covered(.parameter(.cropAngle), via: .model)
+            // Pulled down beside the crop's right edge, the photo turns clockwise, as one step.
+            try app.main { $0.setCrop(CropRect(left: 0.25, top: 0.25, right: 0.75, bottom: 0.75)) }
+            let steps = try app.main { $0.history.count }
+            if try app.focus() {
+                let start = try app.main { model -> CGPoint in
+                    let size = model.canvas.viewSize
+                    let frame = model.canvas.imageRect(in: size)
+                    let crop = model.recipe.crop
+                    let right = frame.minX + crop.right * frame.width
+                    let middle = frame.minY + (crop.top + crop.bottom) / 2 * frame.height
+                    return CGPoint(x: (right + 30) / size.width, y: middle / size.height)
+                }
+                try app.drag(.canvas, from: start, by: CGVector(dx: 0, dy: -60), steps: 12)
+                app.covered(.feature("crop.straighten"), via: .mouse)
+            } else {
+                try app.main { model in
+                    model.beginEdit(.cropAngle)
+                    model.setValue(.cropAngle, 9)
+                    model.endEdit()
+                }
+            }
+            try app.wait("the photo turned clockwise, as one step") { model in
+                model.recipe[.cropAngle] > 5 && model.history.count == steps + 1 && !model.isAdjustingAngle
+            }
             try app.main { $0.straighten(from: CGPoint(x: 0.1, y: 0.5), to: CGPoint(x: 0.9, y: 0.52)) }
             try app.choose(.rotateLeft)
             try app.choose(.rotateRight)

@@ -411,6 +411,9 @@ public final class EditorModel {
     public var cropOverlayTurns = 0
     /// The next drag in the Crop tool draws a line to level (as ⌘-drag always does).
     public var isStraightening = false
+    /// Angle is changing continuously: its slider, value field or keys, or a drag outside the
+    /// crop. The crop shows a fine grid meanwhile.
+    public internal(set) var isAdjustingAngle = false
     /// Guided Upright: drags on the canvas draw guides, in the photo's coordinates.
     public var isPlacingGuides = false {
         didSet { requestRender() }
@@ -1590,6 +1593,7 @@ public final class EditorModel {
         editStart = recipe
         editParameter = parameter
         editsBegun += 1
+        isAdjustingAngle = parameter == .cropAngle
         if isAdjustingMask, activeTool == .masking, showMaskOverlay {
             requestRender()
         }
@@ -1643,6 +1647,7 @@ public final class EditorModel {
         defer {
             editStart = nil
             editParameter = nil
+            isAdjustingAngle = false
             // The overlay comes back once the drag ends, and so does the margin around the
             // visible part, so panning afterwards doesn't render.
             if adjustingMask, activeTool == .masking, showMaskOverlay {
