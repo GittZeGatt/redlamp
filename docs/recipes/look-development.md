@@ -98,6 +98,20 @@ Surveyed 2026-09-30 ([TON-20](../research/research-tracker.md#4-color-tone-and-d
 - **Recipe cards.** Sites such as filmsimrecipes.com and Fuji X Weekly list settings cards that the `fujifilm-card` dialect imports directly ([DEC-18](../research/research-tracker.md#1-decisions-and-legal-questions)).
 - **A camera.** One Fujifilm body for a few days: 30–40 varied raws, each re-rendered in camera through every simulation, is still the cleanest set.
 
+### Fujifilm's published LUTs
+
+Fujifilm publishes 3D LUTs that render F-Log, F-Log2 and F-Log2 C footage in its film simulations, on [its LUT page](https://www.fujifilm-x.com/global/support/download/lut/). Each body's pack holds ETERNA, ETERNA Bleach Bypass and WDR. The GFX ETERNA 55 pack (version 1.10, April 2026) holds F-Log2 and F-Log2 C LUTs, at 33 and 65 points, for PROVIA, Velvia, ASTIA, Classic Chrome, Classic Neg, Reala Ace, PRO Neg Std, ETERNA, Bleach Bypass and ACROS. No pack covers Nostalgic Neg, PRO Neg Hi, Monochrome with a filter, or Sepia.
+
+Fujifilm's terms allow downloads for personal, noncommercial use and forbid modifying them without permission. Users download the LUTs and import them ([TON-43](../research/research-tracker.md#4-color-tone-and-detail)); Redlamp never bundles or re-hosts them, and never fits a look to them ([DEC-73](../research/research-tracker.md#1-decisions-and-legal-questions)).
+
+Probed on 12 October, with the files read in memory and a ColorChecker chart rendered through them and through Redlamp's measured stills looks, middle grey matched:
+
+- **They name themselves.** Comment lines read `#FUJIFILM Corporation`, `#Gamma:F-Log2 to PROVIA` and `#Gamut:F-Gamut to ITU-R BT.709`. 18% grey encodes to 0.391 in F-Log2. Fujifilm's own F-Log2-to-BT.709 conversion passes grey unchanged but isn't a plain matrix, so F-Gamut's primaries come from the data sheet.
+- **They render as the X-Trans V bodies do.** The GFX ETERNA 55's ETERNA and Bleach Bypass LUTs match the X100VI's and the X-T5's, which are the same files: within 0.3 L* on a grey scale and a mean ΔE of 0.6–0.7 on the chart. They differ only for extreme colours outside BT.709.
+- **They're video renderings.** Shadows and midtones sit within about 3 L* of the measured stills Provia; highlights are softer, reaching white 5.6 to 6.1 stops above middle grey (two stops up, PROVIA reads L* 81 against the stills look's 87).
+- **Colour.** Mean ΔE (OKLab × 100) to the measured stills looks: PROVIA 2.1, Classic Chrome 3.5, Velvia 3.0–3.5, ASTIA 4.6–5.3. Against their own PROVIA, the LUTs make Classic Chrome 0.77 as chromatic and Velvia 1.12; the measured looks make them 0.96 and 1.00, which suggests the measured looks miss part of each simulation's character. TON-45 checks it on real photos.
+- **Brightness.** Redlamp Color renders scene middle grey at L* 64 and the LUTs at 46–49, and camera-log import adds no offset, so an imported LUT renders about a stop darker without TON-43's exposure offset. Decoding their output as sRGB matched the stills looks as well as Rec.709 at 2.4 gamma, or better.
+
 ## Lint
 
 Five deterministic checks, run on a synthetic chart through the real pipeline. Each compares the recipe's render with a neutral render, with vignette and grain removed:
