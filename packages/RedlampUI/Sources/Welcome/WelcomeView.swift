@@ -96,7 +96,7 @@ private struct HelpPage: View {
             Develop(delay: 0.5) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("""
-                    Redlamp is a pre-alpha, and only a handful of cameras have been checked properly, so your \
+                    Redlamp is an alpha, and only a handful of cameras have been checked properly, so your \
                     photos are the best test it can have. Edit them the way you normally would, and tell me what \
                     breaks, what looks wrong and what you miss.
                     """)
