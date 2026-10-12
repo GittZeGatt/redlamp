@@ -92,7 +92,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Upright: Auto, Level, Vertical, Full and Guided | Yes | Done | | | LNS-07, LNS-08 | Corrects only where the photo's straight edges agree |
 | Transform sliders | Yes | Done | | | LNS-05 | |
 | Crop and straighten | Yes | Done | | | LNS-06 | Aspect presets, Lightroom's overlays, the Straighten tool and Constrain to Image |
-| Custom crop ratios, and rotating by dragging outside the crop | Yes | Planned | | P2 | LNS-12, LNS-13 | Today `X` swaps the crop's orientation and the Angle slider turns the photo |
+| Custom crop ratios, and rotating by dragging outside the crop | Yes | Done | | | LNS-12, LNS-13 | Enter Custom… takes a ratio or a size in pixels and keeps the five most recent; a button beside the Aspect menu swaps portrait and landscape; a drag outside the crop turns the photo, with a fine grid |
 | Lens Blur | Yes | Later | | | OTH-03 | |
 
 ## Effects

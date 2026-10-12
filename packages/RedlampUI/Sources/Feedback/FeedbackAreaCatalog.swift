@@ -168,8 +168,16 @@ public extension FeedbackArea {
             summary: "Crop, straighten, rotate and flip.",
             tracker: ["LNS"],
             features: [
-                FeedbackFeature("crop", "Crop and Aspect Ratio", ["aspect", "ratio", "lock", "constrain to image"]),
-                FeedbackFeature("straighten", "Straighten and Angle", ["level", "angle", "horizon", "tilt"]),
+                FeedbackFeature(
+                    "crop",
+                    "Crop and Aspect Ratio",
+                    ["aspect", "ratio", "custom aspect", "portrait", "landscape", "lock", "constrain to image"],
+                ),
+                FeedbackFeature(
+                    "straighten",
+                    "Straighten and Angle",
+                    ["level", "angle", "horizon", "tilt", "turn", "drag to rotate"],
+                ),
                 FeedbackFeature("rotate", "Rotate and Flip", ["rotate left", "rotate right", "flip", "orientation"]),
                 FeedbackFeature(
                     "overlays",
