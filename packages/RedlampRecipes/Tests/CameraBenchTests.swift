@@ -48,10 +48,21 @@ struct CameraBenchTests {
 
     // MARK: - No false alarms
 
+    /// The bodies LibRaw has no colour matrix for yet, by the make and model their files give: the Nikon Z5 II and
+    /// Z50 II (CAM-21, #184). Their samples fail the colour check, rightly, and no other.
+    static let withoutColourMatrix = ["Nikon": ["Z5_2", "Z50_2"]]
+
     @Test(.enabled(if: canRender && !verified.isEmpty), arguments: verified)
     func `no check fails on a verified camera's sample`(url: URL) async throws {
         let result = try #require(await Self.bench().run(url))
-        let failed = result.photo.checks.filter { $0.verdict == .fail }.map { "\($0.id): \($0.summary)" }
+        let identity = result.photo.identity
+        let lacksMatrix = Self.withoutColourMatrix[identity.make ?? ""]?.contains(identity.model ?? "") == true
+        if lacksMatrix {
+            let gained = "CAM-21 gave the \(identity.camera) a colour matrix: take it out of withoutColourMatrix"
+            #expect(Self.verdict(result.photo, "decode.colour") == .fail, "\(url.lastPathComponent): \(gained)")
+        }
+        let failed = result.photo.checks.filter { $0.verdict == .fail && !(lacksMatrix && $0.id == "decode.colour") }
+            .map { "\($0.id): \($0.summary)" }
         #expect(failed.isEmpty, "\(url.lastPathComponent): \(failed)")
         #expect(result.photo.fileHash.count == 64)
         #expect(result.photo.mode.key.hasPrefix(result.photo.identity.normalizedMake ?? "?"))
