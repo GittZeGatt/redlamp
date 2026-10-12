@@ -692,6 +692,25 @@ What it changed:
 - **A volume that answers slowly isn't gone.** Real listings stalled for up to 10.2 s under this load, and the 1 s reader timeout took the volume for gone. An overdue operation now asks the volume's root first, and only no answer means offline. One real operation then stalled for 68 minutes, so an operation still going after thirty timeouts fails alone, and its folder waits for the next run.
 - Reconcile wasn't run at a million: it clones the fixture, a million files, which this Mac's security scanners make expensive. One warm-launch run died with signal 11 at 400,000 photos, with no crash report; nine Thread Sanitizer runs, 60,000 one-photo batches and sixteen warm launches didn't reproduce it. Thread Sanitizer flagged two intermittent races of one shape, an array built inside an index read and used after the `await`, in the indexer's run and in choosing roots' sidecar placements. They aren't races. When a read finishes before its caller awaits it, the Swift runtime orders the hand-off with its acquire and release instructions but doesn't tell Thread Sanitizer, and a probe that forces that order reproduces the report every time. A read's result now also passes through a lock, and Thread Sanitizer runs are clean.
 
+### Two million photos (LIB-03, LIB-04)
+
+`redlamp library bench` on `lib-2m.noindex/Photos` (2,000,000 photos in 11,283 folders, the manifest's 43 queries), a Release build of `fd1d4d6a`, through the simulated SSD, a scenario at a time under `/usr/bin/time -l` (`reports/lib-2m-bench.sh` beside the fixtures), on 12 October with other sessions building (load average 18 to 40):
+
+| Scenario | Result | Budget | Peak memory |
+| --- | --- | --- | --- |
+| fixture-check | every count equal to the manifest's | PASS | 2.74 GB |
+| listing | all 2,000,000 photos in 49.0 s, 40,843 a second, 16 folders at once | 12 s: FAIL | 2.73 GB |
+| index-build | all 2,000,000 in 2,641.7 s, 757 a second, no failures; the first 1,000 searchable in 11.0 s | first 1,000 under 2 s: FAIL | 5.45 GB |
+| warm-launch | the column store built from the index: visible and searchable in 1,293 ms, 486 MB over launch, 72 MB idle after a trim; reconciled behind it by folder signatures in 41.5 s, searches meanwhile p95 7.5 ms. Launched again, the store mapped from its snapshot: 36.2 ms, 72 MB, reconciled from the volume's history in 206 ms | under 1 s and 250 MB: FAIL for the first launch, PASS for the second | 1.07 GB |
+| search | all 43 counts equal the manifest's; first page and count p50 3.7 ms, p95 7.7 ms; every photo in order p95 12.5 ms; the store built in 989 ms, 92.3 bytes a photo | p95 under 16 ms: PASS | 1.26 GB |
+| facets | p50 2.9 ms, p95 7.9 ms | under 100 ms: PASS | 484 MB |
+| lists, groups, stacks, duplicates | every check passed | PASS | 1.57 GB, 843 MB, 770 MB, 682 MB |
+
+- **The budgets are this design's, set for a million photos;** at two million, three miss. Listing takes four times its budget. The first 1,000 photos take 11.0 s to become searchable, against 3.5 s at a million, which missed too. A launch that has to build the column store takes 1.29 s and 486 MB, where every launch after maps the snapshot the first saved, in 36 ms.
+- **Indexing's memory grows faster than the library:** 5.45 GB at its peak for two million photos, against 1.33 GB for a million.
+- **The index the query scenarios share** was made by `redlamp library index` in 7,186.5 s, 278 photos a second, under heavier load (45 to 60), and kept in `lib-2m.noindex/index`; search and facets searched it, and lists, groups, stacks and duplicates a copy.
+- **Not run at this size:** reconcile, metadata and collections, which clone the fixture or write its sidecars, too slow on this Mac at two million as at one; vanishing-volume, another full index; and store, naming, xmp, files, keywords and import, which measure sets of their own size, not the fixture's.
+
 ### Photo lists and selections (LIB-10)
 
 The `lists` scenario at a million photos in memory, Release, load average about 80, two runs agreeing:
