@@ -38,7 +38,8 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
     private let presets = FilterPopUp(identifier: "library.filter.presets", tip: "Filter Presets", large: true)
     private let lock = FilterBarButton(identifier: "library.filter.lock", symbol: "lock.open", tip: "Lock Filters")
     let field = FilterSearchField()
-    /// The field's capsule: the system's glass, its own material and tint, as a search field has in a toolbar.
+    /// The field's capsule: the regular glass of the toolbar's own buttons and the Library and Develop picker, in
+    /// either appearance.
     private let fieldGlass = NSGlassEffectView()
     private let attributes: FilterAttributeRow
     let columns: FilterColumnsView
@@ -92,7 +93,7 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
             + "kw:birds -flag:reject filter, Tab completing them"
         fieldGlass.cornerRadius = FilterSearchField.height / 2
         fieldGlass.contentView = field
-        updateGlass()
+        fieldGlass.style = .regular
         completions.onChoose = { [weak self] completion in self?.accept(completion) }
         for view: NSView in [
             fieldGlass,
@@ -137,21 +138,6 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
         layer?.backgroundColor = LibraryLook.bar
         needsDisplay = true
         update()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateGlass()
-    }
-
-    /// The field's glass lifted from the bar, as a search field in a toolbar is in either appearance: on dark the
-    /// clear glass lightens what's behind it, where the regular glass darkens it.
-    private func updateGlass() {
-        let style: NSGlassEffectView.Style = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? .clear : .regular
-        if fieldGlass.style != style {
-            fieldGlass.style = style
-        }
     }
 
     override func viewDidMoveToWindow() {
