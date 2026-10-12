@@ -902,6 +902,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Photos library integration and a Photos editing extension <!-- tracker: EXT-04 -->
 - [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
 - [x] The filmstrip hidden automatically or kept up, as a setting, with the photo fitted above it <!-- tracker: UX-19 -->
+- [ ] The filmstrip: a scroll bar, thumbnails you can resize, Home and End for the first and last photo, and its line of text made optional <!-- tracker: UX-42 -->
 - [x] The pixel under the pointer under the histogram: its RGB percentages or L*a*b* values <!-- tracker: UX-32 -->
 - [x] Masks: reorder masks and components, every overlay mode and its opacity <!-- tracker: MSK-21 -->
 - [x] Masks: a Color swatch <!-- tracker: MSK-23 -->
@@ -950,6 +951,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] **Files on disk:** naming templates, batch rename, moving and copying files and new folders with Undo and Stop partway, removing photos to the Trash from their menu or the Delete key, importing from cards with a backup copy, stacks, and Library Health: exact duplicates, damaged and misnamed files, and a rule for raw and JPEG pairs, moved to the Trash only from a list you confirm, and photos whose files went missing, found again or removed <!-- tracker: LIB-25, LIB-26, LIB-27, LIB-28, LIB-39, LIB-40, LIB-46 -->
 - [ ] **Coming from Lightroom:** a Lightroom Classic catalog's ratings, keywords and collections, and other apps' libraries <!-- tracker: LIB-29, LIB-30 -->
 - [ ] Library research, and a design measured against a stress harness of up to two million photos on simulated spinning and network disks, with budgets that fail on regressions <!-- internal; tracker: LIB-01, LIB-02, LIB-03, LIB-04 -->
+- [ ] The app in the App Sandbox, which the Mac App Store requires, so that it reaches only the files you give it <!-- internal; tracker: ARC-17 -->
 - [ ] Accessibility, usability testing, and the Mac App Store release <!-- internal -->
 
 ### Phase 5: iPad and iPhone
@@ -961,6 +963,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
+- Working on your photos away from home over your own private network, such as Tailscale, with the photos left on a drive at home: a study first <!-- tracker: LIB-47 -->
 - Panorama and HDR merge <!-- tracker: OTH-04 -->
 - **The library's AI and map:** AI-assisted culling, similar photos, suggested keywords and text search, natural-language search, people, a map, and sensor dust followed from shoot to shoot <!-- tracker: OTH-02, LIB-31, LIB-32, LIB-33, LIB-34, LIB-35, LIB-43 -->
 - **Tethered shooting:** capture sessions with settings for the next captures and a hot folder for any camera, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, wireless, and focus brackets straight into a stack ([research](docs/research/tethering-findings.md)) <!-- tracker: TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 -->
