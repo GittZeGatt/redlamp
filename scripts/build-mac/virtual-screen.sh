@@ -48,9 +48,10 @@ esac
 "$CLI" set -name="$NAME" -connected=on
 printf '==> Virtual screen "%s": connected\n' "$NAME"
 # Retina, as the main Mac's screens are: tests that choose their references by the screen's scale
-# (HistogramGraphViewTests) then choose the same ones with the lid open or closed.
-if "$CLI" set -name="$NAME" -virtualScreenHiDPI=on && sleep 2 \
-    && "$CLI" set -name="$NAME" -resolution=2560x1440 -hiDPI=on; then
+# (HistogramGraphViewTests) then choose the same ones with the lid open or closed. A virtual screen
+# offers HiDPI modes from the start, and changing that offer needs BetterDisplay Pro, so this only
+# chooses the mode.
+if "$CLI" set -name="$NAME" -resolution=2560x1440 -hiDPI=on; then
     printf '==> Virtual screen "%s": Retina, looks like 2560 × 1440\n' "$NAME"
 else
     echo "note: the virtual screen stays at 1x; choose a HiDPI resolution for it in BetterDisplay's menu" >&2
