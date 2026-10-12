@@ -71,9 +71,15 @@ NOT_READ = (
     "Casks/", "README.md", "AGENTS.md", "LICENSE", "Version.xcconfig",
 )
 # ...except these: SidecarSchemaTests builds its path to sidecar-format.md, and CI runs the
-# fixtures and generate tasks, and generate the LibRaw script. Paths the Swift code names in full
-# are found in it (named_in_code).
-READ = ("docs/recipes/", "mise/tasks/fixtures", "mise/tasks/generate", "scripts/vendor-libraw.sh")
+# fixtures and generate tasks, and generate the LibRaw and libjxl scripts. Paths the Swift code
+# names in full are found in it (named_in_code).
+READ = (
+    "docs/recipes/",
+    "mise/tasks/fixtures",
+    "mise/tasks/generate",
+    "scripts/vendor-libraw.sh",
+    "scripts/vendor-libjxl.sh",
+)
 QUOTED = re.compile(r'"(?:\.\./)*((?:docs|research|scripts)/[^"\\\s]*)')
 # The reference tests: every suite in a test file with a record or update switch, golden renders or
 # tests/golden; every suite named for its golden files; and these, whose references are

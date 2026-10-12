@@ -1279,7 +1279,7 @@ Help › Your Reports lists the reports sent from this Mac (kept in `~/Library/A
 Redlamp is at an early stage and moving quickly. Issues and discussion are very welcome: Report a Bug or Send Feedback in the app files an issue for you, with the details that help. To ask a question or follow along, join the [Redlamp Discord](https://discord.gg/4VZpxpgRCA).
 
 - **Clean-room policy.** No GPL or LGPL code or data. Algorithms are implemented from published papers and specifications. Reading GPL projects such as darktable and RawTherapee to understand an idea is fine, but never port, translate or paraphrase their code, and never copy their data (profiles, tables, presets).
-- **Third-party components:** LibRaw is used under its CDDL-1.0 option, and two files ported from it, Markesteijn's X-Trans demosaic (`DemosaicXTrans.metal`, `XTransDemosaic.swift`), are CDDL-1.0 too (`LICENSES/CDDL-1.0.txt`). MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
+- **Third-party components:** LibRaw is used under its CDDL-1.0 option, and two files ported from it, Markesteijn's X-Trans demosaic (`DemosaicXTrans.metal`, `XTransDemosaic.swift`), are CDDL-1.0 too (`LICENSES/CDDL-1.0.txt`). libjxl (BSD-3-Clause, with Google's patent grant) writes JPEG XL exports, built with Highway (used under its BSD-3-Clause option), Brotli (MIT) and skcms (BSD-3-Clause); their licences are in `LICENSES/`. MLX Swift (MIT) and Swift Numerics (Apache-2.0) run generative fill's models on the Mac. Planned additions are lcms2 (MIT) and the lensfun database (CC-BY-SA, data only).
 - **Conventions:**
   - Run `mise run setup` once, so commits are linted and pushes to main are tested, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.
@@ -1297,6 +1297,7 @@ Redlamp is licensed under the **Mozilla Public License 2.0**; see [LICENSE](LICE
 
 Redlamp builds on the work of others:
 - [LibRaw](https://www.libraw.org) for RAW unpacking (CDDL-1.0)
+- [libjxl](https://github.com/libjxl/libjxl), JPEG XL's reference library, for JPEG XL export (BSD-3-Clause), with [Highway](https://github.com/google/highway) (BSD-3-Clause), [Brotli](https://github.com/google/brotli) (MIT) and [skcms](https://skia.googlesource.com/skcms) (BSD-3-Clause)
 - [raw.pixls.us](https://raw.pixls.us) for CC0 sample files
 - Björn Ottosson's [OKLab](https://bottosson.github.io/posts/oklab/) color space
 - Robertson's method for correlated color temperature

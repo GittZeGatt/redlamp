@@ -126,6 +126,12 @@ public let libRawDependencies: [TargetDependency] = [
     .sdk(name: "z", type: .library),
 ]
 
+/// libjxl, which writes JPEG XL exports, is vendored as a static XCFramework built by `mise run vendor`.
+public let libJXLDependencies: [TargetDependency] = [
+    .xcframework(path: .relativeToRoot("vendor/build/libjxl.xcframework")),
+    .sdk(name: "c++", type: .library),
+]
+
 private let releaseSettings: SettingsDictionary = [
     "SWIFT_COMPILATION_MODE": "wholemodule",
     "DEAD_CODE_STRIPPING": "YES",

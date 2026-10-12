@@ -55,6 +55,13 @@ jobs:
           path: vendor/build
           key: libraw-${{ hashFiles('config/vendored-libs.json', 'vendor/shims/**', 'scripts/vendor-libraw.sh') }}
 
+      # After LibRaw's, whose cache holds all of vendor/build, so this one's libjxl is the one used.
+      - name: Cache vendored libjxl
+        uses: actions/cache@v4
+        with:
+          path: vendor/build/libjxl.xcframework
+          key: libjxl-${{ hashFiles('config/vendored-libs.json', 'scripts/vendor-libjxl.sh') }}
+
       - name: Cache sample raw files
         uses: actions/cache@v4
         with:

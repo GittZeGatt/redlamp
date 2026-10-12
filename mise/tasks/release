@@ -151,10 +151,12 @@ if [ "$BUMP" = 1 ]; then
 fi
 BUILD="$(git rev-list --count "$COMMIT")"
 echo "==> Releasing Redlamp $VERSION (build $BUILD) from ${REF:-origin/main}: $(git log -1 --format='%h %s' "$COMMIT")"
-# Reusing the vendored LibRaw saves a rebuild; generate still rebuilds it if its stamp doesn't
-# match the pinned version and shim.
-[ ! -d vendor/build/LibRaw.xcframework ] \
-    || ditto vendor/build/LibRaw.xcframework "$SRC/vendor/build/LibRaw.xcframework"
+# Reusing the vendored LibRaw and libjxl saves rebuilds; generate still rebuilds either if its stamp
+# doesn't match its pins (and LibRaw's shim).
+for framework in LibRaw libjxl; do
+    [ ! -d "vendor/build/$framework.xcframework" ] \
+        || ditto "vendor/build/$framework.xcframework" "$SRC/vendor/build/$framework.xcframework"
+done
 (cd "$SRC" && mise run generate)
 
 # What ships is stripped of all but its exported symbols; the dSYMs keep the rest, for

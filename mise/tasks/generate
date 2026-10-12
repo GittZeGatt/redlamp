@@ -6,6 +6,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 scripts/vendor-libraw.sh
+scripts/vendor-libjxl.sh
 echo "==> Resolving Swift packages (Tuist/Package.swift)..."
 tuist install
 echo "==> Generating Xcode workspace with Tuist..."
