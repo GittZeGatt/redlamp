@@ -162,7 +162,11 @@ extension LibraryFilterTests {
         #expect(button.isHidden, "no query, nothing to search everywhere")
         try await filtered(model, "camera:X-T5")
         try await eventually { !button.isHidden }
-        #expect(button.title == "Search All Photographs", "the library not counted yet")
+        // Until the library is counted the button names All Photographs; a count can already be there.
+        #expect(
+            button.title == "Search All Photographs" || button.title == "Search All 6",
+            "the library not counted yet, or counted already",
+        )
         // The Library panel counts the library while it's in the window.
         model.librarySources.recount()
         await model.librarySources.counted()
