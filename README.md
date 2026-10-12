@@ -938,10 +938,12 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
 - [ ] HDR and EDR editing and export <!-- tracker: TON-42 -->
 - [ ] Batch export <!-- tracker: EDT-16 -->
+- [ ] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->
 - [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
 - [ ] **A library for a million photos:** an index on your Mac of every photo under your folders, kept current as the disks change, with thumbnails and previews that let you browse slow, network and disconnected drives; edits and metadata stay beside each photo, or in Redlamp on this Mac for folders it can't write to, moved between the two from a folder's menu, and several Macs can share the same folders <!-- tracker: LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11, LIB-37 -->
+- [ ] Working on your photos away from home over your own private network, such as Tailscale, with the photos left on a drive at home: a study first <!-- tracker: LIB-47 -->
 - [ ] **Library and Develop in one window:** switch with a key or a click, with your selection, source and filmstrip carried across, and a second window for another screen <!-- tracker: LIB-13, LIB-20 -->
 - [ ] **Search and filters:** results as you type, one query language for the filter bar, the command palette, smart collections and `redlamp library`, counts for every filter, traits such as long exposures, panoramas, and wide-open, telephoto and ultra-wide shots, and an empty search that names the filter in its way or a name a typo away <!-- tracker: LIB-06, LIB-12, LIB-18, LIB-19 -->
 - [ ] **Grid and culling:** a grid and loupe that held arrow keys fly through, photos grouped into moments, days, cameras or lenses, Compare and Survey, sensor clipping, a raw histogram and focus peaking while culling, thumbnails that show your edits, and ratings, flags, colour labels and marks on whole selections, with Undo, by key, by mouse or from the command palette <!-- tracker: LIB-14, LIB-15, LIB-16, LIB-17, LIB-38, LIB-41 -->
@@ -963,7 +965,6 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Later
 - CloudKit sync with lightweight proxy RAW files
-- Working on your photos away from home over your own private network, such as Tailscale, with the photos left on a drive at home: a study first <!-- tracker: LIB-47 -->
 - Panorama and HDR merge <!-- tracker: OTH-04 -->
 - **The library's AI and map:** AI-assisted culling, similar photos, suggested keywords and text search, natural-language search, people, a map, and sensor dust followed from shoot to shoot <!-- tracker: OTH-02, LIB-31, LIB-32, LIB-33, LIB-34, LIB-35, LIB-43 -->
 - **Tethered shooting:** capture sessions with settings for the next captures and a hot folder for any camera, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, wireless, and focus brackets straight into a stack ([research](docs/research/tethering-findings.md)) <!-- tracker: TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 -->

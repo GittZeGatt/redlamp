@@ -234,7 +234,8 @@ A high-level list of the features photographers know from Lightroom, and where R
 | JPEG, HEIC, AVIF, PNG and TIFF | Yes | Done | | | EDT-13, EDT-15 | 8, 10 or 16 bits, in sRGB or Display P3 |
 | Size, metadata and export presets | Yes | Done | | | EDT-15 | With Export with Previous |
 | Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P3 | EDT-26 | |
-| DNG, PSD and JPEG XL output | Yes | Planned | | P4 | EDT-27 | |
+| JPEG XL output | Yes | Planned | | P4 | EDT-30 | Lossy or lossless |
+| DNG and PSD output | Yes | Planned | | P4 | EDT-27 | |
 | Watermarks | Yes | Planned | | P4 | EDT-25 | |
 | Output sharpening | Yes | Planned | | P4 | EDT-28 | |
 | Edit in Photoshop or another app | Yes | Planned | | P4 | EDT-29 | |
@@ -288,6 +289,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | iPad and iPhone | Yes | Planned | | P5 | | The same engine, after 1.0 |
 | Edits shared between Macs | Yes (cloud) | Done | Behind | | | Through iCloud Drive: sidecars sync safely and conflicting copies merge. A photo that's open doesn't reload yet when another Mac changes its edit |
 | A library shared between Macs | Yes (cloud) | Planned | | P4 | LIB-37 | Ratings, keywords and collections another Mac changes, through iCloud Drive or a shared volume, merged field by field |
+| Working on your photos away from home | Yes (cloud) | Planned | | P4 | LIB-47 | Over your own private network, such as Tailscale, with the photos left on a drive at home rather than in a cloud; a study first |
 | Edits moving between your Mac, iPad and iPhone | Yes (cloud) | Planned | | P5 | | Through iCloud Drive and Files, rather than Adobe's cloud |
 | Cloud sync with smart previews | Yes (cloud) | Later | | | | |
 | Photos library and a Photos editing extension | Partly (mobile) | Planned | | P2 | EXT-04 | |
