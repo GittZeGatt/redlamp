@@ -26,7 +26,8 @@ raws, vendored LibRaw and the Swift packages, cloned from the main checkout, so 
 recorded but never added can't make it pass. It isn't inside the main checkout, where tools that
 read their configuration from parent folders would find the main checkout's (SwiftFormat's
 excludes build/, and would lint nothing). The lock, the logs and the passes it remembers are in
-the main checkout's build/push-gate.
+the main checkout's build/push-gate, with each run of the tests summarised beside its log
+(<log>.tests.json, which scripts/test-results.py compares between runs).
 
 A pass is remembered by the commit's tree, so the same files aren't checked twice; a pass on the
 build Mac (scripts/build-mac.py gate) is remembered here the same way. One gate runs
@@ -90,6 +91,8 @@ SHOWN = re.compile(r"✘|(?:^|: )error: |Test run with \d+ tests|unexpected exit
 # failure in that bundle shown, rather than running the other bundles (`mise run test` runs them).
 BUNDLE_FAILED = re.compile(r"✘ Test run with \d+ tests|Test Suite '[^']+\.xctest' failed")
 KEPT_LOGS = 20
+# In the worktree, replaced by each run of the tests; its summary stays beside the log.
+RESULTS = "build/push-gate.xcresult"
 # Git exports GIT_DIR and the like to its hooks; git in the gate's worktree mustn't see them.
 ENV = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
 
@@ -230,9 +233,10 @@ def steps(level: str) -> list[tuple[str, list[str], bool]]:
         only = [f"-only-testing:{suite}" for suite in reference_suites()]
         return out + [
             ("Build with the tests", [*xcodebuild, "build-for-testing"], True),
-            (f"Reference tests ({len(only)} suites)", [*xcodebuild, "test-without-building", *only], True),
+            (f"Reference tests ({len(only)} suites)",
+             [*xcodebuild, "test-without-building", "-resultBundlePath", RESULTS, *only], True),
         ]
-    out.append(("Test", [*xcodebuild, "test"], True))
+    out.append(("Test", [*xcodebuild, "test", "-resultBundlePath", RESULTS], True))
     if level == "full":
         out += [
             ("Build app (Release)", [*common, "build", "-scheme", "Redlamp", "-configuration", "Release"], True),
@@ -387,6 +391,17 @@ def run(name: str, command: list[str], log, long: bool) -> bool:
     return code == 0 and not stopped
 
 
+def summarise(log_path: Path) -> None:
+    """The tests' results beside the log, for comparing runs (scripts/test-results.py); never stops the gate."""
+    script = ROOT / "scripts/test-results.py"
+    if not (SRC / RESULTS).exists() or not script.exists():
+        return
+    found = subprocess.run([sys.executable, str(script), "summary", str(SRC / RESULTS), "--out",
+                            str(log_path.with_suffix(".tests.json"))], env=ENV, capture_output=True, text=True)
+    if found.returncode == 0 and found.stdout.strip():
+        say(found.stdout.strip())
+
+
 def check(commit: str, theirs: str | None, asked: str, remote: str | None) -> bool:
     """Checks the commit at the level its changes need, or the one asked for if that's higher."""
     tree = git("rev-parse", f"{commit}^{{tree}}")
@@ -440,13 +455,20 @@ def check(commit: str, theirs: str | None, asked: str, remote: str | None) -> bo
         logs.mkdir(parents=True, exist_ok=True)
         for old in sorted(logs.glob("*.log"))[:-KEPT_LOGS]:
             old.unlink()
+            old.with_suffix(".tests.json").unlink(missing_ok=True)
         log_path = logs / f"{dt.datetime.now():%Y%m%d-%H%M%S}-{short}.log"
         if level != "checks":
             say(f"Log: {log_path}")
         with log_path.open("w") as log:
             log.write(f"==> Push gate: {commit} at the {level} level, {'pushed to ' + remote if remote else 'by hand'}\n")
             for name, command, long in steps(level):
-                if not run(name, command, log, long):
+                if RESULTS in command:
+                    shutil.rmtree(SRC / RESULTS, ignore_errors=True)
+                    (SRC / RESULTS).parent.mkdir(parents=True, exist_ok=True)
+                passed = run(name, command, log, long)
+                if RESULTS in command:
+                    summarise(log_path)
+                if not passed:
                     log.write(f"==> Push gate: {name} failed after {took(time.monotonic() - started)}\n")
                     say(f"Push gate: {name} failed{'; the push is stopped and nothing was sent' if remote else ''}.")
                     print(f"    Log: {log_path}\n    Worktree: {SRC}", flush=True)

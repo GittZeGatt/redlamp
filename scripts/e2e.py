@@ -82,6 +82,12 @@ def load() -> float:
     return float(out.strip("{} \n").split()[0])
 
 
+def machine() -> str:
+    """The Mac, as "Apple M1 Ultra, macOS 26.6.2": reports from the build Mac sit beside this Mac's."""
+    chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True).stdout.strip()
+    return f"{chip or platform.machine()}, macOS {platform.mac_ver()[0]}"
+
+
 def commit() -> tuple[str, bool]:
     sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short=7", "HEAD"], capture_output=True, text=True)
     dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
@@ -90,6 +96,13 @@ def commit() -> tuple[str, bool]:
 
 
 # ---------------------------------------------------------------- building the test app
+
+def can_sign() -> bool:
+    """Whether the keychain holds a code signing identity; the build Mac's holds none (ARC-15)."""
+    out = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"], capture_output=True, text=True).stdout
+    lines = out.strip().splitlines()
+    return bool(lines) and lines[-1].split()[0] != "0"
+
 
 def build(configuration: str) -> Path:
     """Builds the app with the driver compiled in: Debug, or Release with REDLAMP_PROFILING."""
@@ -101,6 +114,10 @@ def build(configuration: str) -> Path:
     ]
     if configuration == "qa":
         command.append("SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REDLAMP_PROFILING")
+    if not can_sign():
+        # Ad hoc, and without the hardened runtime: its library validation refuses the app's own
+        # frameworks when they're signed ad hoc ("different Team IDs").
+        command += ["CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "ENABLE_HARDENED_RUNTIME=NO"]
     log(f"Building the {configuration} test app")
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
@@ -1105,7 +1122,7 @@ def main() -> int:
     report = {
         "format": "app.redlamp.e2e-report", "tier": tier, "commit": sha, "dirty": dirty, "focus": args.focus,
         "started": started.isoformat(timespec="seconds"), "seconds": (dt.datetime.now().astimezone() - started).total_seconds(),
-        "machine": f"{platform.machine()} macOS {platform.mac_ver()[0]}", "load": {"before": load_before, "after": load_after},
+        "machine": machine(), "load": {"before": load_before, "after": load_after},
         "noisy": max(load_before, load_after) > QUIET_LOAD, "app": str(built), "seed": args.seed,
         "verdict": "Failed: " + ", ".join(problems) if problems else "Passed",
         "summary": summary, "scenarios": scenarios, "crashes": crashes, "hangs": hangs,

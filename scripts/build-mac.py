@@ -8,22 +8,33 @@ check runs here, as it would without the build Mac:
     scripts/build-mac.py gate [<commit>]      # the push gate on a commit (HEAD by default)
     scripts/build-mac.py gate --suite         # the whole test suite, as CI runs it
     scripts/build-mac.py gate --full          # and CI's Release builds
+    scripts/build-mac.py e2e [-- <arguments>] # the regression suite on this checkout's commit
+    scripts/build-mac.py release-checks       # a release's checks on this checkout's commit
     scripts/build-mac.py attach [<job>]       # follow a job again (the one running by default)
     scripts/build-mac.py cancel [<job>]       # stop a job there (the one running by default)
+    scripts/build-mac.py models               # this Mac's models, copied to the build Mac where it lacks them
     scripts/build-mac.py setup [<options>]    # scripts/build-mac/setup.sh there, with this Mac's versions
 
 A job sends its commit with git push to the build Mac's clone (~/src/build-mac/redlamp), under
 refs/build-mac/, which the pre-push hook lets through, and runs in the clone in a process of its
 own, so it carries on if the connection drops. Jobs run there one at a time, under caffeinate.
 The command prints what the job prints; Ctrl-C cancels the job, and --detach leaves it running for
-attach to follow. Its log comes back into build/build-mac/<job>/, with the push gate's own log, and
-a gate's pass into build/push-gate/passed, so a push of that commit, by the owner or an agent,
-goes straight through.
+attach to follow. Its log comes back into build/build-mac/<job>/, with the push gate's own log and
+its tests' results (tests.json, which scripts/test-results.py compares with a run here), and a
+gate's pass into build/push-gate/passed, so a push of that commit, by the owner or an agent, goes
+straight through.
 
-When the build Mac doesn't answer, or its Xcode isn't this Mac's, gate says so in one line and runs
-the same check here; a different macOS is reported and allowed, since only Xcode has to match.
---there waits for the build Mac instead, and checks a commit there even when it passed here; --here
-doesn't try it.
+e2e runs scripts/e2e.py, with the arguments after --, on the checkout's commit as committed, and
+brings the run's folder back into the checkout's build/e2e/, leaving its photos, test home and
+exports there; mise run release finds a passing report in it as it would one made here.
+release-checks, which mise run release-checks runs in the release copy, is the regression suite's
+release tier with focus, then the push gate on every test suite, each skipped if it has passed
+already, on either Mac.
+
+When the build Mac doesn't answer, or its Xcode isn't this Mac's, gate and e2e say so in one line
+and run here; a different macOS is reported and allowed, since only Xcode has to match. --there
+waits for the build Mac instead, and gate --there checks a commit there even when it passed here;
+--here doesn't try it.
 
 The build Mac is the host build-mac in ~/.ssh/config; REDLAMP_BUILD_MAC names another. Under its
 ~/src/build-mac: the clone, the push gate's worktree beside it (redlamp-push-gate), and jobs/, with
@@ -44,6 +55,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import time
 import traceback
 from pathlib import Path
@@ -60,7 +72,9 @@ SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "ServerAliv
 # The push gate's levels, each covering the ones before it (scripts/push-gate.py).
 LEVELS = ("checks", "reference", "suite", "full")
 FINAL = ("passed", "failed", "cancelled", "lost")
-JOB_ID = re.compile(r"\d{8}-\d{6}-[a-z]+-[0-9a-f]{7}")
+JOB_ID = re.compile(r"\d{8}-\d{6}-[a-z0-9]+-[0-9a-f]{7}")
+# What a regression run's folder keeps that each run makes again: left on the build Mac.
+LEFT_THERE = ("home", "photos", "originals", "exports")
 # Starts the last line the build Mac's side of a command prints: what came of it, as JSON.
 MARK = b"@@build-mac "
 KEPT_JOBS = 30
@@ -239,10 +253,14 @@ def send(commit: str, job: str) -> None:
         sys.exit(f"build-mac: sending {commit[:7]} to the build Mac failed: {result.stderr.strip()}")
 
 
-def start(kind: str, commit: str, command: list[str], detach: bool) -> int:
+def start(kind: str, commit: str, command: list[str], detach: bool, into: Path | None = None) -> int:
+    """Starts a job there; a regression run's folder comes back into `into`'s build/e2e/ when it ends."""
     job = f"{dt.datetime.now():%Y%m%d-%H%M%S}-{kind}-{commit[:7]}"
     say(f"On the build Mac, as {job}")
     send(commit, job)
+    if into:
+        results(job).mkdir(parents=True, exist_ok=True)
+        (results(job) / "into").write_text(f"{into}\n")
     mode = ["_start", job, kind, commit, *(["--detach"] if detach else []), "--", *command]
     if not detach:
         return follow(job, mode)
@@ -288,9 +306,28 @@ def follow(job: str, mode: list[str]) -> int:
     return finish(job, state, folder)
 
 
-def fetch(path: str, target: Path) -> None:
+def fetch(path: str, target: Path) -> bool:
     with target.open("wb") as out:
-        subprocess.run([*SSH, HOST, f"cat {shlex.quote(path)}"], stdout=out, stderr=subprocess.DEVNULL, env=ENV)
+        code = subprocess.run([*SSH, HOST, f"cat {shlex.quote(path)}"], stdout=out, stderr=subprocess.DEVNULL,
+                              env=ENV).returncode
+    if code != 0:
+        target.unlink(missing_ok=True)
+    return code == 0
+
+
+def bring_back(run: str, into: Path) -> Path | None:
+    """A regression run's folder there, without what each run makes again, into the checkout's build/e2e/."""
+    target = into / "build/e2e" / Path(run).name
+    process = run_there("_pack", run)
+    try:
+        with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
+            archive.extractall(target, filter="data")
+    except (tarfile.TarError, OSError) as error:
+        say(f"Its run's folder didn't come back ({error})")
+        return None
+    finally:
+        process.wait()
+    return target
 
 
 def remember(state: dict) -> None:
@@ -308,9 +345,16 @@ def remember(state: dict) -> None:
 
 def finish(job: str, state: dict, folder: Path) -> int:
     (folder / "job.json").write_text(json.dumps(state, indent=1) + "\n")
-    gate_log = re.search(r"Log: (/\S+\.log)", (folder / "log").read_text(errors="replace"))
+    printed = (folder / "log").read_text(errors="replace")
+    gate_log = re.search(r"Log: (/\S+)\.log", printed)
     if gate_log:
-        fetch(gate_log.group(1), folder / "push-gate.log")
+        fetch(f"{gate_log.group(1)}.log", folder / "push-gate.log")
+        fetch(f"{gate_log.group(1)}.tests.json", folder / "tests.json")
+    report = re.search(r"Report: (/\S+)/report\.md", printed)
+    if report:
+        into = Path((folder / "into").read_text().strip()) if (folder / "into").exists() else ROOT
+        run = bring_back(report.group(1), into)
+        say(f"Its report is in {shown(run / 'report.md')}" if run else f"`scripts/build-mac.py attach {job}` tries again")
     if state.get("passed"):
         remember(state)
     ran = between(state.get("started"), state.get("finished"))
@@ -346,13 +390,22 @@ def pick(named: str | None, unfinished: bool) -> str:
 # ---------------------------------------------------------------- commands
 
 
-def gate(args: argparse.Namespace) -> int:
+def here(command: list[str], replace: bool) -> int:
+    """Runs the command on this Mac: in place of this process, or in one of its own."""
+    if replace:
+        os.execve(command[0], command, ENV)
+    return subprocess.call(command, env=ENV)
+
+
+def gate(args: argparse.Namespace, replace: bool = True, again: bool | None = None) -> int:
+    """The push gate on a commit; with `again` (--there), there even when this Mac's gate passed it."""
+    again = args.there if again is None else again
     commit = git("rev-parse", "--verify", f"{args.commit}^{{commit}}")
     flags = ["--full"] if args.full else ["--suite"] if args.suite else []
     asked = "full" if args.full else "suite" if args.suite else "reference"
     record = covered(git("rev-parse", f"{commit}^{{tree}}"), asked)
     there = record is not None and record.get("machine") == "build-mac"
-    if record and (there or not args.there):
+    if record and (there or not again):
         on = " on the build Mac" if there else ""
         say(f"Its files passed the gate ({record['level']}){on} on {record['at'][:16].replace('T', ' at ')} "
             f"({record['commit'][:7]}); nothing to check")
@@ -360,9 +413,74 @@ def gate(args: argparse.Namespace) -> int:
     if record:
         say(f"Its files passed the gate here ({record['level']}); --there checks them on the build Mac too")
     if where(args) is None:
-        command = [str(ROOT / "scripts/push-gate.py"), commit, *flags]
-        os.execve(command[0], command, ENV)
+        return here([str(ROOT / "scripts/push-gate.py"), commit, *flags], replace)
     return start("gate", commit, ["scripts/push-gate.py", commit, *flags], args.detach)
+
+
+def e2e(args: argparse.Namespace, replace: bool = True) -> int:
+    """The regression suite on the checkout's commit, its run's folder brought back into its build/e2e/."""
+    commit = git("rev-parse", "HEAD")
+    if where(args) is None:
+        if not (ROOT / "Redlamp.xcworkspace").is_dir():
+            subprocess.run(["mise", "run", "generate"], cwd=ROOT, env=ENV, check=True)
+        return here([str(ROOT / "scripts/e2e.py"), *args.options], replace)
+    # Generated at each commit, which may add or remove source files.
+    command = ["bash", "-c", 'mise run generate && exec scripts/e2e.py "$@"', "e2e", *args.options]
+    return start("e2e", commit, command, args.detach, into=ROOT)
+
+
+def release_checks(args: argparse.Namespace) -> int:
+    """The regression suite's release tier with focus, then every test suite, on the checkout's commit."""
+    commit = git("rev-parse", "HEAD")
+    if git("status", "--porcelain", "--untracked-files=no"):
+        sys.exit(f"build-mac: {ROOT} has uncommitted changes, and a release's checks run on the commit as it is")
+    say(f"A release's checks on {git('log', '-1', '--format=%h %s', commit)[:90]}: the regression suite's "
+        "release tier with focus, then every test suite")
+    outcome = {}
+    found = subprocess.run([str(ROOT / "scripts/e2e.py"), "--passing-report", commit, "--tier", "release", "--focus"],
+                           capture_output=True, text=True, env=ENV)
+    if found.returncode == 0:
+        say(f"The regression suite passed already: {shown(Path(found.stdout.strip()))}")
+        outcome["The regression suite"] = 0
+    else:
+        options = argparse.Namespace(there=args.there, here=args.here, detach=False,
+                                     options=["--tier", "release", "--focus"])
+        outcome["The regression suite"] = e2e(options, replace=False)
+    suite = argparse.Namespace(commit=commit, suite=True, full=False, there=args.there, here=args.here, detach=False)
+    outcome["Every test suite"] = gate(suite, replace=False, again=False)
+    for name, code in outcome.items():
+        say(f"{name}: {'passed' if code == 0 else 'failed'}")
+    return 0 if all(code == 0 for code in outcome.values()) else 1
+
+
+def copy_models(_args: argparse.Namespace) -> int:
+    """This Mac's models, copied to the build Mac where it lacks them, each put in place once it has arrived."""
+    info, why = ask("_status")
+    if info is None:
+        sys.exit(f"build-mac: the build Mac doesn't answer ({why})")
+    missing = sorted(set(models()) - set(info["models"]))
+    if not missing:
+        say(f"The build Mac has this Mac's {len(models())} models")
+        return 0
+    size = sum(path.stat().st_size for model in missing for path in (MODELS / model).rglob("*") if path.is_file())
+    say(f"Copying {len(missing)} models ({size / 1e9:.1f} GB) to the build Mac: {', '.join(missing)}")
+    there = "Library/Application Support/Redlamp/Models"
+    incoming = shlex.quote(f"{there}/.incoming")
+    moves = []
+    for model in missing:
+        place, folder = shlex.quote(f"{there}/{model}"), shlex.quote(f"{there}/{Path(model).parent}")
+        moves.append(f"mkdir -p {folder} && rm -rf {place} && mv {shlex.quote(f'{there}/.incoming/{model}')} {place}")
+    line = (f"rm -rf {incoming} && mkdir -p {incoming} && tar -C {incoming} -xf - && {' && '.join(moves)} && "
+            f"rm -rf {incoming}")
+    started = time.monotonic()
+    pack = subprocess.Popen(["tar", "-C", str(MODELS), "--exclude", ".DS_Store", "-cf", "-", *missing],
+                            stdout=subprocess.PIPE, env=ENV)
+    unpack = subprocess.run([*SSH, HOST, line], stdin=pack.stdout, env=ENV)
+    pack.stdout.close()
+    if pack.wait() != 0 or unpack.returncode != 0:
+        sys.exit("build-mac: copying the models failed; the build Mac keeps those it had")
+    say(f"Copied in {took(time.monotonic() - started)}; the tests and the regression suite there use them")
+    return 0
 
 
 def attach(args: argparse.Namespace) -> int:
@@ -414,7 +532,8 @@ def status(_args: argparse.Namespace) -> int:
         parts = [f"{len(missing)} of this Mac's {len(mine)} missing ({', '.join(missing[:3])}"
                  f"{', …' if len(missing) > 3 else ''})"] if missing else []
         parts += [f"{len(extra)} this Mac lacks"] if extra else []
-        print(f"    {name}: {'; '.join(parts)}; the tests that need them skip where they're missing")
+        copies = "; `scripts/build-mac.py models` copies them" if name == "Models" and missing else ""
+        print(f"    {name}: {'; '.join(parts)}; the tests that need them skip where they're missing{copies}")
     for job in info["jobs"][:8]:
         ran = between(job.get("started"), job.get("finished") or now())
         spent = f" {'for' if job['state'] == 'running' else 'in'} {took(ran)}" if ran is not None else ""
@@ -694,11 +813,25 @@ def status_there() -> int:
     return 0
 
 
+def pack_there(run: str) -> int:
+    """A regression run's folder as a tar stream, leaving out what each run makes again."""
+    base = Path(run)
+    with tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as archive:
+        for folder, folders, files in os.walk(base):
+            relative = Path(folder).relative_to(base)
+            if not relative.parts or (len(relative.parts) == 1 and relative.parts[0].startswith("attempt-")):
+                folders[:] = [name for name in folders if name not in LEFT_THERE]
+            for name in sorted(files):
+                archive.add(Path(folder) / name, arcname=str(relative / name))
+    return 0
+
+
 THERE = {
     "_start": start_there,
     "_follow": lambda argv: follow_there(argv[0], int(argv[1])),
     "_cancel": lambda argv: cancel_there(argv[0]),
     "_status": lambda argv: status_there(),
+    "_pack": lambda argv: pack_there(argv[0]),
 }
 
 
@@ -722,18 +855,32 @@ def main() -> int:
                        help="wait for the build Mac rather than check here, and check there what passed here")
     place.add_argument("--here", action="store_true", help="check here, without trying the build Mac")
     checking.add_argument("--detach", action="store_true", help="start it there and return; attach follows it")
+    regression = commands.add_parser("e2e", help="the regression suite on this checkout's commit, there or, failing "
+                                                 "that, here, passing scripts/e2e.py the arguments after --")
+    place = regression.add_mutually_exclusive_group()
+    place.add_argument("--there", action="store_true", help="wait for the build Mac rather than run it here")
+    place.add_argument("--here", action="store_true", help="run it here, without trying the build Mac")
+    regression.add_argument("--detach", action="store_true", help="start it there and return; attach follows it")
+    releasing = commands.add_parser("release-checks", help="the regression suite's release tier with focus, then "
+                                                           "every test suite, on this checkout's commit")
+    place = releasing.add_mutually_exclusive_group()
+    place.add_argument("--there", action="store_true", help="wait for the build Mac rather than run them here")
+    place.add_argument("--here", action="store_true", help="run them here, without trying the build Mac")
     following = commands.add_parser("attach", help="follow a job there again")
     following.add_argument("job", nargs="?", help="the job (the one running there by default)")
     stopping = commands.add_parser("cancel", help="stop a job there")
     stopping.add_argument("job", nargs="?", help="the job (the one running there by default)")
+    commands.add_parser("models", help="copy this Mac's models to the build Mac where it lacks them")
     commands.add_parser("setup", help="scripts/build-mac/setup.sh there, with this Mac's versions, passing it "
                                       "its options (--gate, --no-settings, --no-fixtures)")
     args, options = parser.parse_known_args()
-    if options and args.command != "setup":
+    if options and args.command not in ("setup", "e2e"):
         parser.error(f"unrecognized arguments: {' '.join(options)}")
-    args.options = options
+    args.options = options[1:] if args.command == "e2e" and options[:1] == ["--"] else options
+    commands_by_name = {"status": status, "gate": gate, "e2e": e2e, "release-checks": release_checks,
+                        "attach": attach, "cancel": cancel, "models": copy_models, "setup": setup}
     try:
-        return {"status": status, "gate": gate, "attach": attach, "cancel": cancel, "setup": setup}[args.command](args)
+        return commands_by_name[args.command](args)
     except KeyboardInterrupt:
         return 130
 
