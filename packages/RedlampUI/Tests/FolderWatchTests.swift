@@ -110,7 +110,9 @@ struct FolderWatchTests {
 
         try write("Trip/A.ARW")
         let (model, _) = try await open("Trip")
-        try write("Trip/B.ARW", bytes: 10, age: -3600)
+        // Dated before it's moved in: a listing between writing it and dating it finds a file just written.
+        try write("B.ARW", bytes: 10, age: -3600)
+        try FileManager.default.moveItem(at: root.appending(path: "B.ARW"), to: root.appending(path: "Trip/B.ARW"))
         try await eventually { model.items.count == 2 }
         #expect(model.items.map(\.name) == ["A.ARW", "B.ARW"])
         #expect(model.items.last?.isSettling == false, "its thumbnail doesn't wait an hour")
