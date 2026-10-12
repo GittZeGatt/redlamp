@@ -21,6 +21,7 @@ struct RedlampApp: App {
     @AppStorage(WhatsNewStore.opensKey) private var showsWhatsNew = true
 
     init() {
+        ThemeSettings.turnOffDesktopTinting()
         #if DEBUG || REDLAMP_PROFILING
             DebugDecodeCheck.runIfRequested()
             Automation.listIfRequested(arguments: LaunchArguments.all)

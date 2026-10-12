@@ -7,6 +7,10 @@ import SwiftUI
 struct HarnessApp: App {
     @NSApplicationDelegateAdaptor(HarnessAppDelegate.self) private var appDelegate
 
+    init() {
+        ThemeSettings.turnOffDesktopTinting()
+    }
+
     var body: some Scene {
         WindowGroup("Redlamp Harness") {
             HarnessRootView()

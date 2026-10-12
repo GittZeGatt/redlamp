@@ -145,10 +145,10 @@
                 FeedbackActions.presentReports(model: model)
             case "feedback":
                 // For this launch only: the defaults are shared with an installed Redlamp.
-                UserDefaults.standard.setVolatileDomain(
-                    ["feedback.noteAccepted": value == "note" ? 0 : 1, "feedback.draft": Data()],
-                    forName: UserDefaults.argumentDomain,
-                )
+                var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+                arguments["feedback.noteAccepted"] = value == "note" ? 0 : 1
+                arguments["feedback.draft"] = Data()
+                UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
                 model.sendFeedback(value == "error" ? model.openErrorReport : nil)
             case "palette":
                 await drivePalette(value, model: model)

@@ -61,6 +61,18 @@ public final class ThemeSettings {
         }
     }
 
+    /// Takes the desktop picture's tint off the system's fills in every window of the app: in dark mode macOS tints
+    /// a text field's, a search field's and a window's background with the wallpaper, which no theme sets, and a field
+    /// draws its own fill whatever its `backgroundColor`. The preference behind System Settings' "Allow wallpaper
+    /// tinting in windows" is set off in the app's volatile argument domain: never written, and above the user's own
+    /// setting. The app calls it before it starts, as AppKit reads it for windows' backgrounds once; fields read it as
+    /// they draw.
+    public static func turnOffDesktopTinting(in defaults: UserDefaults = .standard) {
+        var arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments[Keys.reducesDesktopTinting] = true
+        defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         var selection = ThemeSelection()
@@ -128,5 +140,7 @@ public final class ThemeSettings {
         static let paletteFamily = "commandPaletteThemeFamily"
         static let paletteAppearance = "commandPaletteThemeAppearance"
         static let paletteTint = "commandPaletteThemeTint"
+        /// The system's, which AppKit reads.
+        static let reducesDesktopTinting = "AppleReduceDesktopTinting"
     }
 }
