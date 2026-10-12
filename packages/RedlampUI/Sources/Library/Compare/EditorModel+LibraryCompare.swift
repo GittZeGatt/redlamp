@@ -362,6 +362,8 @@ public extension EditorModel {
     /// photo alone. Nil for every other action, and outside Compare and Survey.
     internal func performCompareShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool? {
         guard showsCompareOrSurvey, !showsMissingPhotos else { return nil }
+        // Home and End would leave the photos compared; ← and → step among them.
+        guard action != .firstPhoto, action != .lastPhoto else { return false }
         let comparing = libraryView == .compare
         let handled = action == .previousPhoto || action == .nextPhoto || CullingChange(action) != nil
             || (comparing && Self.compareActions.contains(action))
@@ -397,6 +399,7 @@ public extension EditorModel {
         guard showsCompareOrSurvey, !showsMissingPhotos else { return nil }
         let comparing = libraryView == .compare
         switch action {
+        case .firstPhoto, .lastPhoto: return false
         case .previousPhoto, .nextPhoto:
             let offset = action == .nextPhoto ? 1 : -1
             if comparing {

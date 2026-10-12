@@ -147,6 +147,30 @@ public extension EditorModel {
         selectRow(next)
     }
 
+    /// Home and End: the first or last cell in the grid's order (`GridOrder`), where ← and → stop: a closed stack's
+    /// cell is its first photo, and a closed group's photos are left out. False where ← or → wouldn't move.
+    func selectFirstOrLast(last: Bool) -> Bool {
+        guard canPerform(last ? .nextPhoto : .previousPhoto) else { return false }
+        let order = gridOrder
+        if case .listed = order {
+            selectRow(last ? items.count - 1 : 0)
+            return true
+        }
+        let cells = order.cells
+        guard let id = last ? cells.last : cells.first else { return false }
+        guard let url = library.url(ofPhoto: id) else {
+            library.whenRead([id]) { [weak self] in
+                guard let self, let url = library.url(ofPhoto: id) else { return }
+                select(url)
+                coverClosedStacks()
+            }
+            return true
+        }
+        select(url)
+        coverClosedStacks()
+        return true
+    }
+
     /// The photo being opened, then its neighbours in the grid's order (`GridOrder`), where ← and → go, the
     /// direction of travel first.
     internal func workingSet(around url: URL, comingFrom previous: URL?) -> [URL] {

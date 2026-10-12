@@ -12,22 +12,20 @@ enum PanelMetrics {
     static let inset: CGFloat = 8
     /// How close to the bottom edge the pointer brings the filmstrip in.
     static let filmstripTrigger: CGFloat = 14
-    /// The filmstrip's height, its header and its photos.
-    static let filmstripHeight: CGFloat = 110
 
     /// The stage the photo is fitted to (`CanvasController.stageInsets`): clear of the toolbar, of
-    /// each side panel's nominal width while it shows, and of the filmstrip while the photo makes
-    /// room for it (`EditorModel.makesRoomForFilmstrip`), with the gap the panels keep. Presenting
-    /// gives the photo the whole window.
+    /// each side panel's nominal width while it shows, and of the filmstrip, `filmstrip` tall, while the photo
+    /// makes room for it (`EditorModel.makesRoomForFilmstrip`), with the gap the panels keep; nil while it
+    /// floats over the photo. Presenting gives the photo the whole window.
     static func stageInsets(
-        toolbarHeight: CGFloat, presenting: Bool, leftPanel: Bool, rightPanel: Bool, filmstrip: Bool,
+        toolbarHeight: CGFloat, presenting: Bool, leftPanel: Bool, rightPanel: Bool, filmstrip: CGFloat?,
     ) -> StageInsets {
         guard !presenting else { return .zero }
         return StageInsets(
             leading: inset + (leftPanel ? sidebarNominal + inset : 0),
             trailing: (rightPanel ? inspectorNominal : 0) + inset,
             top: toolbarHeight,
-            bottom: inset + (filmstrip ? filmstripHeight + inset : 0),
+            bottom: inset + (filmstrip.map { $0 + inset } ?? 0),
         )
     }
 }
@@ -75,6 +73,7 @@ struct EditorContentView: View {
             .onChange(of: model.leftPanelVisible) { _, _ in updateStage() }
             .onChange(of: model.rightPanelVisible) { _, _ in updateStage() }
             .onChange(of: model.makesRoomForFilmstrip) { _, _ in updateStage() }
+            .onChange(of: model.filmstripHeight) { _, _ in updateStage() }
             .environment(model)
             .environment(theme)
             .tint(Theme.nativeTint)
@@ -83,7 +82,8 @@ struct EditorContentView: View {
     private func updateStage() {
         model.canvas.stageInsets = PanelMetrics.stageInsets(
             toolbarHeight: toolbarHeight, presenting: model.isPresenting, leftPanel: model.leftPanelVisible,
-            rightPanel: model.rightPanelVisible, filmstrip: model.makesRoomForFilmstrip,
+            rightPanel: model.rightPanelVisible,
+            filmstrip: model.makesRoomForFilmstrip ? model.filmstripHeight : nil,
         )
     }
 }
@@ -130,13 +130,15 @@ struct EditorOverlays: View {
 /// over it, and away shortly after the pointer leaves. With nothing selected it stays, as
 /// it is the way to pick a photo. It also comes up for a few seconds when a focus stack is
 /// found, so its banner is seen. With Hide Automatically off it stays up, and the photo is
-/// fitted above it. Its own menu, everywhere on it but its photos, has Hide Automatically.
+/// fitted above it. Its own menu, everywhere on it but its photos, has Hide Automatically, Show Info Line and
+/// the thumbnails' sizes; with the line hidden, what only it shows floats above it (`FilmstripStatus`).
 private struct FloatingFilmstrip: View {
     @Environment(EditorModel.self) private var model
     @Environment(ThemeSettings.self) private var theme
     @State private var revealed = false
     @State private var overEdge = false
     @State private var overStrip = false
+    @State private var overStatus = false
     @State private var hiding: Task<Void, Never>?
 
     private var shown: Bool {
@@ -149,7 +151,6 @@ private struct FloatingFilmstrip: View {
     }
 
     var body: some View {
-        @Bindable var model = model
         ZStack(alignment: .bottom) {
             Color.clear
                 .frame(height: PanelMetrics.filmstripTrigger)
@@ -162,16 +163,25 @@ private struct FloatingFilmstrip: View {
                 .modifier(FloatingPane(opacity: theme.panelOpacity))
                 // On the pane, so its empty parts take it too; a photo's cell has its own.
                 .contextMenu {
-                    Toggle("Hide Automatically", isOn: $model.filmstripHidesAutomatically)
+                    FilmstripMenuItems(floating: true)
                 }
                 .onHover { inside in
                     overStrip = inside
                     hoverChanged()
                 }
+                .overlay(alignment: .topLeading) {
+                    FilmstripStatus()
+                        .onHover { inside in
+                            overStatus = inside
+                            hoverChanged()
+                        }
+                        .alignmentGuide(.top) { $0[.bottom] + 4 }
+                        .padding(.leading, 10)
+                }
                 .padding(.horizontal, PanelMetrics.inset)
                 .padding(.bottom, PanelMetrics.inset)
                 // Slid out of the window rather than removed: a new strip starts at the first photo.
-                .offset(y: shown ? 0 : PanelMetrics.filmstripHeight + PanelMetrics.inset)
+                .offset(y: shown ? 0 : model.filmstripHeight + PanelMetrics.inset)
                 .opacity(shown ? 1 : 0)
                 .allowsHitTesting(shown)
                 .accessibilityHidden(!shown)
@@ -187,7 +197,7 @@ private struct FloatingFilmstrip: View {
     }
 
     private func hoverChanged() {
-        if overEdge || overStrip {
+        if overEdge || overStrip || overStatus {
             reveal()
         } else {
             scheduleHide()
@@ -204,7 +214,7 @@ private struct FloatingFilmstrip: View {
         hiding?.cancel()
         hiding = Task {
             try? await Task.sleep(for: delay)
-            guard !Task.isCancelled, !overEdge, !overStrip else { return }
+            guard !Task.isCancelled, !overEdge, !overStrip, !overStatus else { return }
             revealed = false
         }
     }

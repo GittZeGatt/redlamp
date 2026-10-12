@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The Library module's middle: the grid, the loupe, Compare or Survey between the panels, the Library toolbar
 /// under them, and the filmstrip docked beneath, the same filmstrip Develop floats, with the same photos,
-/// selection and place. Built once with the window and kept; G, E, C and N show one of the four. While Develop
+/// selection, place and size; with its line of text hidden, what only the line shows floats just above the toolbar
+/// (`FilmstripStatus`). Built once with the window and kept; G, E, C and N show one of the four. While Develop
 /// is shown it's transparent and its parts follow nothing (`isInShownModule`).
 final class LibraryModuleView: NSView {
     let grid: LibraryGridView
@@ -17,6 +18,8 @@ final class LibraryModuleView: NSView {
     /// A culling change some photos didn't get, floating over the top of the photos shown (LIB-15).
     private let problem: NSView
     private let filmstrip: NSView
+    private let filmstripStatus: NSView
+    private var filmstripHeight: NSLayoutConstraint?
     private let model: EditorModel
     private let theme: ThemeSettings
     /// The theme its views last took their colours from.
@@ -30,8 +33,6 @@ final class LibraryModuleView: NSView {
     /// The Library module is the one shown (`ModuleContentController`).
     private(set) var isShownModule = false
     private(set) var showsFilmstrip = true
-
-    private static let filmstripHeight: CGFloat = 110
 
     init(model: EditorModel, theme: ThemeSettings) {
         self.model = model
@@ -52,13 +53,25 @@ final class LibraryModuleView: NSView {
         let hosting = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme).focusEffectDisabled())
         hosting.sizingOptions = []
         filmstrip = hosting
+        filmstripStatus = NSHostingView(rootView: LibraryFilmstripStatus(model: model, theme: theme)
+            .focusEffectDisabled())
         problem = CullingProblemStrip(model: model)
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
         wantsLayer = true
         layer?.backgroundColor = LibraryLook.background
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
-        for view in [grid, loupe, compare, survey, toolbar, filmstrip, filterBar, problem] as [NSView] {
+        for view in [
+            grid,
+            loupe,
+            compare,
+            survey,
+            toolbar,
+            filmstrip,
+            filterBar,
+            problem,
+            filmstripStatus,
+        ] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -66,11 +79,15 @@ final class LibraryModuleView: NSView {
         filterBar.isHidden = true
         let filterHeight = filterBar.heightAnchor.constraint(equalToConstant: 0)
         self.filterHeight = filterHeight
+        let filmstripHeight = filmstrip.heightAnchor.constraint(equalToConstant: model.filmstripHeight)
+        self.filmstripHeight = filmstripHeight
         var constraints = [
             filmstrip.leadingAnchor.constraint(equalTo: stage.leadingAnchor, constant: inset),
             filmstrip.trailingAnchor.constraint(equalTo: stage.trailingAnchor, constant: -inset),
             filmstrip.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
-            filmstrip.heightAnchor.constraint(equalToConstant: Self.filmstripHeight),
+            filmstripHeight,
+            filmstripStatus.leadingAnchor.constraint(equalTo: filmstrip.leadingAnchor, constant: 10),
+            filmstripStatus.bottomAnchor.constraint(equalTo: toolbar.topAnchor, constant: -4),
             toolbar.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
             toolbar.heightAnchor.constraint(equalToConstant: LibraryToolbarView.height),
@@ -114,6 +131,13 @@ final class LibraryModuleView: NSView {
                 updateParts()
                 if isShownModule {
                     takeFocus()
+                }
+            },
+            Tracker { [weak self] in
+                guard let self else { return }
+                let height = model.filmstripHeight
+                if filmstripHeight?.constant != height {
+                    filmstripHeight?.constant = height
                 }
             },
             Tracker { [weak self] in
@@ -195,7 +219,7 @@ final class LibraryModuleView: NSView {
         let view = model.libraryView
         let parts: [(NSView, Bool)] = [
             (grid, view == .grid), (loupe, view == .loupe), (compare, view == .compare), (survey, view == .survey),
-            (filmstrip, showsFilmstrip),
+            (filmstrip, showsFilmstrip), (filmstripStatus, showsFilmstrip),
         ]
         for (part, visible) in parts where part.isHidden == visible {
             part.isHidden = !visible
@@ -233,7 +257,8 @@ final class LibraryModuleView: NSView {
     }
 }
 
-/// The filmstrip in the Library module, in the pane the floating one has.
+/// The filmstrip in the Library module, in the pane the floating one has, with its menu but for Hide
+/// Automatically: it's docked here.
 private struct LibraryFilmstrip: View {
     let model: EditorModel
     let theme: ThemeSettings
@@ -241,11 +266,28 @@ private struct LibraryFilmstrip: View {
     var body: some View {
         FilmstripView()
             .modifier(FloatingPane(opacity: theme.panelOpacity))
+            .contextMenu {
+                FilmstripMenuItems(floating: false)
+            }
             .id(theme.selection)
             .environment(model)
             .environment(theme)
             .tint(Theme.nativeTint)
             .focusEffectDisabled()
+    }
+}
+
+/// What only the filmstrip's line of text shows, while it's hidden, floating above the Library toolbar.
+private struct LibraryFilmstripStatus: View {
+    let model: EditorModel
+    let theme: ThemeSettings
+
+    var body: some View {
+        FilmstripStatus()
+            .id(theme.selection)
+            .environment(model)
+            .environment(theme)
+            .tint(Theme.nativeTint)
     }
 }
 

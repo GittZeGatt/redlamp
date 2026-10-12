@@ -5,6 +5,8 @@ public struct KeyCombo: Hashable, Sendable {
     public enum Key: Hashable, Sendable {
         case character(Character)
         case tab, escape, delete, space, left, right, up, down
+        /// fn ← and fn → on a laptop's keyboard.
+        case home, end
         case function(Int)
     }
 
@@ -63,6 +65,8 @@ public struct KeyCombo: Hashable, Sendable {
         case .right: keys.append("→")
         case .up: keys.append("↑")
         case .down: keys.append("↓")
+        case .home: keys.append("Home")
+        case .end: keys.append("End")
         case let .function(number): keys.append("F\(number)")
         }
         return keys
@@ -87,6 +91,8 @@ public struct KeyCombo: Hashable, Sendable {
         case .right: return KeyboardShortcut(.rightArrow, modifiers: modifiers)
         case .up: return KeyboardShortcut(.upArrow, modifiers: modifiers)
         case .down: return KeyboardShortcut(.downArrow, modifiers: modifiers)
+        case .home: return KeyboardShortcut(.home, modifiers: modifiers)
+        case .end: return KeyboardShortcut(.end, modifiers: modifiers)
         // A menu item matches the Delete key's U+007F, not SwiftUI's `.delete`, U+0008.
         case .delete: return KeyboardShortcut(KeyEquivalent("\u{7F}"), modifiers: modifiers)
         default: return nil
@@ -148,7 +154,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case panelLens, panelTransform, panelEffects, panelCalibration
 
     /// Navigation
-    case previousPhoto, nextPhoto, selectAllPhotos, deselectOtherPhotos, previousGroup, nextGroup
+    case previousPhoto, nextPhoto, firstPhoto, lastPhoto, selectAllPhotos, deselectOtherPhotos, previousGroup, nextGroup
 
     // Develop
     case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
@@ -212,7 +218,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail,
              .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             .panels
-        case .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos, .previousGroup, .nextGroup:
+        case .previousPhoto, .nextPhoto, .firstPhoto, .lastPhoto, .selectAllPhotos, .deselectOtherPhotos,
+             .previousGroup, .nextGroup:
             .navigation
         case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync,
@@ -350,6 +357,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .panelCalibration: "Calibration Panel"
         case .previousPhoto: "Previous Photo"
         case .nextPhoto: "Next Photo"
+        case .firstPhoto: "First Photo"
+        case .lastPhoto: "Last Photo"
         case .previousGroup: "Previous Group"
         case .nextGroup: "Next Group"
         case .undo: "Undo"
@@ -528,6 +537,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .panelCalibration: [.char("9", command: true)]
         case .previousPhoto: [KeyCombo(.left), KeyCombo(.left, command: true)]
         case .nextPhoto: [KeyCombo(.right), KeyCombo(.right, command: true)]
+        // ⌘← and ⌘→ are already the previous and next photo's (#376).
+        case .firstPhoto: [KeyCombo(.home)]
+        case .lastPhoto: [KeyCombo(.end)]
         case .previousGroup: [KeyCombo(.left, option: true)]
         case .nextGroup: [KeyCombo(.right, option: true)]
         case .undo: [.char("z", command: true)]

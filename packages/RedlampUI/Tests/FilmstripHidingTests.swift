@@ -10,7 +10,9 @@ import Testing
 
 /// The filmstrip's Hide Automatically (UX-19): one saved preference for the View menu, the
 /// filmstrip's own menu and Settings, and the room the photo makes for the filmstrip while it's off.
+/// One test at a time: they set the app's preference, which every editor's filmstrip follows.
 @MainActor
+@Suite(.serialized)
 struct FilmstripHidingTests {
     private let folder = FileManager.default.temporaryDirectory.appending(path: "filmstrip-hiding-\(UUID().uuidString)")
     private let suite = "FilmstripHidingTests-\(UUID().uuidString)"
@@ -93,10 +95,44 @@ struct FilmstripHidingTests {
         #expect(FilmstripPreference(defaults: defaults).hidesAutomatically)
     }
 
+    /// The filmstrip as it is at first: Small thumbnails under the info line.
+    private static let filmstripHeight: CGFloat = 110
+
+    /// UX-42: the thumbnails' size and Show Info Line, kept beside Hide Automatically.
+    @Test func `the thumbnails' size and the info line are kept, within the sizes there are`() throws {
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { cleanUp() }
+        let first = FilmstripPreference(defaults: defaults)
+        #expect(first.showsInfoLine && first.cellHeight == FilmstripSize.small.cellHeight, "nothing saved yet")
+        #expect(first.height == Self.filmstripHeight)
+
+        first.resize(to: 500)
+        #expect(first.cellHeight == FilmstripSize.large.cellHeight, "about twice today's at most")
+        first.resize(to: 10)
+        #expect(first.cellHeight == FilmstripSize.small.cellHeight, "today's at least")
+        first.resize(to: 120.4)
+        first.showsInfoLine = false
+        let next = FilmstripPreference(defaults: defaults)
+        #expect(next.cellHeight == 120 && !next.showsInfoLine)
+        #expect(next.height == CGFloat(120 + 12), "without its line, the filmstrip is its photos")
+        #expect(FilmstripSize(cellHeight: next.cellHeight) == nil, "dragged between the sizes the menus name")
+        #expect(FilmstripSize.cell(height: FilmstripSize.large.cellHeight) == CGSize(width: 200, height: 146))
+        #expect(FilmstripSize.allCases.allSatisfy { FilmstripSize(cellHeight: $0.cellHeight) == $0 })
+    }
+
+    @Test func `the photo fitted above the filmstrip makes room for the height its thumbnails give it`() {
+        let large = PanelMetrics.stageInsets(
+            toolbarHeight: 52, presenting: false, leftPanel: true, rightPanel: true, filmstrip: 28 + 146 + 12,
+        )
+        #expect(large.bottom == PanelMetrics.inset + 186 + PanelMetrics.inset)
+        #expect(large.bottom - Self.stageInsets(filmstrip: true).bottom == 76)
+    }
+
     /// With both side panels showing.
     private static func stageInsets(presenting: Bool = false, filmstrip: Bool) -> StageInsets {
         PanelMetrics.stageInsets(
-            toolbarHeight: 52, presenting: presenting, leftPanel: true, rightPanel: true, filmstrip: filmstrip,
+            toolbarHeight: 52, presenting: presenting, leftPanel: true, rightPanel: true,
+            filmstrip: filmstrip ? filmstripHeight : nil,
         )
     }
 
@@ -104,7 +140,7 @@ struct FilmstripHidingTests {
         let floating = Self.stageInsets(filmstrip: false)
         let kept = Self.stageInsets(filmstrip: true)
         #expect(floating.bottom == PanelMetrics.inset, "the filmstrip floats over the photo")
-        #expect(kept.bottom == PanelMetrics.inset + PanelMetrics.filmstripHeight + PanelMetrics.inset)
+        #expect(kept.bottom == PanelMetrics.inset + Self.filmstripHeight + PanelMetrics.inset)
         #expect(kept.bottom == 126)
         #expect(kept.top == 52 && kept.leading == floating.leading && kept.trailing == floating.trailing)
         #expect(Self.stageInsets(presenting: true, filmstrip: true) == .zero)
@@ -116,7 +152,7 @@ struct FilmstripHidingTests {
         canvas.updateView(size: CGSize(width: 1800, height: 900), backingScale: 2)
         canvas.imageSize = PixelSize(width: 3024, height: 4032)
         canvas.stageInsets = Self.stageInsets(filmstrip: true)
-        let filmstripTop = 900 - PanelMetrics.inset - PanelMetrics.filmstripHeight
+        let filmstripTop = 900 - PanelMetrics.inset - Self.filmstripHeight
         let fit = canvas.imageRect(in: canvas.viewSize)
         #expect(abs(fit.maxY - (filmstripTop - PanelMetrics.inset)) < 0.5)
         #expect(abs(canvas.visibleImageRect.height - 1) < 1e-6, "the Navigator shows all of it in view")

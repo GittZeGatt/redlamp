@@ -2,27 +2,33 @@ import RedlampDocument
 import RedlampEngineAPI
 import SwiftUI
 
+/// The filmstrip: its line of text (Show Info Line, UX-42) above its photos, at the size its thumbnails are, which
+/// dragging its top edge changes.
 struct FilmstripView: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
+        let preference = FilmstripPreference.shared
+        let strip = FilmstripStripView.height(forCellHeight: preference.cellHeight)
         VStack(spacing: 0) {
-            // Parts of their own, each reading only what it shows: a step of a held arrow key changes the active
-            // photo, which only the last two read.
-            HStack(spacing: 8) {
-                FilmstripFolder()
-                FilmstripCount()
-                FilmstripSync()
-                FilmstripSuggestion()
-                Spacer()
-                FilmstripStackButton()
-                FilmstripPhotoInfo()
+            if preference.showsInfoLine {
+                // Parts of their own, each reading only what it shows: a step of a held arrow key changes the active
+                // photo, which only the last two read.
+                HStack(spacing: 8) {
+                    FilmstripFolder()
+                    FilmstripCount()
+                    FilmstripSync()
+                    FilmstripSuggestion()
+                    Spacer()
+                    FilmstripStackButton()
+                    FilmstripPhotoInfo()
+                }
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondaryLabel)
+                .padding(.horizontal, 12)
+                .frame(height: FilmstripPreference.infoLineHeight - 6)
+                .padding(.top, 6)
             }
-            .font(Theme.captionFont)
-            .foregroundStyle(Theme.secondaryLabel)
-            .padding(.horizontal, 12)
-            .frame(height: 22)
-            .padding(.top, 6)
 
             if model.library.isOpenFolderUnavailable {
                 Label(
@@ -32,13 +38,100 @@ struct FilmstripView: View {
                 .font(Theme.captionFont)
                 .foregroundStyle(Theme.secondaryLabel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .frame(height: FilmstripStripView.height)
+                .frame(height: strip)
             } else {
-                FilmstripStripHost(model: model)
-                    .frame(height: FilmstripStripView.height)
+                FilmstripStripHost(model: model, cellHeight: preference.cellHeight)
+                    .frame(height: strip)
             }
         }
-        .frame(height: PanelMetrics.filmstripHeight)
+        .frame(height: preference.height)
+        .overlay(alignment: .top) {
+            FilmstripTopEdge()
+        }
+    }
+}
+
+/// The filmstrip's top edge, dragged up or down to make its thumbnails larger or smaller, as Lightroom Classic's
+/// is: the filmstrip grows from the window's bottom edge, so the edge stays under the pointer.
+private struct FilmstripTopEdge: View {
+    @State private var start: CGFloat?
+
+    var body: some View {
+        Color.clear
+            .frame(height: 6)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .pointerStyle(.frameResize(position: .top))
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { drag in
+                        let preference = FilmstripPreference.shared
+                        let start = start ?? preference.cellHeight
+                        self.start = start
+                        preference.resize(to: start - drag.translation.height)
+                    }
+                    .onEnded { _ in start = nil },
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// The filmstrip's own menu items, on its right-click menu everywhere but on its photos, and in View › Filmstrip:
+/// Hide Automatically where it floats (UX-19), Show Info Line and its thumbnails' sizes (UX-42).
+struct FilmstripMenuItems: View {
+    let floating: Bool
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        if floating {
+            Toggle("Hide Automatically", isOn: $model.filmstripHidesAutomatically)
+        }
+        Toggle("Show Info Line", isOn: $model.filmstripShowsInfoLine)
+        Divider()
+        ForEach(FilmstripSize.allCases, id: \.self) { size in
+            Toggle(size.title, isOn: Binding(
+                get: { model.filmstripSize == size },
+                set: {
+                    if $0 {
+                        model.filmstripSize = size
+                    }
+                },
+            ))
+        }
+    }
+}
+
+/// What only the line of text shows, in a capsule of its own while the line is hidden (UX-42): the selection with
+/// Sync… and Auto Sync, a sync's progress and report, the focus stack found, and Stack…, while there's any of them.
+/// It floats over the photos at the filmstrip's top edge, so the filmstrip and the photo fitted above it keep their
+/// place as it comes and goes.
+struct FilmstripStatus: View {
+    @Environment(EditorModel.self) private var model
+    @Environment(ThemeSettings.self) private var theme
+    @Environment(\.themeTokens) private var themeTokens
+
+    var body: some View {
+        if !FilmstripPreference.shared.showsInfoLine, hasAny {
+            HStack(spacing: 8) {
+                FilmstripSync()
+                FilmstripSuggestion()
+                FilmstripStackButton()
+            }
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.secondaryLabel)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(ThemeColors(themeTokens).panelBackground.opacity(theme.panelOpacity), in: Capsule())
+            .glassEffect(.regular, in: Capsule())
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("filmstrip.status")
+        }
+    }
+
+    private var hasAny: Bool {
+        model.settingsSync.progress != nil || model.isMultiSelecting || model.settingsSync.report != nil
+            || !model.stackSuggestions.isEmpty || model.selection.map(SupportedFormats.isStack) == true
     }
 }
 

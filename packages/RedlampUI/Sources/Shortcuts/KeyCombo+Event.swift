@@ -11,8 +11,7 @@ extension KeyCombo {
     static let monitoredFunctionKeys: Set<Int> = [2, 5, 6, 7, 8]
 
     /// A key press as the key monitor reads one: the unshifted key, so ⇧1 reads as 1 with ⇧ held, and its
-    /// modifiers. Nil for a key no action can have: Return, Enter, Home, End, Page Up and Down, and keys that
-    /// type nothing.
+    /// modifiers. Nil for a key no action can have: Return, Enter, Page Up and Down, and keys that type nothing.
     public init?(event: NSEvent) {
         let flags = event.modifierFlags
         let key: Key
@@ -25,7 +24,9 @@ extension KeyCombo {
         case 124: key = .right
         case 125: key = .down
         case 126: key = .up
-        case 36, 76, 115, 119, 116, 121: return nil
+        case 115: key = .home
+        case 119: key = .end
+        case 36, 76, 116, 121: return nil
         default:
             if let number = Self.functionKeys[event.keyCode] {
                 key = .function(number)

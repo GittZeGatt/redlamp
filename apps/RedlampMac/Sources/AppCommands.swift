@@ -168,6 +168,8 @@ struct AppCommands: Commands {
         Divider()
         item(.previousPhoto)
         item(.nextPhoto)
+        item(.firstPhoto)
+        item(.lastPhoto)
         item(.previousGroup)
         item(.nextGroup)
     }
@@ -340,6 +342,23 @@ struct AppCommands: Commands {
                 set: { model.filmstripHidesAutomatically = $0 },
             ))
             .disabled(shown.isModalDialogOpen)
+            Toggle("Show Info Line", isOn: Binding(
+                get: { menu.shown.filmstripShowsInfoLine },
+                set: { model.filmstripShowsInfoLine = $0 },
+            ))
+            .disabled(shown.isModalDialogOpen)
+            Divider()
+            ForEach(FilmstripSize.allCases, id: \.self) { size in
+                Toggle(size.title, isOn: Binding(
+                    get: { menu.shown.filmstripSize == size },
+                    set: {
+                        if $0 {
+                            model.filmstripSize = size
+                        }
+                    },
+                ))
+                .disabled(shown.isModalDialogOpen)
+            }
         }
         Divider()
     }

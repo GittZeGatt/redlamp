@@ -84,6 +84,8 @@ final class KeyboardShortcuts {
         case 124: return .right
         case 125: return .down
         case 126: return .up
+        case 115: return .home
+        case 119: return .end
         case 120: return .function(2)
         case 96: return .function(5)
         case 97: return .function(6)

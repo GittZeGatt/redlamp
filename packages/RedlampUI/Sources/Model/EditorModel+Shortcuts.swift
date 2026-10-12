@@ -95,6 +95,7 @@ public extension EditorModel {
         // Navigation
         case .previousPhoto: selectPrevious()
         case .nextPhoto: selectNext()
+        case .firstPhoto, .lastPhoto: return selectFirstOrLast(last: action == .lastPhoto)
         // Develop
         case .copySettings: chooseSettingsToCopy()
         case .copySettingsAgain: copySettings()
@@ -245,6 +246,9 @@ public extension EditorModel {
         case .previousPhoto, .nextPhoto:
             guard let from = opening ?? selection, let index = library.index(of: from) else { return false }
             return items.indices.contains(index + (action == .nextPhoto ? 1 : -1))
+        // As far as ← and → go, grouped and stacked as they are.
+        case .firstPhoto: return canPerform(.previousPhoto)
+        case .lastPhoto: return canPerform(.nextPhoto)
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
         case .copySettings, .copySettingsAgain, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,

@@ -20,8 +20,11 @@ import Synchronization
 /// memory; the library's photos are left to the indexer.
 @MainActor
 public final class ThumbnailLoader {
-    /// The long edge thumbnails are decoded at: a filmstrip cell's image at 2x.
+    /// The long edge thumbnails are decoded at for the filmstrip's smallest cells: a cell's image at 2x.
     public nonisolated static let pixelSize = 192
+    /// The long edges thumbnails are decoded at: the smallest cells', and larger cells' (UX-42) up to the store's grid
+    /// tier's, in steps, so that a few sizes of a photo's thumbnail are kept at most.
+    public nonisolated static let longEdges = [pixelSize, 288, PhotoStore.Tier.grid.pixelSize]
     /// Photos per warming job.
     static let warmBatch = 8
 
@@ -34,6 +37,8 @@ public final class ThumbnailLoader {
     public var library: (@MainActor (LibraryItem) -> (StoreThumbnails, ContentKey)?)?
     /// Which edit each photo's thumbnail shows.
     weak var renders: EditRenders?
+    /// The long edge thumbnails are decoded at now, one of `longEdges`: the filmstrip's cells' (`FilmstripStripView`).
+    public var longEdge = ThumbnailLoader.pixelSize
 
     private let scheduler: WorkScheduler
     /// Starts every key this loader gives `scheduler`, which other loaders share (the harness's
@@ -56,10 +61,11 @@ public final class ThumbnailLoader {
     private var warmGeneration = 0
     private var pressure: (any DispatchSourceMemoryPressure)?
 
-    /// A photo's thumbnail showing `edit`'s render, or with none its embedded preview.
+    /// A photo's thumbnail showing `edit`'s render, or with none its embedded preview, decoded at `longEdge`.
     private struct Key: Hashable {
         let url: URL
         let edit: EditDigest?
+        let longEdge: Int
     }
 
     private struct Entry {
@@ -110,14 +116,21 @@ public final class ThumbnailLoader {
         cachedThumbnail(item)?.image
     }
 
-    /// `cached(_:)`'s thumbnail, and the edit it shows (nil for the embedded preview).
-    public func cachedThumbnail(_ item: LibraryItem) -> (image: CGImage, edit: EditDigest?)? {
+    /// `cached(_:)`'s thumbnail, the edit it shows (nil for the embedded preview), and the long edge it was decoded
+    /// at: `longEdge`, else, until that's decoded, a larger or a smaller one held.
+    public func cachedThumbnail(_ item: LibraryItem) -> (image: CGImage, edit: EditDigest?, longEdge: Int)? {
         let wanted = key(item)
-        if let image = entry(wanted, item) {
-            return (image, wanted.edit)
+        let larger = Self.longEdges.filter { $0 > longEdge }
+        let smaller: [Int] = Self.longEdges.filter { $0 < longEdge }.reversed()
+        let sizes = [longEdge] + larger + smaller
+        for edit in wanted.edit == nil ? [nil] : [wanted.edit, nil] {
+            for size in sizes {
+                if let image = entry(Key(url: item.url, edit: edit, longEdge: size), item) {
+                    return (image, edit, size)
+                }
+            }
         }
-        guard wanted.edit != nil, let image = entry(Key(url: item.url, edit: nil), item) else { return nil }
-        return (image, nil)
+        return nil
     }
 
     /// Whether the thumbnail of the edit `item` is to show is in memory.
@@ -135,7 +148,7 @@ public final class ThumbnailLoader {
     }
 
     private func key(_ item: LibraryItem) -> Key {
-        Key(url: item.url, edit: renders?.shownEdit(for: item))
+        Key(url: item.url, edit: renders?.shownEdit(for: item), longEdge: longEdge)
     }
 
     /// Asks for `item`'s thumbnail; `completion` gets it on the main thread (nil if it can't be
@@ -165,7 +178,9 @@ public final class ThumbnailLoader {
         lanes[key] = lane
         let (packs, decode, store) = (packs, decode, library?(item))
         scheduler.submit(lane, key: job(key)) {
-            let image = Self.load(item, store: store, edit: key.edit, packs: packs, decode: decode)
+            let image = Self.load(
+                item, store: store, edit: key.edit, longEdge: key.longEdge, packs: packs, decode: decode,
+            )
             Task { @MainActor [weak self] in self?.finish(key, item, image) }
         }
         return id
@@ -251,7 +266,7 @@ public final class ThumbnailLoader {
     }
 
     private func job(_ key: Key) -> String {
-        keyPrefix + "thumb:" + (key.edit.map { "\($0):" } ?? "") + key.url.path
+        keyPrefix + "thumb:\(key.longEdge):" + (key.edit.map { "\($0):" } ?? "") + key.url.path
     }
 
     private func finish(_ key: Key, _ item: LibraryItem, _ image: CGImage?) {
@@ -271,33 +286,37 @@ public final class ThumbnailLoader {
     }
 
     /// From the library's store, else from the pack, else decoded from the photo and added to the
-    /// pack; with `edit`, the store's render of it, or nil when it has none. A thumbnail to keep is
-    /// always one decoded from a JPEG, the store's or the pack's: ImageIO holds those pixels in
-    /// purgeable memory, which the system can take back (ImageIO decodes them again when drawn) and
+    /// pack; with `edit`, the store's render of it, or nil when it has none; at most `longEdge` on its long edge.
+    /// The packs hold the smallest cells' thumbnails, so a larger one outside the library is decoded from the photo.
+    /// A thumbnail to keep is always one decoded from a JPEG, the store's, the pack's or its own: ImageIO holds
+    /// those pixels in purgeable memory, which the system can take back (ImageIO decodes them again when drawn) and
     /// doesn't count against the app, so a thumbnail costs about 33 KB of footprint rather than its
     /// 96 KB bitmap.
     nonisolated static func load(
         _ item: LibraryItem, store: (StoreThumbnails, ContentKey)? = nil, edit: EditDigest? = nil,
-        packs: ThumbnailPacks, decode: (URL, Int) -> CGImage?, keep: Bool = true,
+        longEdge: Int = pixelSize, packs: ThumbnailPacks, decode: (URL, Int) -> CGImage?, keep: Bool = true,
     ) -> CGImage? {
         if let edit {
             guard let (thumbnails, key) = store else { return nil }
             return thumbnails.image(
-                for: key, tier: .grid, edit: edit, size: item.size, modified: item.modified, pixelSize: pixelSize,
+                for: key, tier: .grid, edit: edit, size: item.size, modified: item.modified, pixelSize: longEdge,
             )
         }
         if let (thumbnails, key) = store, let image = thumbnails.image(
-            for: item.url, key: key, size: item.size, modified: item.modified, pixelSize: pixelSize,
+            for: item.url, key: key, size: item.size, modified: item.modified, pixelSize: longEdge,
         ) {
             return image
         }
-        if let jpeg = packs.jpeg(for: item.url, size: item.size, modified: item.modified),
+        let packed = longEdge <= pixelSize
+        if packed, let jpeg = packs.jpeg(for: item.url, size: item.size, modified: item.modified),
            let image = ThumbnailPacks.decode(jpeg) {
             return image
         }
-        guard let image = decode(item.url, pixelSize) else { return nil }
+        guard let image = decode(item.url, longEdge) else { return nil }
         guard let jpeg = ThumbnailPacks.encode(image) else { return image }
-        packs.store(jpeg, for: item.url, size: item.size, modified: item.modified)
+        if packed {
+            packs.store(jpeg, for: item.url, size: item.size, modified: item.modified)
+        }
         return keep ? ThumbnailPacks.decode(jpeg) ?? image : image
     }
 

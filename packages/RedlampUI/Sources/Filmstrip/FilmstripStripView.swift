@@ -20,9 +20,12 @@ import SwiftUI
 ///   and the others selected with it (⌘- and ⇧-click, in the grid's order) are marked.
 /// - Photos drag as the grid's do, and move within their open stack when dropped on another of its photos in the strip
 ///   (`FilmstripStripView+Drag`).
+/// - Its cells are as large as the filmstrip's size has them (`cellHeight`, UX-42), and its thumbnails are decoded
+///   at their size.
 final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSCollectionViewPrefetching {
-    static let height: CGFloat = 82
+    /// The strip's height with the smallest cells, the harness's.
+    static let height: CGFloat = height(forCellHeight: FilmstripSize.small.cellHeight)
     private static let spacing: CGFloat = 6
     private static let insets = NSEdgeInsets(top: 6, left: 10, bottom: 5, right: 10)
 
@@ -70,6 +73,34 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     var press: FilmstripPress?
     /// The photo ringed under a drag of photos that would move to its place in their stack.
     var dropTarget: Int64?
+    /// The cells' height (`FilmstripSize`): as it changes, the strip centres the open photo while any of it is on
+    /// screen, else the photo in its middle, and the cells on screen ask for thumbnails of their new size. Near either
+    /// end of the strip, the photo in its middle can be several cells from the open one.
+    var cellHeight = FilmstripSize.small.cellHeight {
+        didSet {
+            guard cellHeight != oldValue, let layout = collectionView.collectionViewLayout as? FilmstripLayout else {
+                return
+            }
+            let shown = layout.items(in: scrollView.contentView.bounds)
+            let open = model.selection.flatMap(item(of:)).flatMap { shown.contains($0) ? $0 : nil }
+            let kept = open ?? layout.item(nearest: scrollView.contentView.bounds.midX)
+            layout.itemSize = FilmstripSize.cell(height: cellHeight)
+            followLongEdge()
+            if let kept {
+                center(row: kept, animated: false)
+            }
+            for indexPath in collectionView.indexPathsForVisibleItems() {
+                guard let item = collectionView.item(at: indexPath) as? FilmstripItem,
+                      let row = row(ofItem: indexPath.item), let photo = model.library.items.row(row) else { continue }
+                requestThumbnail(for: item, photo)
+            }
+        }
+    }
+
+    /// The strip's height with cells `cell` tall: their insets above and below.
+    static func height(forCellHeight cell: CGFloat) -> CGFloat {
+        cell + 12
+    }
 
     init(model: EditorModel) {
         self.model = model
@@ -90,8 +121,6 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         collectionView.frame = bounds
         scrollView.documentView = collectionView
         scrollView.drawsBackground = false
-        scrollView.hasHorizontalScroller = false
-        scrollView.hasVerticalScroller = false
         scrollView.verticalScrollElasticity = .none
         scrollView.contentView.postsBoundsChangedNotifications = true
         addSubview(scrollView)
@@ -115,8 +144,19 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         }
     }
 
+    /// The loader's thumbnails as large as a cell's image on this screen, at the next of its sizes up.
+    private func followLongEdge() {
+        let pixels = Int(((FilmstripSize.cell(height: cellHeight).width - 8) * (window?.backingScaleFactor ?? 2))
+            .rounded(.up))
+        let longEdge = ThumbnailLoader.longEdges.first { $0 >= pixels } ?? ThumbnailLoader.longEdges.last
+        if let longEdge, model.thumbnailLoader.longEdge != longEdge {
+            model.thumbnailLoader.longEdge = longEdge
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        followLongEdge()
         observation = nil
         editObservation = nil
         stacksObservation = nil
@@ -319,8 +359,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         return model.stackBadges(of: itemPhotos[index], in: stacks)
     }
 
-    /// Scrolls the photo at `row` to the strip's middle, by its clip view: `scrollToItems` doesn't move a
-    /// strip whose scroll view says it has no horizontal scroller (`FilmstripScrollView`).
+    /// Scrolls the photo at `row` to the strip's middle, by its clip view, whose move a held arrow key can cut short.
     func center(row: Int, animated: Bool) {
         collectionView.layoutSubtreeIfNeeded()
         // The model's list can be ahead of the rows the strip has loaded, and asking for one it hasn't raises;
@@ -393,7 +432,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         item.cell.isHidden = false
         let shown = model.thumbnailLoader.cachedThumbnail(photo)
         item.cell.rendersEdit = model.editRenders.renders(photo)
-        item.cell.configure(photo, image: shown?.image, edit: shown?.edit)
+        item.cell.configure(photo, image: shown?.image, edit: shown?.edit, longEdge: shown?.longEdge ?? 0)
         item.cell.stackBadges = stackBadges(ofItem: index)
         item.cell.isFocusSuggested = suggestedFrames.contains(photo.url)
         item.cell.isSelected = photo.url == selected
@@ -456,11 +495,16 @@ extension FilmstripStripView {
             model.thumbnailLoader.cancel(id)
         }
         let edit = model.editRenders.shownEdit(for: photo)
+        let longEdge = model.thumbnailLoader.longEdge
         guard item.cell.image == nil || item.cell.item?.modified != photo.modified || item.cell.shownEdit != edit
+            || item.cell.shownLongEdge < longEdge
         else { return }
         if let shown = model.thumbnailLoader.cachedThumbnail(photo), shown.edit == edit || item.cell.image == nil {
-            item.cell.setImage(shown.image, edit: shown.edit)
-            if shown.edit == edit {
+            if item.cell.image == nil || shown.longEdge >= item.cell.shownLongEdge || shown.edit != item.cell
+                .shownEdit {
+                item.cell.setImage(shown.image, edit: shown.edit, longEdge: shown.longEdge)
+            }
+            if shown.edit == edit, shown.longEdge >= longEdge {
                 return
             }
         }
@@ -468,7 +512,7 @@ extension FilmstripStripView {
             guard let item, item.cell.item?.url == photo.url else { return }
             item.request = nil
             if let image {
-                item.cell.setImage(image, edit: edit)
+                item.cell.setImage(image, edit: edit, longEdge: longEdge)
             }
         }
     }
@@ -600,7 +644,14 @@ extension FilmstripStripView {
 /// One row of cells of one size, each one's place worked out from its row: a reload or a change to the
 /// photos lays out the cells on screen, at any count, where a flow layout lays out every one.
 final class FilmstripLayout: NSCollectionViewLayout {
-    let itemSize: CGSize
+    var itemSize: CGSize {
+        didSet {
+            if itemSize != oldValue {
+                invalidateLayout()
+            }
+        }
+    }
+
     let spacing: CGFloat
     let insets: NSEdgeInsets
 
@@ -638,6 +689,13 @@ final class FilmstripLayout: NSCollectionViewLayout {
         )
     }
 
+    /// The row whose cell is nearest `x`, the middle of the gap between two cells parting them; nil with no photos.
+    func item(nearest x: CGFloat) -> Int? {
+        guard count > 0 else { return nil }
+        let pitch = itemSize.width + spacing
+        return min(max(Int(((x - insets.left + spacing / 2) / pitch).rounded(.down)), 0), count - 1)
+    }
+
     /// The rows whose cells `rect` meets.
     func items(in rect: CGRect) -> Range<Int> {
         guard count > 0, rect.maxY > insets.top, rect.minY < insets.top + itemSize.height else { return 0 ..< 0 }
@@ -669,13 +727,24 @@ final class FilmstripLayout: NSCollectionViewLayout {
     }
 }
 
-/// Scrolls horizontally with a mouse wheel too (trackpads already scroll sideways). It never shows
-/// a scroller: with a mouse connected, AppKit's legacy style otherwise draws a track along the
-/// strip's bottom, though `hasHorizontalScroller` was turned off.
+/// Scrolls horizontally with a mouse wheel too (trackpads already scroll sideways). Its scroller is the app's thin
+/// overlay kind (`useOverlayScrollers`), drawn over the cells' bottom edge while it shows, so a long folder is
+/// crossed in one drag: AppKit's legacy style, which a mouse or Show scroll bars: Always brings, would draw a track
+/// along the strip's bottom, and sets the style back whenever the preference changes.
 final class FilmstripScrollView: NSScrollView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        hasHorizontalScroller = true
+        useOverlayScrollers()
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
     override var hasHorizontalScroller: Bool {
-        get { false }
-        set { super.hasHorizontalScroller = false }
+        didSet { horizontalScroller?.controlSize = .small }
     }
 
     override var hasVerticalScroller: Bool {
@@ -685,6 +754,7 @@ final class FilmstripScrollView: NSScrollView {
 
     override var scrollerStyle: NSScroller.Style {
         get { .overlay }
+        // swiftlint:disable:next unused_setter_value
         set { super.scrollerStyle = .overlay }
     }
 
@@ -720,13 +790,18 @@ final class FilmstripScrollView: NSScrollView {
     }
 }
 
-/// Hosts the AppKit strip under the SwiftUI header.
+/// Hosts the AppKit strip under the SwiftUI header, its cells `cellHeight` tall as the filmstrip's frame is set.
 struct FilmstripStripHost: NSViewRepresentable {
     let model: EditorModel
+    let cellHeight: CGFloat
 
     func makeNSView(context _: Context) -> FilmstripStripView {
-        FilmstripStripView(model: model)
+        let strip = FilmstripStripView(model: model)
+        strip.cellHeight = cellHeight
+        return strip
     }
 
-    func updateNSView(_: FilmstripStripView, context _: Context) {}
+    func updateNSView(_ strip: FilmstripStripView, context _: Context) {
+        strip.cellHeight = cellHeight
+    }
 }

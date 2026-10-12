@@ -30,6 +30,9 @@ final class FilmstripCellView: NSView {
     private(set) var item: LibraryItem?
     /// The edit its thumbnail shows, nil for the photo's embedded preview.
     private(set) var shownEdit: EditDigest?
+    /// The long edge its thumbnail was decoded at (`ThumbnailLoader.longEdge`): smaller than the cells' size asks
+    /// for, it's shown until the larger one comes.
+    private(set) var shownLongEdge = 0
     /// The library renders the photo's edit (LIB-17), so its embedded preview is marked until then.
     var rendersEdit = false {
         didSet { badges.uneditedPreview = showsUneditedPreview }
@@ -125,12 +128,12 @@ final class FilmstripCellView: NSView {
 
     override func updateLayer() {}
 
-    /// Shows `item`; `image` is its thumbnail if already in memory, showing `edit`.
-    func configure(_ item: LibraryItem, image: CGImage?, edit: EditDigest? = nil) {
+    /// Shows `item`; `image` is its thumbnail if already in memory, showing `edit`, decoded at `longEdge`.
+    func configure(_ item: LibraryItem, image: CGImage?, edit: EditDigest? = nil, longEdge: Int = 0) {
         let changedPhoto = item.url != self.item?.url
         self.item = item
         if changedPhoto || image != nil {
-            setImage(image, edit: edit)
+            setImage(image, edit: edit, longEdge: longEdge)
         }
         if changedPhoto {
             isMenuTarget = false
@@ -152,9 +155,10 @@ final class FilmstripCellView: NSView {
         setAccessibilityValue(suggested)
     }
 
-    func setImage(_ image: CGImage?, edit: EditDigest? = nil) {
+    func setImage(_ image: CGImage?, edit: EditDigest? = nil, longEdge: Int = 0) {
         thumbnail.contents = image
         shownEdit = image == nil ? nil : edit
+        shownLongEdge = image == nil ? 0 : longEdge
         badges.hasImage = image != nil
         badges.uneditedPreview = showsUneditedPreview
     }

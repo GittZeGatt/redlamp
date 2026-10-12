@@ -121,6 +121,8 @@ extension ShortcutAction {
         .toggleRightPanel: ["inspector", "develop", "panels"],
         .previousPhoto: ["back", "photo", "image"],
         .nextPhoto: ["forward", "photo", "image"],
+        .firstPhoto: ["home", "start", "beginning", "photo", "image"],
+        .lastPhoto: ["end", "photo", "image"],
         .selectAllPhotos: ["select", "all", "photos", "filmstrip", "sync"],
         .deselectOtherPhotos: ["deselect", "select none", "only this", "filmstrip"],
         .undo: ["undo", "back"],
@@ -297,6 +299,8 @@ extension ShortcutAction {
         case .panelCalibration: PanelID.calibration.symbol
         case .previousPhoto: "chevron.left"
         case .nextPhoto: "chevron.right"
+        case .firstPhoto: "arrow.left.to.line"
+        case .lastPhoto: "arrow.right.to.line"
         case .undo: "arrow.uturn.backward"
         case .redo: "arrow.uturn.forward"
         case .copySettings: "doc.on.doc"

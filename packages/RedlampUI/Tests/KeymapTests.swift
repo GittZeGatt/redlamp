@@ -195,7 +195,8 @@ struct KeymapTests {
         #expect(try press(99, "\u{F706}", .function) == KeyCombo(.function(3)))
         #expect(try press(51, "\u{7F}", .option) == KeyCombo(.delete, option: true))
         #expect(try press(36, "\r") == nil, "Return")
-        #expect(try press(115, "\u{F729}") == nil, "Home")
+        #expect(try press(116, "\u{F72C}") == nil, "Page Up")
+        #expect(try press(115, "\u{F729}", .function) == KeyCombo(.home), "Home")
         #expect(try press(99, "\u{F706}")?.isMonitored == false, "F3 isn't the key monitor's")
         #expect(try press(96, "\u{F708}")?.isMonitored == true, "F5 is")
     }

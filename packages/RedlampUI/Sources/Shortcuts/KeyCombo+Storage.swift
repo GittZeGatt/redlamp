@@ -5,7 +5,7 @@ import Foundation
 extension KeyCombo: Codable {
     private static let names: [(String, Key)] = [
         ("tab", .tab), ("escape", .escape), ("delete", .delete), ("space", .space),
-        ("left", .left), ("right", .right), ("up", .up), ("down", .down),
+        ("left", .left), ("right", .right), ("up", .up), ("down", .down), ("home", .home), ("end", .end),
     ]
 
     public var stored: String {

@@ -298,8 +298,16 @@
                     try app.main { model in model.select(model.items[1].url) }
                     try app.settle()
                 }, observe: { $0.selection?.lastPathComponent ?? "" }, restore: { app in try app.settle() })
-            case .nextPhoto:
+            case .nextPhoto, .lastPhoto:
                 ActionCheck(action: action, observe: { $0.selection?.lastPathComponent ?? "" }, restore: { app in
+                    try app.main { model in model.select(model.items[0].url) }
+                    try app.settle()
+                })
+            case .firstPhoto:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { model in model.select(model.items[model.items.count - 1].url) }
+                    try app.settle()
+                }, observe: { $0.selection?.lastPathComponent ?? "" }, restore: { app in
                     try app.main { model in model.select(model.items[0].url) }
                     try app.settle()
                 })

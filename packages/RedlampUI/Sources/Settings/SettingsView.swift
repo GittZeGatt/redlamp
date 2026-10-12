@@ -104,13 +104,28 @@ private struct AppearanceSettings: View {
             Section {
                 Toggle("Hide automatically", isOn: Bindable(FilmstripPreference.shared).hidesAutomatically)
                     .accessibilityIdentifier("settings.filmstrip.hide-automatically")
+                Toggle("Show info line", isOn: Bindable(FilmstripPreference.shared).showsInfoLine)
+                    .accessibilityIdentifier("settings.filmstrip.info-line")
+                Picker("Thumbnails", selection: Binding(
+                    get: { FilmstripSize(cellHeight: FilmstripPreference.shared.cellHeight) },
+                    set: { size in size.map { FilmstripPreference.shared.resize(to: $0.cellHeight) } },
+                )) {
+                    Text("Small").tag(FilmstripSize?.some(.small))
+                    Text("Medium").tag(FilmstripSize?.some(.medium))
+                    Text("Large").tag(FilmstripSize?.some(.large))
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.filmstrip.size")
             } header: {
                 Text("Filmstrip")
             } footer: {
                 Text("""
                 The filmstrip slides in when the pointer reaches the bottom of the window, and away \
                 once it leaves. Turned off, the filmstrip stays up and the photo is fitted above it. \
-                View › Filmstrip and the filmstrip's own menu change this too.
+                The info line shows the folder, the count and the open photo above the thumbnails; \
+                hidden, a selection's Sync, a sync's progress and a focus stack found show at the \
+                filmstrip's top edge. Drag that edge to size the thumbnails between Small and Large. \
+                View › Filmstrip and the filmstrip's own menu change these too.
                 """)
                 .formFooter()
             }

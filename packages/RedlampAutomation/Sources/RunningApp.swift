@@ -301,6 +301,8 @@
             case .right: (code, characters) = (UInt16(kVK_RightArrow), String(UnicodeScalar(NSRightArrowFunctionKey)!))
             case .up: (code, characters) = (UInt16(kVK_UpArrow), String(UnicodeScalar(NSUpArrowFunctionKey)!))
             case .down: (code, characters) = (UInt16(kVK_DownArrow), String(UnicodeScalar(NSDownArrowFunctionKey)!))
+            case .home: (code, characters) = (UInt16(kVK_Home), String(UnicodeScalar(NSHomeFunctionKey)!))
+            case .end: (code, characters) = (UInt16(kVK_End), String(UnicodeScalar(NSEndFunctionKey)!))
             case let .function(number):
                 let functionCodes = [5: kVK_F5, 6: kVK_F6, 7: kVK_F7, 8: kVK_F8]
                 guard let function = functionCodes[number] else { throw ScenarioFailure("No key code for F\(number)") }
@@ -349,7 +351,7 @@
     extension KeyCombo.Key {
         var isFunctionKey: Bool {
             switch self {
-            case .left, .right, .up, .down, .function: true
+            case .left, .right, .up, .down, .home, .end, .function: true
             default: false
             }
         }

@@ -97,7 +97,7 @@ public extension EditorModel {
         .showRecentlyTrashed, .putBack, .putBackBatch,
         .toggleZoom, .lightsOut, .fullScreenPreview, .toggleToolbar,
         .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip, .toggleLeftPanel, .toggleRightPanel,
-        .previousPhoto, .nextPhoto, .selectAllPhotos, .deselectOtherPhotos, .autoAdvance,
+        .previousPhoto, .nextPhoto, .firstPhoto, .lastPhoto, .selectAllPhotos, .deselectOtherPhotos, .autoAdvance,
         .openFolder, .showShortcuts, .commandPalette, .sendFeedback, .testCamera, .filmLooks, .cancel,
     ]
 

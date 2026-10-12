@@ -63,6 +63,12 @@ struct FilmstripTests {
         (strip.collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem)?.cell
     }
 
+    /// Makes the cells where the strip now is, as its next layout on screen would.
+    private func layOut(_ strip: FilmstripStripView) {
+        strip.collectionView.needsLayout = true
+        strip.collectionView.layoutSubtreeIfNeeded()
+    }
+
     @Test func `a thousand photos make only a screenful of cells`() async throws {
         defer { cleanUp() }
         let (_, strip, window) = try await showStrip(count: 1000)
@@ -72,18 +78,95 @@ struct FilmstripTests {
         #expect(cells > 0 && cells < 40, "\(cells) cells for a 900 pt strip")
     }
 
-    @Test func `the strip never shows a scroller, even in the legacy style a mouse brings`() async throws {
+    /// #376: a scroller to cross a long folder in one drag, the thin overlay kind the app's other scroll views
+    /// have (LIB-45), however AppKit sets the style when a mouse or Show scroll bars: Always brings the legacy one.
+    @Test func `the strip's scroller is the thin overlay kind, even in the legacy style a mouse brings`() async throws {
         defer { cleanUp() }
         let (_, strip, window) = try await showStrip(count: 1000)
         defer { window.contentView = nil }
         let scrollView = strip.scrollView
         scrollView.scrollerStyle = .legacy
-        scrollView.hasHorizontalScroller = true
+        scrollView.hasVerticalScroller = true
         scrollView.tile()
-        #expect(!scrollView.hasHorizontalScroller && !scrollView.hasVerticalScroller)
-        #expect(scrollView.scrollerStyle == .overlay)
-        #expect(scrollView.horizontalScroller.map { $0.isHidden || $0.superview == nil } ?? true)
-        #expect(scrollView.contentView.frame.height == strip.bounds.height)
+        #expect(scrollView.hasHorizontalScroller && !scrollView.hasVerticalScroller)
+        #expect(scrollView.scrollerStyle == .overlay && scrollView.autohidesScrollers)
+        let scroller = try #require(scrollView.horizontalScroller)
+        #expect(scroller.controlSize == .small && scroller.superview === scrollView)
+        #expect(scrollView.contentView.frame.height == strip.bounds.height, "it takes no room from the cells")
+        #expect(scroller.frame.width > strip.bounds.width - 20 && scroller.frame.height < 20, "\(scroller.frame)")
+        #expect(scroller.knobProportion > 0 && scroller.knobProportion < 0.1, "a thousand photos make a small knob")
+    }
+
+    /// UX-42: larger thumbnails, up to the store's grid tier's pixels on this screen.
+    @Test func `larger cells keep the photo in the strip's middle and get thumbnails of their size`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 200)
+        defer { window.contentView = nil }
+        strip.center(row: 100, animated: false)
+        let clip = strip.scrollView.contentView
+        let layout = try #require(strip.collectionView.collectionViewLayout as? FilmstripLayout)
+        let middle = { layout.item(nearest: clip.bounds.midX) }
+        #expect(middle() == 100)
+        #expect(model.thumbnailLoader.longEdge == ThumbnailLoader.pixelSize)
+
+        strip.cellHeight = FilmstripSize.large.cellHeight
+        layOut(strip)
+        #expect(layout.itemSize == CGSize(width: 200, height: 146))
+        #expect(middle() == 100, "the photo in the middle stays there")
+        let scale = window.backingScaleFactor
+        let wanted = ThumbnailLoader.longEdges.first { CGFloat($0) >= 192 * scale } ?? ThumbnailLoader.longEdges.last
+        #expect(model.thumbnailLoader.longEdge == wanted)
+        let shown = try #require(cell(strip, 100))
+        try await eventually { shown.image?.width == wanted }
+        #expect(shown.image?.width == wanted && shown.shownLongEdge == wanted)
+
+        // Meanwhile a reload of the folder may have brought the strip back to the active photo, the first.
+        strip.center(row: 100, animated: false)
+        strip.cellHeight = FilmstripSize.small.cellHeight
+        layOut(strip)
+        #expect(model.thumbnailLoader.longEdge == ThumbnailLoader.pixelSize)
+        #expect(middle() == 100)
+    }
+
+    /// At the strip's start the photo in its middle is several cells from the first: larger cells keep the open
+    /// photo on screen, not the one in the middle.
+    @Test func `larger cells keep the open photo on screen at the start of the strip`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 200)
+        defer { window.contentView = nil }
+        let clip = strip.scrollView.contentView
+        let layout = try #require(strip.collectionView.collectionViewLayout as? FilmstripLayout)
+        try await eventually { model.selection == model.items[0].url && clip.bounds.minX == 0 }
+        #expect(layout.item(nearest: clip.bounds.midX) != 0, "the open photo is in the strip's middle")
+
+        strip.cellHeight = FilmstripSize.large.cellHeight
+        layOut(strip)
+        #expect(clip.bounds.minX == 0 && layout.frame(ofItem: 0).maxX <= clip.bounds.maxX, "at \(clip.bounds)")
+    }
+
+    /// UX-42, #376: Home and End (fn ← and fn → on a laptop), as ⌘← and ⌘→ are the previous and next photo's.
+    @Test func `Home and End reach the first and last photo, and do nothing there`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 50)
+        defer { window.contentView = nil }
+        #expect(ShortcutAction.resolve(KeyCombo(.home), in: .develop)?.action == .firstPhoto)
+        #expect(ShortcutAction.resolve(KeyCombo(.end), in: .library)?.action == .lastPhoto)
+        #expect(KeyCombo(stored: KeyCombo(.end, shift: true).stored) == KeyCombo(.end, shift: true))
+        #expect(ShortcutAction.firstPhoto.combos.first?.display == "Home")
+        let homeKey = try String(#require(UnicodeScalar(NSHomeFunctionKey)))
+        let home = try #require(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.function], timestamp: 0, windowNumber: 0, context: nil,
+            characters: homeKey, charactersIgnoringModifiers: homeKey, isARepeat: false, keyCode: 115,
+        ))
+        #expect(KeyCombo(event: home) == KeyCombo(.home))
+
+        model.select(model.items[20].url)
+        #expect(model.perform(.lastPhoto))
+        #expect(model.selection == model.items[49].url)
+        #expect(!model.canPerform(.lastPhoto) && !model.perform(.lastPhoto), "at the last photo already")
+        #expect(model.perform(.firstPhoto))
+        #expect(model.selection == model.items[0].url)
+        #expect(!model.canPerform(.firstPhoto))
     }
 
     @Test func `the strip's cells sit in one row, and those a rect meets are found from where it is`() {
@@ -105,6 +188,10 @@ struct FilmstripTests {
         #expect(layout.items(in: CGRect(x: 10 + 102 * 19990, y: 0, width: 5000, height: 82)) == 19990 ..< 20000)
         #expect(layout.items(in: CGRect(x: 0, y: 80, width: 900, height: 2)).isEmpty)
         #expect(layout.layoutAttributesForItem(at: IndexPath(item: 20000, section: 0)) == nil)
+        // The cell nearest a point: the one it's on, or across a gap the nearer one; the strip's middle when it
+        // changes size (UX-42).
+        let nearest = ([0, 60, 106, 108, 111, 160, 3_000_000] as [CGFloat]).map { layout.item(nearest: $0) }
+        #expect(nearest == [0, 0, 0, 0, 1, 1, 19999] as [Int?])
     }
 
     @Test func `centring a photo the strip hasn't loaded yet leaves it where it is rather than raising`() {
