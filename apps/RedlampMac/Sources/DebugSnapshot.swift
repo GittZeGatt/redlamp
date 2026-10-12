@@ -51,8 +51,10 @@
     ///   `rating>=4`. `judge=<tools>` turns on the judging bar's `histogram`, `peaking` and `af`, joined by
     ///   `+`; `painter=<keywords>` takes the keyword painter out to paint them, and `click=<file name>` clicks a
     ///   photo in the Library grid, as a press and release on its cell do, so the painter paints it;
-    ///   `settings=<tab>` opens Settings on the tab with that label (`Shortcuts`); and `import=start` imports
-    ///   what the import window has chosen and waits for it to finish. While Develop is shown, every command but
+    ///   `settings=<tab>` opens Settings on the tab with that label (`Shortcuts`); `import=start` imports
+    ///   what the import window has chosen and waits for it to finish; `move=<folder>` runs Move to Folder… with
+    ///   its panel answered; and `signal=<path>` makes an empty file there, so a capture can be taken at that
+    ///   moment. While Develop is shown, every command but
     /// `wait`, `scroll`, `find`, `source` and `quit` waits for
     ///   its photo to open first; in the Library, which may have none open, no command waits.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
@@ -160,6 +162,8 @@
                 try? await Task.sleep(for: .milliseconds(200))
             case "import" where value == "start":
                 await ImportWindowController.current?.importAndWait()
+            case "signal":
+                FileManager.default.createFile(atPath: value, contents: nil)
             case "type":
                 await beginTyping(in: value)
             case "scroll":

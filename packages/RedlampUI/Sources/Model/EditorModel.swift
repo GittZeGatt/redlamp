@@ -2019,6 +2019,10 @@ public final class EditorModel {
                 if let action = ShortcutAction(rawValue: value) {
                     perform(action)
                 }
+            case "move":
+                // Move to Folder… with its panel answered by the folder given.
+                MoveFolderPanel.answer = URL(fileURLWithPath: value, isDirectory: true)
+                perform(.moveToFolder)
             case "painter":
                 // The keyword painter out, painting the keywords given as if typed in its field.
                 keywordPainter.text = value
