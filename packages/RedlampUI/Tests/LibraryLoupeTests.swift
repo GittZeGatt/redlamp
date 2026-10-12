@@ -76,4 +76,33 @@ struct LibraryLoupeTests {
         model.showModule(.develop)
         #expect(model.perform(.toggleZoom) && model.libraryViews.loupeZoom == .actual, "Develop's Z zooms its canvas")
     }
+
+    @Test func `the caption shows the date and settings in whole fields, as many as its width does, never part of one`(
+    ) throws {
+        var details = PhotoDetails()
+        details.captured = Date(timeIntervalSinceReferenceDate: 542_652_000)
+        details.shutter = 1.0 / 50
+        details.aperture = 4
+        details.iso = 400
+        details.focal = 32
+        let fields = ["1/50 s", "ƒ/4", "ISO 400", "32 mm"]
+        let steps = [""] + (0 ... fields.count).map { count in
+            [details.date, fields.prefix(count).joined(separator: "  ")].filter { !$0.isEmpty }
+                .joined(separator: "  ·  ")
+        }
+        func width(_ text: String) -> CGFloat {
+            let label = NSTextField(labelWithString: text)
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            return label.intrinsicContentSize.width
+        }
+        var shown: Set<String> = []
+        for room in stride(from: CGFloat(0), through: 420, by: 3) {
+            let caption = LibraryLoupeView.caption(details, width: room)
+            let step = try #require(steps.firstIndex(of: caption), "\(room): “\(caption)” is whole fields")
+            #expect(caption.isEmpty || width(caption) <= room, "\(room): the caption shows all of “\(caption)”")
+            #expect(step == steps.count - 1 || width(steps[step + 1]) > room, "\(room): and a field more doesn't fit")
+            shown.insert(caption)
+        }
+        #expect(shown == Set(steps), "from nothing to the whole caption")
+    }
 }

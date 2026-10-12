@@ -17,6 +17,7 @@ import RedlampLibrary
 final class LibraryLoupeView: NSView {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
+    private static let captionFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
 
     private let model: EditorModel
     private let photo = CALayer()
@@ -28,6 +29,8 @@ final class LibraryLoupeView: NSView {
     let judgingBar: JudgingBar
     let autoAdvance = ToolbarButton(symbol: "arrow.right.to.line", identifier: "library.loupe.autoAdvance")
     private let details: PhotoDetailsCache
+    /// The shown photo's details, which the caption shows as much of as its width does.
+    private var captionDetails: PhotoDetails?
     private var trackers: [Tracker] = []
     private var editObservation: LibraryObservation?
     private var libraryObservation: LibraryObservation?
@@ -62,7 +65,7 @@ final class LibraryLoupeView: NSView {
         layer?.addSublayer(mark)
         name.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         name.textColor = Palette.value.nsColor
-        caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        caption.font = Self.captionFont
         caption.textColor = Palette.label.nsColor
         for label in [name, caption] {
             label.lineBreakMode = .byTruncatingMiddle
@@ -201,14 +204,14 @@ final class LibraryLoupeView: NSView {
         guard let url, let item = model.library.item(for: url) else {
             setImage(nil)
             name.stringValue = ""
-            caption.stringValue = ""
+            showCaption(nil)
             badges.metadata = nil
             setAccessibilityLabel(nil)
             return
         }
         badges.metadata = item.metadata
         name.stringValue = item.name
-        caption.stringValue = ""
+        showCaption(nil)
         setAccessibilityLabel(item.name)
         showDetails(of: item)
         details.request([item]) { [weak self] _ in
@@ -265,7 +268,7 @@ final class LibraryLoupeView: NSView {
 
     private func showDetails(of item: LibraryItem) {
         guard let details = details.details(for: item.url) else { return }
-        caption.stringValue = [details.date, details.settings].filter { !$0.isEmpty }.joined(separator: "  ·  ")
+        showCaption(details)
         if let width = details.width, let height = details.height, width > 0, height > 0, !showsFullPhoto {
             pixelSize = CGSize(width: width, height: height)
             layoutPhoto()
@@ -391,7 +394,32 @@ final class LibraryLoupeView: NSView {
         let width = max(judgingBar.frame.minX - Self.inset * 2, 0)
         name.frame = CGRect(x: Self.inset, y: 2, width: width, height: name.intrinsicContentSize.height)
         caption.frame = CGRect(x: Self.inset, y: 18, width: width, height: caption.intrinsicContentSize.height)
+        showCaption(captionDetails)
         layoutPhoto()
+    }
+
+    /// What the caption shows of `details` in a frame `width` wide: their date and settings, whole fields left out
+    /// from the end until the rest fits.
+    static func caption(_ details: PhotoDetails, width: CGFloat) -> String {
+        details.caption { text in
+            captionMeasure.stringValue = text
+            return captionMeasure.intrinsicContentSize.width <= width
+        }
+    }
+
+    /// A label set up as the caption is, to measure what it shows.
+    private static let captionMeasure: NSTextField = {
+        let label = NSTextField(labelWithString: "")
+        label.font = captionFont
+        return label
+    }()
+
+    private func showCaption(_ details: PhotoDetails?) {
+        captionDetails = details
+        let text = details.map { Self.caption($0, width: caption.frame.width) } ?? ""
+        if caption.stringValue != text {
+            caption.stringValue = text
+        }
     }
 
     // MARK: - Mouse

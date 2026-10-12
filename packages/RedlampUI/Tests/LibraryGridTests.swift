@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import CoreText
 import Foundation
 import RedlampDocument
 import RedlampLibrary
@@ -313,6 +314,45 @@ struct LibraryGridTests {
 
         #expect(model.perform(.cycleGridStyle))
         #expect(model.libraryViews.cellStyle == .compact)
+    }
+
+    @Test func `an expanded cell's settings leave out whole fields from their end where they don't all fit, never part of one`(
+    ) throws {
+        var details = PhotoDetails()
+        details.shutter = 1.0 / 4
+        details.aperture = 3.5
+        details.iso = 1000
+        details.focal = 35
+        let fields = ["1/4 s", "ƒ/3.5", "ISO 1000", "35 mm"]
+        #expect(details.settings == fields.joined(separator: "  "))
+        let font = try #require(CTFontCreateUIFontForLanguage(.system, 10, nil))
+        func width(_ text: String) -> CGFloat {
+            let string = NSAttributedString(string: text, attributes: [.font: font]) as CFAttributedString
+            return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(string), nil, nil, nil))
+        }
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        func drawn(_ settings: String, width: CGFloat) -> Data? {
+            let lines = GridText.Lines(name: "P01_AF.RAF", date: "25 Sep 2018 at 17:54", settings: settings)
+            return GridText.render(GridText.Key(lines: lines, width: width, scale: 2), in: space)?.dataProvider?
+                .data as Data?
+        }
+        var counts: Set<Int> = []
+        for size in GridSize.steps {
+            let room = GridCellGeometry(size: CGFloat(size), style: .expanded).text.width
+            let count = (0 ... fields.count).last { width(fields.prefix($0).joined(separator: "  ")) <= room } ?? 0
+            let whole = fields.prefix(count).joined(separator: "  ")
+            let fitted = PhotoDetails.settings(details.settings) { width($0) <= room }
+            #expect(fitted == whole && !fitted.contains("…"), "\(size): “\(fitted)”, not “\(whole)”")
+            #expect(drawn(details.settings, width: room) == drawn(whole, width: room), "\(size): drawn as “\(whole)”")
+            counts.insert(count)
+        }
+        #expect(
+            counts.contains(fields.count) && counts.count > 1,
+            "all four in larger cells, fewer in smaller: \(counts)",
+        )
+        let narrow = width(fields[0]) - 1
+        #expect(PhotoDetails.settings(details.settings) { width($0) <= narrow }.isEmpty, "nothing, not part of a field")
+        #expect(drawn(details.settings, width: narrow) == drawn("", width: narrow))
     }
 
     @Test func `context menus open photos in the loupe and Develop, show them in Finder, and set the view`(

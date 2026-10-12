@@ -74,7 +74,30 @@ struct PhotoDetails: Sendable, Equatable {
         if let focal, focal > 0 {
             parts.append("\(Int(focal.rounded())) mm")
         }
-        return parts.joined(separator: "  ")
+        return parts.joined(separator: Self.separator)
+    }
+
+    /// Between the settings' fields, none of which holds two spaces itself.
+    static let separator = "  "
+
+    /// A settings line as `settings` makes it, whole fields left out from its end until `fits` takes the rest:
+    /// nothing, where even its first field doesn't fit.
+    static func settings(_ line: String, fitting fits: (String) -> Bool) -> String {
+        var shown = Substring(line)
+        while !shown.isEmpty, !fits(String(shown)) {
+            shown = shown.range(of: separator, options: .backwards).map { shown[..<$0.lowerBound] } ?? ""
+        }
+        return String(shown)
+    }
+
+    /// The loupe's caption, "13 Mar 2018 at 16:38  ·  1/50 s  ƒ/4  ISO 400  32 mm": as much of it as `fits` takes,
+    /// whole fields left out from the end, and nothing where even the date doesn't fit.
+    func caption(fitting fits: (String) -> Bool) -> String {
+        func joined(_ settings: String) -> String {
+            [date, settings].filter { !$0.isEmpty }.joined(separator: "  ·  ")
+        }
+        let shown = joined(Self.settings(settings) { fits(joined($0)) })
+        return fits(shown) ? shown : ""
     }
 
     private static func number(_ value: Double) -> String {
@@ -169,10 +192,11 @@ enum GridText {
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue,
         ) else { return nil }
         context.scaleBy(x: key.scale, y: key.scale)
+        let small = font(10)
         let lines: [(String, CTFont, CGFloat)] = [
             (key.lines.name, CTFontCreateUIFontForLanguage(.emphasizedSystem, 11, nil) ?? font(11), 0.92),
-            (key.lines.date, font(10), 0.62),
-            (key.lines.settings, font(10), 0.62),
+            (key.lines.date, small, 0.62),
+            (PhotoDetails.settings(key.lines.settings) { width(of: $0, in: small) <= key.width }, small, 0.62),
         ]
         var baseline = height - 10
         for (text, font, white) in lines {
@@ -197,5 +221,12 @@ enum GridText {
 
     private nonisolated static func font(_ size: CGFloat) -> CTFont {
         CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+    }
+
+    /// `text`'s width as `render` draws it in `font`.
+    private nonisolated static func width(of text: String, in font: CTFont) -> CGFloat {
+        let attributes = [kCTFontAttributeName: font] as CFDictionary
+        guard let string = CFAttributedStringCreate(nil, text as CFString, attributes) else { return .infinity }
+        return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(string), nil, nil, nil))
     }
 }
