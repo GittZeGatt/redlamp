@@ -2,9 +2,10 @@ import AppKit
 import RedlampDesign
 
 /// The filter bar's search field (LIB-45, DEC-66): the query's terms as tokens, taken out with Delete, edited with a
-/// double-click and moved by dragging, in a field drawn as the system's search field, a magnifying glass at its start
-/// and at its end a button that clears it and the two that open the Attribute row and the Metadata columns.
-/// `NSSearchField` has no tokens of its own, so this is a token field with the search field's shape and insets.
+/// double-click and moved by dragging, drawn as macOS 26 draws a search field in a toolbar (Finder's, Photos', Mail's):
+/// a capsule of the system's glass (`LibraryFilterBarView`), a magnifying glass at its start and at its end a button
+/// that clears it and the two that open the Attribute row and the Metadata columns. `NSSearchField` has no tokens of
+/// its own, so this is a token field without a bezel of its own, with the search field's insets.
 ///
 /// The term being typed stays text until a space after it, outside quotes and parentheses, makes it a token: the
 /// field tokenizes at spaces only while no quote or parenthesis is open in the text being typed (`followTyping`).
@@ -12,6 +13,8 @@ final class FilterSearchField: NSTokenField {
     static let height: CGFloat = 28
     private static let leading: CGFloat = 24
     private static let buttonWidth: CGFloat = 20
+    /// The line its text and tokens are centred in.
+    private static let lineHeight: CGFloat = 18
 
     let clearButton = FilterSearchField.button(
         "xmark.circle.fill", identifier: "library.filter.clear", tip: "Clear the Filter",
@@ -33,8 +36,9 @@ final class FilterSearchField: NSTokenField {
         super.init(frame: CGRect(x: 0, y: 0, width: 400, height: Self.height))
         controlSize = .large
         font = .systemFont(ofSize: NSFont.systemFontSize)
-        isBezeled = true
-        bezelStyle = .roundedBezel
+        isBezeled = false
+        isBordered = false
+        drawsBackground = false
         focusRingType = .none
         tokenStyle = .rounded
         tokenizingCharacterSet = Self.tokenizing
@@ -213,15 +217,17 @@ final class FilterSearchField: NSTokenField {
         return convert(CGPoint(x: min(max(x - 8, 0), bounds.width - 200), y: bounds.maxY), to: view)
     }
 
-    /// Keeps the text inside the magnifying glass and the buttons, as the search field's own cell does.
+    /// Keeps the text inside the magnifying glass and the buttons, as the search field's own cell does, centred in the
+    /// capsule's height: a cell without a bezel draws its text at its top.
     final class Cell: NSTokenFieldCell {
         var trailing: CGFloat = 0
 
         override func drawingRect(forBounds rect: CGRect) -> CGRect {
             let drawn = super.drawingRect(forBounds: rect)
+            let height = min(FilterSearchField.lineHeight, rect.height)
             return CGRect(
-                x: drawn.minX + FilterSearchField.leading, y: drawn.minY,
-                width: max(drawn.width - FilterSearchField.leading - trailing, 0), height: drawn.height,
+                x: drawn.minX + FilterSearchField.leading, y: rect.midY - height / 2,
+                width: max(drawn.width - FilterSearchField.leading - trailing, 0), height: height,
             )
         }
     }

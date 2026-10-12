@@ -100,8 +100,9 @@ extension LibraryFilterTests {
             LibraryFilterBars.type(String(character), in: window)
         }
         try await eventually { filters.completions.first?.title == "Fujifilm X-T5" && !bar.completions.isHidden }
+        let field = bar.field.convert(bar.field.bounds, to: bar.completions.superview)
         #expect(
-            !bar.completions.isHidden && bar.completions.frame.minX > bar.field.frame.minX + 40,
+            !bar.completions.isHidden && bar.completions.frame.minX > field.minX + 40,
             "the completions under the term being typed, past the token before it",
         )
         let editor = try #require(bar.field.currentEditor() as? NSTextView)
@@ -173,7 +174,7 @@ extension LibraryFilterTests {
         try await eventually { !button.isHidden && button.title == "Search All 6" }
         #expect(!button.isHidden && button.title == "Search All 6", "the library's six, the one in Below among them")
         window.contentView?.layoutSubtreeIfNeeded()
-        #expect(button.frame.minX >= bar.field.frame.maxX, "beside the field")
+        #expect(button.frame.minX >= bar.field.convert(bar.field.bounds, to: bar).maxX, "beside the field")
 
         button.performClick(nil)
         try await eventually { model.library.shownSource == .allPhotographs && !model.library.isListing }

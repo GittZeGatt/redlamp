@@ -38,6 +38,8 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
     private let presets = FilterPopUp(identifier: "library.filter.presets", tip: "Filter Presets", large: true)
     private let lock = FilterBarButton(identifier: "library.filter.lock", symbol: "lock.open", tip: "Lock Filters")
     let field = FilterSearchField()
+    /// The field's capsule: the system's glass, its own material and tint, as a search field has in a toolbar.
+    private let fieldGlass = NSGlassEffectView()
     private let attributes: FilterAttributeRow
     let columns: FilterColumnsView
     /// The completions of the term being typed, shown over the grid under it.
@@ -88,9 +90,12 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
         field.metadataButton.action = #selector(metadataChosen)
         field.toolTip = "Words find names, folders, keywords and captions; terms such as rating>=3 camera:X-T5 "
             + "kw:birds -flag:reject filter, Tab completing them"
+        fieldGlass.cornerRadius = FilterSearchField.height / 2
+        fieldGlass.contentView = field
+        updateGlass()
         completions.onChoose = { [weak self] completion in self?.accept(completion) }
         for view: NSView in [
-            field,
+            fieldGlass,
             searchAll,
             filterOff,
             offers,
@@ -132,6 +137,21 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
         layer?.backgroundColor = LibraryLook.bar
         needsDisplay = true
         update()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateGlass()
+    }
+
+    /// The field's glass lifted from the bar, as a search field in a toolbar is in either appearance: on dark the
+    /// clear glass lightens what's behind it, where the regular glass darkens it.
+    private func updateGlass() {
+        let style: NSGlassEffectView.Style = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? .clear : .regular
+        if fieldGlass.style != style {
+            fieldGlass.style = style
+        }
     }
 
     override func viewDidMoveToWindow() {
@@ -314,9 +334,10 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
         var room = right - 12 - Self.gap
         let least: CGFloat = offers.isHidden ? 300 : 280
         let fieldWidth = max(min(room - offersWidth - searchAllWidth - filterOffWidth - Self.statusRoom, 600), least)
-        field.frame = CGRect(x: 12, y: y, width: max(min(fieldWidth, room), 120), height: height)
-        room -= field.frame.width + Self.gap
-        var x = field.frame.maxX + Self.gap
+        fieldGlass.frame = CGRect(x: 12, y: y, width: max(min(fieldWidth, room), 120), height: height)
+        field.frame = fieldGlass.bounds
+        room -= fieldGlass.frame.width + Self.gap
+        var x = fieldGlass.frame.maxX + Self.gap
         let fits = searchAllWanted && room - offersWidth - filterOffWidth >= searchAllWidth
         if searchAll.isHidden == fits {
             searchAll.isHidden = !fits
