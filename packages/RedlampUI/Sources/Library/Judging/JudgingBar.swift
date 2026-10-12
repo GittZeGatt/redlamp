@@ -4,7 +4,7 @@ import RedlampDesign
 /// The judging tools' buttons (LIB-38), in the loupe's caption row and Compare's bar: sensor clipping (Develop's
 /// button, on Develop's key), the raw histogram, focus peaking, the AF point, and the following loupe with its
 /// magnifications, shown while it's on. Each button's tooltip names what it shows. The tools are one group and the
-/// magnifications another, each drawn as a segmented control.
+/// magnifications another, each drawn as a segmented control, in the colours of the photo's surround they're on.
 final class JudgingBar: NSView, ThemeFollowing {
     static let height: CGFloat = 22
     private static let iconWidth: CGFloat = 26
@@ -56,10 +56,11 @@ final class JudgingBar: NSView, ThemeFollowing {
         loupe.onPress = { model.toggleFollowingLoupe() }
         for button in [clipping, histogram, peaking, afPoint, loupe]
             + LoupeMagnification.allCases.compactMap({ magnifications[$0] }) {
+            button.onSurround = true
             addSubview(button)
         }
-        ToolbarLook.install(toolsGroup, in: self)
-        ToolbarLook.install(magnificationsGroup, in: self)
+        ToolbarLook.install(toolsGroup, in: self, tokens: LibraryLook.surroundTokens)
+        ToolbarLook.install(magnificationsGroup, in: self, tokens: LibraryLook.surroundTokens)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Judging Tools")
@@ -76,7 +77,7 @@ final class JudgingBar: NSView, ThemeFollowing {
     }
 
     func followTheme() {
-        ToolbarLook.follow([toolsGroup, magnificationsGroup])
+        ToolbarLook.follow([toolsGroup, magnificationsGroup], tokens: LibraryLook.surroundTokens)
     }
 
     /// The bar's width: its five buttons, and the magnifications while the following loupe is on.

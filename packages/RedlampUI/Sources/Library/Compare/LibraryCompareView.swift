@@ -9,7 +9,8 @@ import RedlampLibrary
 /// a click on the active one zooms it to 1:1 where it lands or fits it again, and a drag pans it. ← and →, Z and
 /// Space, Swap (↓), Make Select (↑) and the culling keys are the model's actions (`EditorModel+LibraryCompare`). It
 /// reads nothing while it isn't shown. The judging tools' buttons (LIB-38) start the bar, each tool drawing over both
-/// photos, and Develop's Show Sensor Clipping key reaches the view itself.
+/// photos, and Develop's Show Sensor Clipping key reaches the view itself. It's drawn on Develop's canvas grey
+/// (`PhotoSurround`), what's on it in the surround's colours.
 final class LibraryCompareView: NSView {
     static let barHeight: CGFloat = 30
     private static let inset: CGFloat = 20
@@ -55,6 +56,9 @@ final class LibraryCompareView: NSView {
         done.toolTip = "Done (\(ShortcutAction.loupeView.combos.first?.display ?? ""))"
         makeSelect.isBordered = true
         done.isBordered = true
+        for button in [link, swap, makeSelect, done] {
+            button.onSurround = true
+        }
         link.onPress = { model.toggleCompareLink() }
         swap.onPress = { model.perform(.swapCompared) }
         makeSelect.onPress = { model.perform(.makeSelect) }
@@ -279,7 +283,7 @@ final class CompareHalfView: NSView, ThemeFollowing {
     }
 
     func followTheme() {
-        let tokens = LibraryLook.tokens
+        let tokens = LibraryLook.surroundTokens
         role.textColor = tokens.label.nsColor
         name.textColor = tokens.value.nsColor
         caption.textColor = tokens.label.nsColor

@@ -37,7 +37,7 @@ final class LibraryModuleView: NSView {
         self.model = model
         self.theme = theme
         shownTheme = theme.selection
-        LibraryLook.follow()
+        LibraryLook.follow(theme.selection)
         grid = LibraryGridView(model: model)
         loupe = LibraryLoupeView(model: model)
         let images = GridThumbnails(
@@ -93,6 +93,7 @@ final class LibraryModuleView: NSView {
         withFilmstrip.append(toolbar.bottomAnchor.constraint(equalTo: filmstrip.topAnchor, constant: -inset / 2))
         withoutFilmstrip.append(toolbar.bottomAnchor.constraint(equalTo: bottomAnchor))
         NSLayoutConstraint.activate(constraints + withFilmstrip)
+        showSurround()
         updateParts()
     }
 
@@ -134,15 +135,28 @@ final class LibraryModuleView: NSView {
                 shownTheme = theme.selection
                 followTheme()
             },
+            Tracker { [weak self] in
+                guard let self else { return }
+                _ = model.lightsOut
+                showSurround()
+            },
         ]
     }
 
     /// Its views take the theme's colours again: they're built once with the window, where Develop's panels are made
     /// again as the theme changes. The filmstrip, in SwiftUI, is made again (`LibraryFilmstrip`).
     private func followTheme() {
-        LibraryLook.follow()
+        LibraryLook.follow(theme.selection)
         layer?.backgroundColor = LibraryLook.background
         followThemeBelow()
+    }
+
+    /// The loupe, Compare and Survey on Develop's canvas grey in every theme, darker with Lights Out as the canvas is.
+    private func showSurround() {
+        let surround = PhotoSurround.color(lightsOut: model.lightsOut)
+        for view in [loupe, compare, survey] as [NSView] {
+            view.layer?.backgroundColor = surround
+        }
     }
 
     /// The filter bar above the grid while the library is on, as tall as its row and the rows open beneath it;

@@ -1,16 +1,18 @@
 import AppKit
 import RedlampDesign
 
-/// The Library's colours, each from the token Develop's panels draw the same role in (`Palette`): behind the photos
-/// (the grid, the loupe, Compare and Survey) the panels' own background; a photo's cell a card on it, a step toward the
-/// theme's selection colour in the selection and a full step for the active photo, ringed in the accent. Text takes
-/// `tokens` by role, as the panels do: names and values `value`, what's said about them `secondaryLabel`.
+/// The Library's colours, each from the token Develop's panels draw the same role in (`Palette`): behind the grid the
+/// panels' own background; a photo's cell a card on it, a step toward the theme's selection colour in the selection and
+/// a full step for the active photo, ringed in the accent. Text takes `tokens` by role, as the panels do: names and
+/// values `value`, what's said about them `secondaryLabel`. The loupe, Compare and Survey are drawn on Develop's canvas
+/// grey instead (`PhotoSurround`), dark in every theme, so what's drawn on them takes `surroundTokens`.
 ///
 /// They're made once for each theme (`follow`), so a cell scrolling in sets colours already made and reads no lock.
 @MainActor
 enum LibraryLook {
     struct Colors {
         let tokens: PaletteTokens
+        let surroundTokens: PaletteTokens
         let background: CGColor
         let tile: CGColor
         let raised: CGColor
@@ -25,8 +27,9 @@ enum LibraryLook {
         let cellText: GridText.Colors
         let headerText: GroupHeaderText.Colors
 
-        init(_ tokens: PaletteTokens, ring: CGColor) {
+        init(_ tokens: PaletteTokens, surround surroundTokens: PaletteTokens, ring: CGColor) {
             self.tokens = tokens
+            self.surroundTokens = surroundTokens
             self.ring = ring
             activeEdge = tokens.value.cgColor
             selectedEdge = tokens.secondaryLabel.cgColor
@@ -43,14 +46,22 @@ enum LibraryLook {
         }
     }
 
-    private(set) static var colors = Colors(Palette.current, ring: Palette.accent.cgColor)
+    private(set) static var colors = Colors(
+        Palette.current, surround: Palette.current.isDark ? Palette.current : .standard, ring: Palette.accent.cgColor,
+    )
 
     /// The tokens the colours were made from, for text and glyphs drawn by role.
     static var tokens: PaletteTokens {
         colors.tokens
     }
 
-    /// Behind the photos: the grid's, the loupe's, Compare's and Survey's background.
+    /// For text and glyphs drawn on a photo's surround: the theme's own tokens when it's dark, else its family's dark
+    /// ones, so its hue stays and they read on the dark grey as Develop's info overlay does on its canvas.
+    static var surroundTokens: PaletteTokens {
+        colors.surroundTokens
+    }
+
+    /// Behind the grid.
     static var background: CGColor {
         colors.background
     }
@@ -115,15 +126,23 @@ enum LibraryLook {
         colors.tokens.nativeTint?.nsColor ?? .controlAccentColor
     }
 
-    /// Makes the colours again from the theme and the system's accent as they are now; false when they're the ones
-    /// already made.
+    /// Makes the colours again from the theme and the system's accent as they are now, and the surround's from the
+    /// family of `selection` when it's given; false when they're the ones already made.
     @discardableResult
-    static func follow() -> Bool {
+    static func follow(_ selection: ThemeSelection? = nil) -> Bool {
         let tokens = Palette.current
         let ring = Palette.accent.cgColor
-        guard tokens != colors.tokens || ring != colors.ring else { return false }
-        colors = Colors(tokens, ring: ring)
+        let surround = selection.map(surroundTokens(for:)) ?? colors.surroundTokens
+        guard tokens != colors.tokens || surround != colors.surroundTokens || ring != colors.ring else { return false }
+        colors = Colors(tokens, surround: surround, ring: ring)
         return true
+    }
+
+    /// `selection`'s family in its dark appearance, at its tint.
+    static func surroundTokens(for selection: ThemeSelection) -> PaletteTokens {
+        var dark = selection
+        dark.appearance = .dark
+        return dark.tokens
     }
 }
 

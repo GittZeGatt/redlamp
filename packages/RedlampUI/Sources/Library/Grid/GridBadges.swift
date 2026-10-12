@@ -166,16 +166,19 @@ enum GridBadges {
     private struct Key: Hashable {
         let kind: Kind
         let scale: CGFloat
+        let onSurround: Bool
     }
 
     private static var images: [Key: CGImage] = [:]
 
-    static func image(_ kind: Kind, scale: CGFloat) -> CGImage? {
-        let key = Key(kind: kind, scale: scale)
+    /// `kind`'s image for a screen of `scale`; `onSurround`, a badge drawn in the theme's colours takes the photo
+    /// surround's (`LibraryLook.surroundTokens`), as the loupe's are.
+    static func image(_ kind: Kind, scale: CGFloat, onSurround: Bool = false) -> CGImage? {
+        let key = Key(kind: kind, scale: scale, onSurround: onSurround && kind.isOnTile)
         if let image = images[key] {
             return image
         }
-        let image = draw(kind, scale: scale)
+        let image = draw(kind, scale: scale, tokens: key.onSurround ? LibraryLook.surroundTokens : LibraryLook.tokens)
         images[key] = image
         return image
     }
@@ -195,7 +198,7 @@ enum GridBadges {
         }
     }
 
-    private static func draw(_ kind: Kind, scale: CGFloat) -> CGImage? {
+    private static func draw(_ kind: Kind, scale: CGFloat, tokens: PaletteTokens) -> CGImage? {
         let size = kind.size
         guard let space = CGColorSpace(name: CGColorSpace.sRGB), let context = CGContext(
             data: nil, width: Int((size.width * scale).rounded(.up)), height: Int((size.height * scale).rounded(.up)),
@@ -248,7 +251,7 @@ enum GridBadges {
             Symbol.draw(
                 "icloud.and.arrow.down",
                 pointSize: 14,
-                color: LibraryLook.tokens.secondaryLabel,
+                color: tokens.secondaryLabel,
                 centeredAt: middle,
                 scale: scale,
             )
@@ -269,7 +272,6 @@ enum GridBadges {
             drawDisc(size, in: context)
             Symbol.draw("circle.fill", pointSize: 7.5, color: white.opacity(0.95), centeredAt: middle, scale: scale)
         case let .ratingSlots(stars):
-            let tokens = LibraryLook.tokens
             for index in 0 ..< 5 {
                 Symbol.draw(
                     index < stars ? "star.fill" : "star", pointSize: 7.5,
@@ -279,7 +281,7 @@ enum GridBadges {
             }
         case .flagSlot:
             Symbol.draw(
-                "flag", pointSize: 8.5, color: LibraryLook.tokens.tertiaryLabel, centeredAt: middle, scale: scale,
+                "flag", pointSize: 8.5, color: tokens.tertiaryLabel, centeredAt: middle, scale: scale,
             )
         case .markSlot:
             Symbol.draw("circle", pointSize: 8.5, color: white.opacity(0.35), centeredAt: middle, scale: scale)

@@ -13,7 +13,8 @@ import RedlampLibrary
 /// (LIB-17). It reads nothing while it isn't shown. LIB-16 adds Compare and Survey. The judging tools (LIB-38)
 /// draw over the photo, their buttons in the caption row; with the following loupe on, the photo itself is decoded
 /// as for 1:1, for the lens to magnify. The caption row also shows the loupe's own Auto Advance, on until it's turned
-/// off there (DEC-68), and turns it on or off.
+/// off there (DEC-68), and turns it on or off. It's drawn on Develop's canvas grey (`PhotoSurround`), its caption row
+/// in the surround's colours (`LibraryLook.surroundTokens`).
 final class LibraryLoupeView: NSView, ThemeFollowing {
     private static let inset: CGFloat = 20
     private static let captionHeight: CGFloat = 34
@@ -73,6 +74,7 @@ final class LibraryLoupeView: NSView, ThemeFollowing {
         addSubview(badges)
         addSubview(judgingBar)
         autoAdvance.onPress = { model.perform(.autoAdvance) }
+        autoAdvance.onSurround = true
         addSubview(autoAdvance)
         judging.install(in: self, above: photo)
         judging.histogram.setAccessibilityIdentifier("library.loupe.histogram")
@@ -99,8 +101,8 @@ final class LibraryLoupeView: NSView, ThemeFollowing {
     override func updateLayer() {}
 
     func followTheme() {
-        name.textColor = LibraryLook.tokens.value.nsColor
-        caption.textColor = LibraryLook.tokens.label.nsColor
+        name.textColor = LibraryLook.surroundTokens.value.nsColor
+        caption.textColor = LibraryLook.surroundTokens.label.nsColor
     }
 
     /// The image on screen, for the tests.
@@ -475,7 +477,9 @@ final class LibraryLoupeView: NSView, ThemeFollowing {
     }
 }
 
-/// The loupe's rating, flag, label and mark, drawn as a grid cell's are, and said to VoiceOver.
+/// The loupe's rating, flag, label and mark, drawn as a grid cell's are, on the photo's surround (Compare's and
+/// Survey's
+/// too), and said to VoiceOver.
 final class LoupeBadgesView: NSView, ThemeFollowing {
     static let size = CGSize(width: 104, height: 16)
     private let rating = CALayer()
@@ -557,7 +561,7 @@ final class LoupeBadgesView: NSView, ThemeFollowing {
             badge.isHidden = kind == nil
             guard let kind else { return }
             let size = kind.size
-            badge.contents = GridBadges.image(kind, scale: scale)
+            badge.contents = GridBadges.image(kind, scale: scale, onSurround: true)
             badge.contentsScale = scale
             badge.frame = CGRect(x: x, y: (Self.size.height - size.height) / 2, width: size.width, height: size.height)
         }

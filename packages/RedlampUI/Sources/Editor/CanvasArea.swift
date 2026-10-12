@@ -31,7 +31,7 @@ import UniformTypeIdentifiers
                             ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
-                        : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
+                        : PhotoSurround.level(lightsOut: model.lightsOut),
                     whiteFrame: model.colorAssessment ? CanvasMetalView.assessmentFrame : 0,
                     forwardsCoveredEvents: model.commandPalette == nil,
                     onSample: { model.sampleEyedropper(at: $0) },

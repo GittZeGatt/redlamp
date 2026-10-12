@@ -8,7 +8,7 @@ import RedlampLibrary
 /// active one outlined. A click makes a photo active and a double-click opens it in the loupe. ↑ and ↓ go to the
 /// photo above or below, and Return, Space and Z open the active one in the loupe, Z at 1:1: keys the key monitor
 /// leaves to the view. ← and → and the culling keys are the model's (`EditorModel+LibraryCompare`). It reads nothing
-/// while it isn't shown.
+/// while it isn't shown. It's drawn on Develop's canvas grey (`PhotoSurround`), what's on it in the surround's colours.
 final class LibrarySurveyView: NSView {
     private static let inset: CGFloat = 20
     private static let gap: CGFloat = 14
@@ -254,10 +254,10 @@ final class SurveyCell: NSView, ThemeFollowing {
     let badges = LoupeBadgesView()
     let remove = ToolbarButton(symbol: "xmark.circle.fill", identifier: "survey.remove", palette: SurveyCell.palette)
 
-    /// The ×'s colours: the theme's background through a disc of its secondary label colour.
+    /// The ×'s colours: the surround's grey through a disc of the surround's secondary label colour.
     private static var palette: [NSColor] {
-        let tokens = LibraryLook.tokens
-        return [tokens.panelBackground.opacity(0.9).nsColor, tokens.secondaryLabel.nsColor]
+        let surround = NSColor(cgColor: PhotoSurround.color(lightsOut: 0)) ?? .black
+        return [surround, LibraryLook.surroundTokens.secondaryLabel.nsColor]
     }
 
     /// The photo shown.

@@ -444,6 +444,15 @@ final class ToolbarButton: NSView, ThemeFollowing {
         }
     }
 
+    /// On a photo's surround (the loupe's, Compare's), in its colours rather than the theme's.
+    var onSurround = false {
+        didSet {
+            if onSurround != oldValue {
+                update()
+            }
+        }
+    }
+
     private let image = NSImageView()
     private let label = NSTextField(labelWithString: "")
     /// The symbol's own colours, which the button's state doesn't tint (Survey's ×).
@@ -491,14 +500,14 @@ final class ToolbarButton: NSView, ThemeFollowing {
     }
 
     private func update() {
-        let tokens = LibraryLook.tokens
+        let tokens = onSurround ? LibraryLook.surroundTokens : LibraryLook.tokens
         let color = (isEnabled ? (isOn ? tokens.value : tokens.label) : tokens.tertiaryLabel).nsColor
         if palette == nil {
             image.contentTintColor = color
         }
         image.alphaValue = isEnabled ? 1 : 0.4
         label.textColor = color
-        layer?.backgroundColor = isOn ? ToolbarLook.on : isBordered ? ToolbarLook.bezel : nil
+        layer?.backgroundColor = isOn ? ToolbarLook.on(tokens) : isBordered ? ToolbarLook.bezel(tokens) : nil
         setAccessibilityValue(isOn ? "on" : nil)
         setAccessibilityEnabled(isEnabled)
     }
@@ -670,18 +679,18 @@ enum ToolbarLook {
     static let chosen = NSColor(white: 1, alpha: 0.2).cgColor
 
     /// Behind a group of buttons that go together, as a segmented control's segments do: a well.
-    static var group: CGColor {
-        LibraryLook.tokens.well.cgColor
+    static func group(_ tokens: PaletteTokens) -> CGColor {
+        tokens.well.cgColor
     }
 
     /// A bordered button at rest.
-    static var bezel: CGColor {
-        LibraryLook.tokens.well.cgColor
+    static func bezel(_ tokens: PaletteTokens) -> CGColor {
+        tokens.well.cgColor
     }
 
-    /// The chosen segment, or a button that's on: the theme's selection colour.
-    static var on: CGColor {
-        LibraryLook.tokens.selection.cgColor
+    /// The chosen segment, or a button that's on: the selection colour.
+    static func on(_ tokens: PaletteTokens) -> CGColor {
+        tokens.selection.cgColor
     }
 
     /// A group's bezel, behind `views`, the union of their frames a little larger; hidden when none is shown.
@@ -696,16 +705,16 @@ enum ToolbarLook {
         CATransaction.commit()
     }
 
-    /// Groups' bezels in the theme's colours as they are now.
-    static func follow(_ bezels: [CALayer]) {
+    /// Groups' bezels in the colours of `tokens` as they are now: the theme's, or the surround's on a photo's.
+    static func follow(_ bezels: [CALayer], tokens: PaletteTokens = LibraryLook.tokens) {
         for bezel in bezels {
-            bezel.backgroundColor = group
+            bezel.backgroundColor = group(tokens)
         }
     }
 
     /// Puts a group's bezel in `view`, below the buttons it's to go behind.
-    static func install(_ bezel: CALayer, in view: NSView) {
-        bezel.backgroundColor = group
+    static func install(_ bezel: CALayer, in view: NSView, tokens: PaletteTokens = LibraryLook.tokens) {
+        bezel.backgroundColor = group(tokens)
         bezel.cornerRadius = 8
         bezel.actions = LibraryGridCell.noActions
         bezel.isHidden = true
