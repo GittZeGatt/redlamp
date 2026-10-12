@@ -899,7 +899,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] **Point Color**, globally and inside masks, with Capture One's uniformity for evening out skin tones <!-- tracker: TON-29 -->
 - [ ] Lens corrections from the lensfun database (waits on counsel) <!-- tracker: LNS-03 -->
 - [ ] Slider-feel calibration against Lightroom: response curves fitted against Lightroom's renders <!-- tracker: EDT-11 -->
-- [ ] Photos library integration and a Photos editing extension
+- [ ] Photos library integration and a Photos editing extension <!-- tracker: EXT-04 -->
 - [x] Tools that behave like Lightroom's: zoom and pan in every tool, and every brush sized from the keyboard and pointer with its size shown as it changes <!-- tracker: UX-15 -->
 - [x] The filmstrip hidden automatically or kept up, as a setting, with the photo fitted above it <!-- tracker: UX-19 -->
 - [x] The pixel under the pointer under the histogram: its RGB percentages or L*a*b* values <!-- tracker: UX-32 -->
@@ -935,7 +935,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 
 ### Phase 4: 1.0
 - [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
-- [ ] HDR and EDR editing and export
+- [ ] HDR and EDR editing and export <!-- tracker: TON-42 -->
 - [ ] Batch export <!-- tracker: EDT-16 -->
 - [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->

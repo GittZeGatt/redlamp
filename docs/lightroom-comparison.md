@@ -2,8 +2,8 @@
 
 A high-level list of the features photographers know from Lightroom, and where Redlamp stands on each: what works today, what's being built, what's planned, and what Redlamp leaves out. It is published at [redlamp.app/compare](https://redlamp.app/compare). It isn't a control-by-control mirror of Lightroom; the [Lightroom feature inventory](lightroom-feature-inventory.md) is the detailed reference, and the [research tracker](research/research-tracker.md) holds the work behind each row.
 
-**Lightroom checked against:** Lightroom Classic 15.6 and the Lightroom Desktop and mobile releases of September 2026, from [The Lightroom Queen's release notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-09/) (checked 4 October 2026); not yet against Adobe's own pages.
-<!-- lightroom-checked: 2026-10-04; through: 2026-09 -->
+**Lightroom checked against:** Lightroom Classic 15.6 and the Lightroom Desktop and mobile releases of September 2026, from [The Lightroom Queen's release notes](https://www.lightroomqueen.com/whats-new-in-lightroom-2026-09/) (checked 12 October 2026); not yet against Adobe's own pages.
+<!-- lightroom-checked: 2026-10-12; through: 2026-09 -->
 
 ## How to read it
 
@@ -34,7 +34,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | JPEG XL DNGs | Yes | In progress | | P2 | CAM-10 | Linear ones (iPhone ProRAW) open; JPEG XL mosaic DNGs don't yet |
 | Testing your own camera | No | Done | | | CAM-14, CAM-15, CAM-16, CAM-17 | The camera bench checks your raws against the camera's own JPEG on your Mac, and sends only the measurements, which add to the cameras page |
 | JPEG, HEIC, TIFF and PNG | Yes | Done | | | TON-23 | Shown as the file at default settings, as Lightroom does |
-| PSD, AVIF and JPEG XL files | Yes | Planned | | P2 | | |
+| PSD, AVIF and JPEG XL files | Yes | Planned | | P2 | CAM-32 | |
 | WebP files | Yes (Classic) | Undecided | | | | |
 | Per-camera raw defaults | Yes | Planned | | P2 | EDT-06 | By camera, lens, ISO and file type |
 | Tethered capture | Yes (Classic) | Later | | | TET-01, TET-02, TET-04, TET-06, TET-07, TET-08, TET-09, TET-11, TET-13, TET-14 | Researched in October 2026: capture sessions and a hot folder for any camera first, then camera control and Live View for Canon, Nikon, Sony and Fujifilm, and wireless ([findings](https://github.com/pdcgomes/redlamp/blob/main/docs/research/tethering-findings.md)) |
@@ -50,11 +50,11 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Texture, Clarity and Dehaze | Yes | Done | | | TON-06, TON-27 | Clarity and Dehaze follow the photo's edges for new edits, so a skyline gets no bright and dark bands |
 | Vibrance and Saturation | Yes | Done | | | TON-07 | Boosts stop at the edge of the output's colours instead of clipping |
 | Tone curve: parametric and point curves | Yes | Done | | | | With split points and the point curve's presets |
-| Tone curve: separate red, green and blue curves | Yes | Planned | | P2 | | |
+| Tone curve: separate red, green and blue curves | Yes | Planned | | P2 | TON-40 | |
 | Targeted Adjustment Tool | Yes | Planned | | P2 | UX-35 | Drag on the photo to move a curve or a colour band |
 | Color Mixer: hue, saturation and luminance per colour | Yes | Done | | | | Works in OKLCh |
 | Black and white | Yes | Done | | | | |
-| B&W mix: brightness per colour band | Yes | Planned | | P2 | | Today the Color Mixer's Luminance shapes a black-and-white photo |
+| B&W mix: brightness per colour band | Yes | Planned | | P2 | TON-41 | Today the Color Mixer's Luminance shapes a black-and-white photo |
 | Point Color | Yes | Done | | | TON-29 | Lightroom's now has a Variance slider too, which evens out similar colours; Redlamp's adds Capture One's separate hue, saturation and lightness uniformity, for skin |
 | Color Grading | Yes | Done | | | | Shadows, midtones, highlights and global wheels, with Blending and Balance |
 | Profiles | Yes | Done | Different | | EDT-04 | Profiles are Base Looks inside Recipes: six built-in looks and the film looks, each with an Amount slider (0–200) |
@@ -66,7 +66,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | A scene-referred rendering for reproduction work, with exposure tied to the camera's metering | No | Done | | | TON-39, CAM-28 | The Base Look Redlamp Reproduction: no tone curve or look, and each camera's exposure calibrated from a target, so a metered grey scale exports at its own L*; Lightroom needs a custom linear profile for this |
 | Calibration panel | Yes | Done | | | | Shadows Tint and the red, green and blue primaries |
 | Process versions | Yes | Done | | | P1-01 | An edit keeps rendering the way it was made; moving it to a newer process is your choice |
-| HDR editing and export | Yes | Planned | | P4 | | |
+| HDR editing and export | Yes | Planned | | P4 | TON-42 | |
 | Adaptive (AI) profile and personalised auto settings | Yes | Later | | | AUT-03, AUT-04 | |
 
 ## Detail
@@ -213,7 +213,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Your own keyboard shortcuts | No | Done | | | LIB-36 | Any action on the key you choose, with keymaps for people coming from Lightroom Classic, Photo Mechanic and Bridge |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
-| Soft proofing | Yes (Classic) | Planned | | P4 | | |
+| Soft proofing | Yes (Classic) | Planned | | P2 | TON-10 | |
 | Secondary display | Yes | Planned | | P4 | LIB-20 | The grid, loupe, Compare or Survey on another screen |
 
 ## Merging photos
@@ -233,19 +233,21 @@ A high-level list of the features photographers know from Lightroom, and where R
 | JPEG, HEIC, AVIF, PNG and TIFF | Yes | Done | | | EDT-13, EDT-15 | 8, 10 or 16 bits, in sRGB or Display P3 |
 | Size, metadata and export presets | Yes | Done | | | EDT-15 | With Export with Previous |
 | Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P3 | EDT-26 | |
-| DNG, PSD and JPEG XL output | Yes | Planned | | P4 | | |
+| DNG, PSD and JPEG XL output | Yes | Planned | | P4 | EDT-27 | |
 | Watermarks | Yes | Planned | | P4 | EDT-25 | |
-| Output sharpening | Yes | Planned | | P4 | | |
-| Edit in Photoshop or another app | Yes | Planned | | P4 | | |
+| Output sharpening | Yes | Planned | | P4 | EDT-28 | |
+| Edit in Photoshop or another app | Yes | Planned | | P4 | EDT-29 | |
 | Content Credentials | Yes | Planned | | P3 | RM-03 | |
 | The edit embedded in exported files | Yes | Done | | | EDT-14 | |
 | Command-line rendering and export | No | Done | | | | The `redlamp` tool |
+| Plug-ins for export, publishing and metadata | Yes (Classic) | Undecided | | | | Lightroom Classic runs plug-ins written for its SDK; Redlamp's nearest are the `redlamp` command line and `redlamp mcp` |
 
 ## Library and organising
 
 | Feature | Lightroom | Redlamp | vs Lightroom | Phase | Tracker | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Catalog | Yes | In progress | | P4 | LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11 | An index on your Mac of the folders you add, designed for a million photos and rebuilt from the photos and their sidecars at any time; a folder taken out of it leaves every view, and comes back whole from its sidecars when added again; edits and metadata kept beside the photos or on this Mac, moved between the two from a folder's menu; folders on your disk stay the organisation, and edits and metadata stay beside each photo or in Redlamp on this Mac; thumbnails and previews are kept so slow and disconnected drives can be browsed; a photo deleted or moved outside Redlamp stays as missing, with everything decided about it, listed only in Library Health until it's located or removed |
+| Editing photos whose drive is disconnected (Smart Previews) | Yes (Classic) | Undecided | | | | Lightroom Classic develops them from a smaller copy of each raw it keeps; Redlamp's library keeps thumbnails and previews to browse disconnected drives |
 | Library and Develop modules | Yes (Classic) | Done | | | LIB-13 | One window, switched by a key or a click, with the selection, source, filter, sort and filmstrip carried across, and one Undo for both |
 | Search and filters | Yes | In progress | | P4 | LIB-06, LIB-12, LIB-18, LIB-19 | Results as you type; a filter bar of text, attributes and metadata columns with counts, sorts and saved filters, in one query language with the command palette, smart collections and the command line; traits such as long exposures and wide-open, telephoto and ultra-wide shots; an empty search names the filter in its way, or a name a typo away; text found whatever its accents and width, so sao finds São Paulo; names found with a typo or by their letters in order, in completion and the palette |
 | Grid, Loupe, Compare and Survey | Yes | In progress | | P4 | LIB-14, LIB-16, LIB-17 | Held arrow keys move through photos without waiting; thumbnails show the edit; Compare and Survey built |
@@ -287,4 +289,4 @@ A high-level list of the features photographers know from Lightroom, and where R
 | A library shared between Macs | Yes (cloud) | Planned | | P4 | LIB-37 | Ratings, keywords and collections another Mac changes, through iCloud Drive or a shared volume, merged field by field |
 | Edits moving between your Mac, iPad and iPhone | Yes (cloud) | Planned | | P5 | | Through iCloud Drive and Files, rather than Adobe's cloud |
 | Cloud sync with smart previews | Yes (cloud) | Later | | | | |
-| Photos library and a Photos editing extension | Partly (mobile) | Planned | | P2 | | |
+| Photos library and a Photos editing extension | Partly (mobile) | Planned | | P2 | EXT-04 | |
