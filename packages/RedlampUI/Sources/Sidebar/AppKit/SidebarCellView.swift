@@ -58,7 +58,7 @@ final class SidebarCellView: NSTableCellView {
     /// A source list's line saying what an empty section holds: quieter than its rows, and wrapping.
     private static func stylePlaceholder(_ label: NSTextField) {
         label.font = .systemFont(ofSize: SourceListLayout.placeholderSize)
-        label.textColor = .secondaryLabelColor
+        label.textColor = Palette.secondaryLabel.nsColor
         label.lineBreakMode = .byWordWrapping
         label.maximumNumberOfLines = 0
     }
@@ -266,17 +266,15 @@ final class SidebarCellView: NSTableCellView {
         }
     }
 
-    /// A name's colour for `tone`: the panels' palette, or a source list's system colours, its selected row's name in
-    /// the accent colour, as AppKit sets a selected row's while its list doesn't have the keyboard.
+    /// A name's colour for `tone`, in the theme's colours in either look: a source list's rows are in its label colour,
+    /// the selected row's brighter on its selection, as a panel's highlighted row is.
     private func color(of tone: Tone) -> NSColor {
         switch (look, tone) {
         case (.panel, .primary): Palette.label.nsColor
         case (.panel, .group): Palette.secondaryLabel.nsColor
-        case (.panel, .dimmed): Palette.tertiaryLabel.nsColor
-        case (.panel, .emphasized): Palette.labelHover.nsColor
-        case (.sourceList, .dimmed): .tertiaryLabelColor
-        case (.sourceList, .emphasized): .controlAccentColor
-        case (.sourceList, _): .labelColor
+        case (_, .dimmed): Palette.tertiaryLabel.nsColor
+        case (_, .emphasized): Palette.labelHover.nsColor
+        case (.sourceList, _): Palette.label.nsColor
         }
     }
 
@@ -287,14 +285,14 @@ final class SidebarCellView: NSTableCellView {
             return sourceList
                 ? FolderCountView(
                     count, font: FontSpec(size: SourceListLayout.textSize(rowSize), monospacedDigits: true),
-                    color: .secondaryLabelColor,
+                    color: Palette.secondaryLabel.nsColor,
                 )
                 : FolderCountView(count)
         }
         guard decoration.isMissing else { return nil }
         return SymbolImageView(
             "questionmark.circle", pointSize: sourceList ? SourceListLayout.textSize(rowSize) : 10,
-            color: sourceList ? .tertiaryLabelColor : Palette.tertiaryLabel.nsColor,
+            color: Palette.tertiaryLabel.nsColor,
         )
     }
 
@@ -319,11 +317,7 @@ final class SidebarCellView: NSTableCellView {
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         image.symbolConfiguration = SourceListLayout.symbolConfiguration(rowSize)
         image.imageScaling = .scaleNone
-        image.contentTintColor = switch tone {
-        case .dimmed: .tertiaryLabelColor
-        case .emphasized: .controlAccentColor
-        default: .labelColor
-        }
+        image.contentTintColor = color(of: tone)
         image.setAccessibilityElement(false)
         addSubview(image)
         icon = image

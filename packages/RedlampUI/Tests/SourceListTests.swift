@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import RedlampDesign
 import RedlampLibrary
 import Testing
 @_spi(Harness) @testable import RedlampUI
@@ -212,7 +213,7 @@ struct SourceListTests {
         #expect(label.stringValue == text)
         let font = try #require(label.font)
         #expect(font.pointSize == SidebarCellView.SourceListLayout.placeholderSize)
-        #expect(label.textColor == .secondaryLabelColor, "in the hint's size and colour")
+        #expect(label.textColor == Palette.secondaryLabel.nsColor, "in the hint's size and the theme's colour for it")
         let needed = try #require(label.cell).cellSize(
             forBounds: CGRect(x: 0, y: 0, width: label.bounds.width, height: .greatestFiniteMagnitude),
         )

@@ -194,7 +194,7 @@ final class SourceListHeaderView: NSView {
     init(title: String, add: Add?) {
         self.title = NSTextField(labelWithString: title)
         self.title.font = .boldSystemFont(ofSize: NSFont.smallSystemFontSize)
-        self.title.textColor = .tertiaryLabelColor
+        self.title.textColor = Palette.tertiaryLabel.nsColor
         self.title.lineBreakMode = .byTruncatingTail
         self.add = add.map { add in
             let button = Self.control("plus", help: add.help)

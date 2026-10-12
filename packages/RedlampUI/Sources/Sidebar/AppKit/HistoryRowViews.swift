@@ -74,9 +74,28 @@ final class HistoryValuesView: LayerDrawnView {
 
 /// A sidebar row. The current history step is highlighted, which leaves the row's trailing
 /// edge to its values; a row photos are dragged onto that takes them is outlined. In a source list
-/// (`drawsHighlights` off), AppKit draws both: the source shown as its selection, and its own drop target.
+/// (`drawsHighlights` off), AppKit draws both: the source shown as its selection, in the theme's selection colour
+/// where AppKit draws its own, and its own drop target.
 final class SidebarRowView: NSTableRowView {
     var drawsHighlights = true
+
+    /// A source list's selection is never the accent's, so its cells keep their colours.
+    override var isEmphasized: Bool {
+        get { false }
+        set {}
+    }
+
+    /// How far in from the row's ends a source list's selection is, and its corners' radius, as AppKit draws it.
+    static let sourceListSelectionInset: CGFloat = 10
+    static let sourceListSelectionRadius: CGFloat = 10
+
+    override func drawSelection(in _: NSRect) {
+        Palette.selection.nsColor.setFill()
+        let inset = Self.sourceListSelectionInset
+        let rect = PixelGrid.snap(bounds.insetBy(dx: inset, dy: 0), scale: window?.backingScaleFactor ?? 2)
+        let radius = min(Self.sourceListSelectionRadius, rect.height / 2)
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+    }
 
     var isCurrentStep = false {
         didSet {
