@@ -24,9 +24,9 @@
 # Xcode change on both Macs together. --gate then runs the push gate on origin/main, which builds
 # everything and runs the reference tests (a few minutes).
 #
-# MACOS_VERSION, XCODE_VERSION and XCODE_BUILD are the main Mac's (`sw_vers -productVersion`,
-# `xcodebuild -version`); set them when it moves on. A build Mac on other versions can build and
-# test differently, so the setup says when they differ.
+# XCODE_VERSION and XCODE_BUILD are the main Mac's Xcode (`xcodebuild -version`), and MACOS_VERSION
+# its macOS (`sw_vers -productVersion`); set them when it moves on. Xcode has to match, since it's
+# what builds; the build Mac's macOS may differ, and the setup says when it does.
 
 set -euo pipefail
 
@@ -88,7 +88,7 @@ preflight() {
     local found free
     found="$(sw_vers -productVersion)"
     [ "$found" = "$MACOS_VERSION" ] \
-        || note "macOS is $found here and $MACOS_VERSION on the main Mac: update one of them so they match"
+        || say "macOS is $found here and $MACOS_VERSION on the main Mac: allowed, since only Xcode has to match"
     free="$(df -g "$HOME" | awk 'NR == 2 { print $4 }')"
     [ "$free" -ge "$DISK_NEEDED_GB" ] \
         || note "$free GB is free; Xcode, the iOS platform, the sample raws and the builds take about $DISK_NEEDED_GB GB"
@@ -141,6 +141,9 @@ tools() {
     part="$(brewfile_part -vE '^[[:space:]]*mas ')"
     HOMEBREW_BUNDLE_NO_LOCK=1 brew bundle install --file="$part"
     rm -f "$part"
+    # The repository's scripts run as `#!/usr/bin/env python3`.
+    python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null \
+        || fail "python3 is $(command -v python3) ($(python3 --version 2>&1)), and the repository's scripts need 3.11 or later: \`brew link python\`, then run this again"
 }
 
 xcode_field() {

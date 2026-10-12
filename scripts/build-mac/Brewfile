@@ -3,9 +3,10 @@
 
 brew "mise"
 brew "git"
-# As on the main Mac: macOS's own python3 is 3.9, and the repository's tools use newer Python
-# (tools/rl needs 3.11's tomllib).
-brew "python@3.14"
+# macOS's own python3 is 3.9, and the repository's scripts need newer (perf-card.py 3.10, tools/rl
+# 3.11's tomllib). Homebrew's default Python, since only it provides the plain python3 command: a
+# versioned formula such as python@3.14 stops providing it once Homebrew's default moves on.
+brew "python"
 brew "mas"
 # Xcode from Apple's developer downloads, when the App Store's isn't the version the main Mac has;
 # it downloads with aria2 when that's installed.
