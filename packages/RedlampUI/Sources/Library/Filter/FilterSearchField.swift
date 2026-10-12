@@ -217,17 +217,49 @@ final class FilterSearchField: NSTokenField {
     }
 
     /// Keeps the text inside the magnifying glass and the buttons, as the search field's own cell does, centred in the
-    /// capsule's height: a cell without a bezel draws its text at its top.
+    /// capsule's height: a cell without a bezel draws its text at its top. The field editor goes where the text is
+    /// drawn: AppKit places it from the frame `select` and `edit` are given, insetting that by
+    /// `drawingRect(forBounds:)` again, so while it does they hand it the drawn rect as it is.
     final class Cell: NSTokenFieldCell {
         var trailing: CGFloat = 0
+        private var placingEditor: CGRect?
 
         override func drawingRect(forBounds rect: CGRect) -> CGRect {
+            if let placingEditor {
+                return placingEditor
+            }
             let drawn = super.drawingRect(forBounds: rect)
             let height = min(FilterSearchField.lineHeight, rect.height)
             return CGRect(
                 x: drawn.minX + FilterSearchField.leading, y: rect.midY - height / 2,
                 width: max(drawn.width - FilterSearchField.leading - trailing, 0), height: height,
             )
+        }
+
+        override func titleRect(forBounds rect: CGRect) -> CGRect {
+            drawingRect(forBounds: rect)
+        }
+
+        override func select(
+            withFrame rect: CGRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, start selStart: Int,
+            length selLength: Int,
+        ) {
+            let line = drawingRect(forBounds: rect)
+            placingEditor = line
+            defer { placingEditor = nil }
+            super.select(
+                withFrame: line, in: controlView, editor: textObj, delegate: delegate, start: selStart,
+                length: selLength,
+            )
+        }
+
+        override func edit(
+            withFrame rect: CGRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, event: NSEvent?,
+        ) {
+            let line = drawingRect(forBounds: rect)
+            placingEditor = line
+            defer { placingEditor = nil }
+            super.edit(withFrame: line, in: controlView, editor: textObj, delegate: delegate, event: event)
         }
     }
 }
