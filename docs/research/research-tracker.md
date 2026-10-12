@@ -113,6 +113,7 @@ These block other rows. Most need the project owner; the ones marked *counsel* n
 | DEC-67 | Does typing search the source shown or the whole library? | The source, with the whole library's count offered beside the field ("Search all 1,042,318") and ⌘K searching everything from anywhere | LIB-18, LIB-19, LIB-45 | Accepted (2026-10-11) | The Library's wireframes; the library board (2026-10-11) |
 | DEC-68 | Is Auto Advance on while culling? | On in the loupe, off in the grid, where a key acts on a selection | LIB-15, LIB-45 | Accepted (2026-10-11) | The Library's wireframes; the library board (2026-10-11) |
 | DEC-69 | Are new shoots grouped into moments? | By moment by default for Previous Import and for cards in the import window; any other source only when chosen | LIB-41, LIB-27, LIB-45 | Accepted (2026-10-11) | The Library's wireframes; the library board (2026-10-11) |
+| DEC-70 | CI fails function bodies that take 1 to 700 ms to type-check here, over its 1,500 ms limit: the first body in a compile job to use `NSMenuItem` pays AppKit's import of it, 1.5 to 1.8 s on the three-core runner, and which body that is moves with how the module's files are split into jobs (six bodies so far): what changes? | Raise the limit for a function body to 3,000 ms on CI only, as DEC-65 did for expressions, keeping 1,500 ms on this Mac and in the push gate, so genuinely slow bodies are still caught | CI | Accepted (2026-10-12) | The library board (2026-10-12); the measurements on fix/ci-green |
 
 ---
 
