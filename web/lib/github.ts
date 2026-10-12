@@ -2,11 +2,15 @@ import { site } from "@/lib/site";
 import { type Issue, issueNumbers } from "@/lib/tracker";
 
 /** A read-only token, if the deployment has one, lifts GitHub's limit for anonymous requests; none is needed. */
-function fetchRepo(path = ""): Promise<Response> {
+function fetchRepo(path = "", revalidate = 3600): Promise<Response> {
   const token = process.env.GITHUB_TOKEN;
   return fetch(`https://api.github.com/repos/${site.githubRepo}${path}`, {
-    headers: { Accept: "application/vnd.github+json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    next: { revalidate: 3600 },
+    headers: {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    next: { revalidate },
     signal: AbortSignal.timeout(4000),
   });
 }
@@ -26,14 +30,15 @@ export async function starCount(): Promise<number | null> {
 export type Release = { version: string | null; url: string };
 
 /**
- * The latest release's disk image, or its zip for a release without one, refreshed hourly; null
- * before the first release. If GitHub can't be reached, the latest release's page with no
- * version, so the download button stays.
+ * The latest release's disk image, or its zip for a release without one, refreshed every five
+ * minutes so a new release reaches the download button soon after it's published; null before the
+ * first release. If GitHub can't be reached, the latest release's page with no version, so the
+ * download button stays.
  */
 export async function latestRelease(): Promise<Release | null> {
   const fallback = { version: null, url: `${site.github}/releases/latest` };
   try {
-    const response = await fetchRepo("/releases/latest");
+    const response = await fetchRepo("/releases/latest", 300);
     if (response.status === 404) return null;
     if (!response.ok) return fallback;
     const body = (await response.json()) as {
