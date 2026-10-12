@@ -34,7 +34,8 @@
     ///   up with a photo selected, `inspector=end` scrolls the inspector to its end, `extend=<n>`
     ///   selects from the open photo to the nth, as ⇧-click does, `type=<identifier>` clicks a value
     ///   field to type in it, such as `type=slider.basic.exposure.value`, `off=<panel>[+<panel>]`
-    ///   switches Develop panels off, and `filmstrip-menu=<n>` opens
+    ///   switches Develop panels off, `scrollers=flash` shows every window's scrollers twice a second
+    ///   so a capture finds them showing, `settings=open` opens Settings, and `filmstrip-menu=<n>` opens
     ///   the context menu of the nth photo on screen; the menu holds the app, so it comes last.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
@@ -120,6 +121,10 @@
                 await showFilmstripMenu(at: Int(value) ?? 0)
             case "inspector" where value == "end":
                 await scrollInspectorToEnd()
+            case "scrollers" where value == "flash":
+                flashScrollers()
+            case "settings" where value == "open":
+                await openSettings()
             case "type":
                 await beginTyping(in: value)
             case "select" where Int(value) == nil:
@@ -263,6 +268,40 @@
 
         private static func openMenuWindow(titled title: String) {
             AppDelegate.performMenuItem(titled: title)
+        }
+
+        /// Overlay scrollers show only while scrolling: every window's are shown again and again, as long as
+        /// the app runs.
+        private static func flashScrollers() {
+            let timer = Timer(timeInterval: 0.5, repeats: true) { _ in
+                MainActor.assumeIsolated {
+                    @MainActor func scrollViews(in view: NSView) -> [NSScrollView] {
+                        ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap(scrollViews)
+                    }
+                    for window in NSApp.windows where window.isVisible {
+                        window.contentView?.superview.map(scrollViews)?.forEach { $0.flashScrollers() }
+                    }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+        }
+
+        /// Settings, from the app menu, on the capture screen when there is one. Its window is titled after
+        /// its tab.
+        private static func openSettings() async {
+            guard let title = NSApp.mainMenu?.items.first?.submenu?.items.first(where: {
+                $0.title.hasPrefix("Settings")
+            })?.title else { return }
+            let shown = Set(NSApp.windows.filter(\.isVisible).map(ObjectIdentifier.init))
+            openMenuWindow(titled: title)
+            guard let captureScreen else { return }
+            for _ in 0 ..< 20 {
+                if let window = NSApp.windows.first(where: { $0.isVisible && !shown.contains(ObjectIdentifier($0)) }) {
+                    center(window, on: captureScreen)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
         }
 
         /// Opens the context menu of the filmstrip's `index`th photo on screen, rising from its
