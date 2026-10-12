@@ -17,7 +17,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
 
     private let model: EditorModel
     private let theme: ThemeSettings
-    private let onOpen: () -> Void
     private let onExport: () -> Void
     private var trackers: [Tracker] = []
     private weak var exportItem: NSToolbarItem?
@@ -37,7 +36,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     ) {
         self.model = model
         self.theme = theme
-        self.onOpen = onOpen
         self.onExport = onExport
 
         let develop = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen)
@@ -132,8 +130,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
 
     public func toolbarDefaultItemIdentifiers(_: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
-            .toggleSidebar, .sidebarTrackingSeparator, .modules,
-            .flexibleSpace, .openFolder, .export, .space, .view,
+            .toggleSidebar, .sidebarTrackingSeparator, .modules, .export, .space, .view,
             .inspectorTrackingSeparator,
             .theme, .feedback, .flexibleSpace, .toggleInspector,
         ]
@@ -149,8 +146,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         switch identifier {
         case .modules:
             return ModulePicker.item(identifier, model: model)
-        case .openFolder:
-            return button(identifier, "Open Folder", "folder", help: "Open Folder (⌘O)", action: #selector(openFolder))
         case .export:
             let item = button(
                 identifier,
@@ -224,10 +219,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         model.rightPanelVisible.toggle()
     }
 
-    @objc private func openFolder() {
-        onOpen()
-    }
-
     @objc private func export() {
         onExport()
     }
@@ -258,7 +249,6 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
 
 private extension NSToolbarItem.Identifier {
     static let modules = Self("modules")
-    static let openFolder = Self("openFolder")
     static let export = Self("export")
     static let view = Self("view")
     static let theme = Self("theme")

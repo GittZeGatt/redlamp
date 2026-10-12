@@ -695,8 +695,17 @@
             claims: [.feature("workspace.toolbar")],
         ) { app in
             try app.openWorking()
-            let items = try app.main { _ in Views.editorWindow?.toolbar?.items.count ?? 0 }
-            try app.expect(items >= 4, "The toolbar has \(items) items")
+            let items = try app.main { _ in Views.editorWindow?.toolbar?.items.map(\.itemIdentifier.rawValue) ?? [] }
+            try app.expect(items.count >= 4, "The toolbar has \(items.count) items")
+            try app.expect(!items.contains("openFolder"), "The toolbar has an Open Folder button: \(items)")
+            let library = try app.frame(of: .identifier("module.library"))
+            let develop = try app.frame(of: .identifier("module.develop"))
+            let width = try app.main { _ in Views.editorWindow?.frame.width ?? 0 }
+            let middle = (library.minX + develop.maxX) / 2
+            try app.expect(
+                abs(middle - width / 2) <= 2,
+                "The module picker's middle at \(middle) of a \(width)-point window",
+            )
             try app.press(.toggleToolbar)
             try app.wait("the toolbar to hide") { _ in Views.editorWindow?.toolbar?.isVisible == false }
             try app.press(.toggleToolbar)

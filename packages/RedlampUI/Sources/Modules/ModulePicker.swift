@@ -125,13 +125,65 @@ final class ModulePickerView: NSView {
     }
 }
 
+/// The picker's place in the toolbar: all the room between the window's title and the buttons after it, with the
+/// picker in the middle of the window, or as near it as that room allows. The toolbar's sections follow the panels,
+/// so the middle of the picker's section is the window's only while neither panel shows. The toolbar's glass would
+/// span the whole slot, so the slot draws its own behind the picker, as the toolbar draws it behind an item.
+final class ModulePickerSlot: NSView {
+    /// The toolbar's glass behind an item: as tall and as round as AppKit's.
+    private static let platterHeight: CGFloat = 36
+    private let picker: ModulePickerView
+    private let platter = NSGlassEffectView()
+
+    init(picker: ModulePickerView) {
+        self.picker = picker
+        let width = picker.intrinsicContentSize.width
+        super.init(frame: CGRect(x: 0, y: 0, width: width, height: Self.platterHeight))
+        platter.cornerRadius = Self.platterHeight / 2
+        platter.contentView = picker
+        addSubview(platter)
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(greaterThanOrEqualToConstant: width),
+            widthAnchor.constraint(lessThanOrEqualToConstant: 4000),
+            heightAnchor.constraint(equalToConstant: Self.platterHeight),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    /// Where the picker goes depends on where the slot is in the window, not only on its size.
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        super.setFrameOrigin(newOrigin)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let width = picker.intrinsicContentSize.width
+        let middle = window.map { convert(CGPoint(x: $0.frame.width / 2, y: 0), from: nil).x } ?? bounds.midX
+        let x = min(max(middle - width / 2, 0), max(bounds.width - width, 0))
+        platter.frame = CGRect(x: x.rounded(), y: 0, width: width, height: bounds.height)
+    }
+
+    /// Clicks beside the picker reach the toolbar, which moves the window, as they would on an empty part of it.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit?.isDescendant(of: picker) == true ? hit : nil
+    }
+}
+
 @MainActor
 enum ModulePicker {
     static func item(_ identifier: NSToolbarItem.Identifier, model: EditorModel) -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: identifier)
         item.label = "Module"
-        item.toolTip = "Library (⌥⌘1) or Develop (⌥⌘2)"
-        item.view = ModulePickerView(model: model)
+        let picker = ModulePickerView(model: model)
+        picker.toolTip = "Library (⌥⌘1) or Develop (⌥⌘2)"
+        item.view = ModulePickerSlot(picker: picker)
+        item.isBordered = false
         return item
     }
 }

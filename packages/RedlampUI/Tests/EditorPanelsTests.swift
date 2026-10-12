@@ -111,6 +111,42 @@ struct EditorPanelsTests {
         #expect(model.leftPanelVisible && model.rightPanelVisible)
     }
 
+    /// The Library and Develop picker sits in the middle of the window, whichever panels show and whichever module is
+    /// shown, rather than after the window's title; the toolbar has no Open Folder button (the Folders panel's +
+    /// adds folders, and File › Open Folder… and ⌘O open one).
+    @Test func `the module picker is centred on the window, with or without either panel`() async throws {
+        _ = NSApplication.shared
+        let model = EditorModel(engine: StubEngine())
+        let controller = EditorWindowController(
+            model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let toolbar = try #require(window.toolbar)
+        #expect(!toolbar.items.contains { $0.itemIdentifier.rawValue == "openFolder" || $0.label == "Open Folder" })
+        func views(in view: NSView) -> [NSView] {
+            [view] + view.subviews.flatMap(views)
+        }
+        let item = try #require(toolbar.items.first { $0.itemIdentifier.rawValue == "modules" }?.view)
+        let picker = try #require(views(in: item).first { $0 is ModulePickerView })
+        for (left, right, module) in [
+            (true, true, AppModule.develop), (false, true, .develop), (true, false, .develop), (false, false, .develop),
+            (true, true, .library), (false, false, .library),
+        ] {
+            model.module = module
+            model.leftPanelVisible = left
+            model.rightPanelVisible = right
+            try await Task.sleep(for: .milliseconds(150))
+            window.layoutIfNeeded()
+            let middle = picker.convert(picker.bounds, to: nil).midX
+            #expect(
+                abs(middle - window.frame.width / 2) <= 1,
+                "\(module), sidebar \(left), inspector \(right): the picker's middle at \(middle)",
+            )
+        }
+    }
+
     /// #358: Tab hides the side panels for a bigger view of the photo, as in Lightroom. At Fit the photo
     /// grows into the room they leave and is rendered again at its new size; F7 and F8 give one side's.
     @Test func `hiding the side panels gives the photo their room, rendered again at its new size`() async throws {
