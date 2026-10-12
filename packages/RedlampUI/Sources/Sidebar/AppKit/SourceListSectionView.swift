@@ -223,7 +223,7 @@ final class SourceListHeaderView: NSView {
     private static func control(_ symbol: String, help: String) -> NSButton {
         let button = NSButton()
         style(button)
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: help)
+        button.image = image(symbol)
         button.toolTip = help
         button.setAccessibilityLabel(help)
         return button
@@ -234,17 +234,21 @@ final class SourceListHeaderView: NSView {
         button.bezelStyle = .accessoryBarAction
         button.imagePosition = .imageOnly
         button.imageScaling = .scaleNone
-        button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
         button.contentTintColor = .secondaryLabelColor
         button.refusesFirstResponder = true
+    }
+
+    /// The symbol at 11 points semibold, as large as the control, on whole pixels at 1x as well as 2x.
+    private static func image(_ symbol: String) -> NSImage {
+        PixelSymbol.image(
+            symbol, pointSize: 11, weight: .semibold, size: CGSize(width: controlSide, height: controlSide),
+        )
     }
 
     private func updateChevron() {
         let name = title.stringValue
         let help = isExpanded ? "Hide \(name)" : "Show \(name)"
-        chevron.image = NSImage(
-            systemSymbolName: isExpanded ? "chevron.down" : "chevron.right", accessibilityDescription: help,
-        )
+        chevron.image = Self.image(isExpanded ? "chevron.down" : "chevron.right")
         chevron.toolTip = help
         chevron.setAccessibilityLabel(help)
     }

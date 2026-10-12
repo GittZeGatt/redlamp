@@ -18,8 +18,8 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     let snapshots: SidebarOutlineView
     let history: SidebarOutlineView
     private let panels: [SidebarSection: PanelSectionView]
-    private let createSnapshot: SymbolImageView
-    private let clearHistory: SymbolImageView
+    private let createSnapshot: HeaderSymbolButton
+    private let clearHistory: HeaderSymbolButton
     private var tracker: Tracker?
     private var expandedGroups: Set<String> = ["Favorites", "My Recipes", "Essentials"]
     private var expandedSessions: Set<UUID> = []
@@ -177,8 +177,8 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     // MARK: - Headers
 
     private static func headerButton(_ symbol: String, help: String, action: @escaping @MainActor () -> Void)
-        -> SymbolImageView {
-        let control = SymbolImageView(symbol, pointSize: 11, color: Palette.secondaryLabel.nsColor)
+        -> HeaderSymbolButton {
+        let control = HeaderSymbolButton(symbol, color: Palette.secondaryLabel.nsColor)
         control.toolTip = help
         control.setAccessibilityRole(.button)
         control.setAccessibilityLabel(help)
@@ -187,7 +187,7 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
     }
 
     /// Importing works without a photo; creating a recipe is disabled in the menu instead.
-    private static func recipesButton(model: EditorModel) -> SymbolImageView {
+    private static func recipesButton(model: EditorModel) -> HeaderSymbolButton {
         let control = headerButton("plus", help: "Create or Import a Recipe") {}
         control.onClick = { [weak control] in
             guard let control else { return }
@@ -224,6 +224,49 @@ final class SidebarListView: PanelColumnScrollView, NSSearchFieldDelegate {
         let clip = scrollView.contentView
         clip.scroll(to: clip.constrainBoundsRect(CGRect(origin: panel.frame.origin, size: clip.bounds.size)).origin)
         scrollView.reflectScrolledClipView(clip)
+    }
+}
+
+/// A panel header's button: its symbol at 11 points in the frame SwiftUI gives it, as `SymbolImageView` lays one
+/// out, drawn at the symbol's own size on whole pixels (`PixelSymbol`). Clickable when given an action.
+private final class HeaderSymbolButton: LayerDrawnView {
+    private let image: NSImage
+    private let size: CGSize
+    private let color: NSColor
+    var onClick: (() -> Void)?
+    var isEnabled = true {
+        didSet { setNeedsContentDisplay() }
+    }
+
+    init(_ name: String, color: NSColor) {
+        size = Symbol.layoutSize(name, pointSize: 11, weight: .regular)
+        image = PixelSymbol.image(name, pointSize: 11, size: size)
+        self.color = color
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        size
+    }
+
+    override func drawContent(in _: CGRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let resolved = color.usingColorSpace(.sRGB) ?? color
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        resolved.withAlphaComponent(resolved.alphaComponent * (isEnabled ? 1 : 0.5)).setFill()
+        bounds.fill(using: .sourceIn)
+        context.endTransparencyLayer()
+    }
+
+    override func mouseDown(with _: NSEvent) {
+        guard isEnabled else { return }
+        onClick?()
     }
 }
 
