@@ -50,16 +50,15 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         case panel, sourceList
     }
 
-    /// In a source list, a row's content ends this far from the list's trailing edge, inside the selection; a top-level
-    /// row's starts at most this far from its leading edge.
+    /// In a source list, a row's content ends this far from the list's trailing edge, inside the selection.
     static let sourceListTrailingInset: CGFloat = 18
-    static let sourceListLeadingInset: CGFloat = 25
     /// A list this short may hold the line that says what an empty section holds, whose height its width decides.
     private static let mostRowsWrapped = 4
 
-    /// How much wider than its column a source list tiles itself, measured on one of AppKit's own: measured on
-    /// this one, its own column sizing would take part.
-    private static let sourceListPadding: CGFloat = {
+    /// How much wider than its column a source list tiles itself, and how far from its leading edge a top-level row's
+    /// content starts, measured on one of AppKit's own: measured on this one, its own column sizing would take part,
+    /// and a row's height is wanted before its content has a frame.
+    private static let sourceListMetrics: (padding: CGFloat, leadingInset: CGFloat) = {
         let probe = NSOutlineView(frame: .zero)
         let column = NSTableColumn(identifier: .init("probe"))
         probe.addTableColumn(column)
@@ -68,7 +67,11 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         probe.style = .sourceList
         probe.rowSizeStyle = .default
         probe.tile()
-        return probe.frame.width - column.width
+        let padding = probe.frame.width - column.width
+        let row = ProbeRow()
+        probe.dataSource = row
+        probe.reloadData()
+        return withExtendedLifetime(row) { (padding, probe.frameOfCell(atColumn: 0, row: 0).minX) }
     }()
 
     /// The rows, read while tracked: the list reloads when anything they read changes.
@@ -126,7 +129,7 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             selectionHighlightStyle = .regular
             draggingDestinationFeedbackStyle = .sourceList
             refusesFirstResponder = true
-            columnPadding = Self.sourceListPadding
+            columnPadding = Self.sourceListMetrics.padding
         }
         dataSource = self
         delegate = self
@@ -185,9 +188,13 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     }
 
     /// A source list tiles itself taller than its rows, by its style's padding: it's as tall as it makes itself, or
-    /// setting another height would tile it again.
-    func height(forWidth _: CGFloat) -> CGFloat {
+    /// setting another height would tile it again. It's made `width` wide first: the line saying what an empty
+    /// section holds wraps to its width.
+    func height(forWidth width: CGFloat) -> CGFloat {
         if look == .sourceList {
+            if frame.width != width {
+                setFrameSize(CGSize(width: width, height: frame.height))
+            }
             tile()
             return frame.height
         }
@@ -211,7 +218,11 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             column.width = width
         }
         if look == .sourceList, resized, (1 ... Self.mostRowsWrapped).contains(numberOfRows) {
-            noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0 ..< numberOfRows))
+            // A view-based table animates its rows to new heights unless told not to: they follow the width at once.
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0 ..< numberOfRows))
+            }
         }
     }
 
@@ -420,8 +431,8 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     /// other row is the list's height.
     func outlineView(_: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         guard look == .sourceList, case let .placeholder(text)? = (item as? SidebarNode)?.kind else { return rowHeight }
-        let width = bounds.width - Self.sourceListLeadingInset - Self.sourceListTrailingInset
-            - SidebarCellView.Layout.labelPadding
+        let leading = Self.sourceListMetrics.leadingInset + CGFloat(max(level(forItem: item), 0)) * indentationPerLevel
+        let width = bounds.width - leading - Self.sourceListTrailingInset - SidebarCellView.Layout.labelPadding
         return max(rowHeight, ceil(SidebarCellView.placeholderHeight(text, width: width)) + 10)
     }
 
@@ -547,5 +558,21 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         } else {
             expandItem(node)
         }
+    }
+}
+
+/// The one row of the source list `SidebarOutlineView` measures AppKit's metrics on.
+@MainActor
+private final class ProbeRow: NSObject, NSOutlineViewDataSource {
+    func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        item == nil ? 1 : 0
+    }
+
+    func outlineView(_: NSOutlineView, child _: Int, ofItem _: Any?) -> Any {
+        self
+    }
+
+    func outlineView(_: NSOutlineView, isItemExpandable _: Any) -> Bool {
+        false
     }
 }

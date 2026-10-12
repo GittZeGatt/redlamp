@@ -37,13 +37,30 @@ final class SidebarCellView: NSTableCellView {
         static let placeholderSize: CGFloat = 11
     }
 
-    /// The height of the line `text` saying what an empty section holds, wrapped to `width`.
+    /// The height of the line `text` saying what an empty section holds, wrapped to `width`, as its label lays out
+    /// its lines: a label shorter than that leaves its last line out.
     static func placeholderHeight(_ text: String, width: CGFloat) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: SourceListLayout.placeholderSize)
-        return (text as NSString).boundingRect(
-            with: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font],
-        ).height
+        placeholderMeasure.stringValue = text
+        // A label draws its text inset by `labelPadding` on each side.
+        let bounds = CGRect(
+            x: 0, y: 0, width: max(width, 1) + Layout.labelPadding * 2, height: .greatestFiniteMagnitude,
+        )
+        return placeholderMeasure.cell?.cellSize(forBounds: bounds).height ?? 0
+    }
+
+    /// A label set up as those lines' labels are, to measure them.
+    private static let placeholderMeasure: NSTextField = {
+        let label = NSTextField(labelWithString: "")
+        stylePlaceholder(label)
+        return label
+    }()
+
+    /// A source list's line saying what an empty section holds: quieter than its rows, and wrapping.
+    private static func stylePlaceholder(_ label: NSTextField) {
+        label.font = .systemFont(ofSize: SourceListLayout.placeholderSize)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byWordWrapping
+        label.maximumNumberOfLines = 0
     }
 
     /// Positions from where the row starts (the panel's padding, then a level further in for
@@ -142,10 +159,7 @@ final class SidebarCellView: NSTableCellView {
         case let .placeholder(text):
             label.stringValue = text
             if look == .sourceList {
-                label.font = .systemFont(ofSize: SourceListLayout.placeholderSize)
-                label.textColor = .secondaryLabelColor
-                label.lineBreakMode = .byWordWrapping
-                label.maximumNumberOfLines = 0
+                Self.stylePlaceholder(label)
                 wraps = true
             } else {
                 label.textColor = Palette.tertiaryLabel.nsColor

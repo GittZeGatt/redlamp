@@ -191,6 +191,91 @@ struct SourceListTests {
         #expect(line.frame.height > line.intrinsicContentSize.height, "the line wraps onto a second")
     }
 
+    /// The row of the line saying what `list`'s section holds while it's empty, with the column `width` wide, once
+    /// it's checked that the line shows all of `text` in the hint's size and colour, inside a row as tall as its
+    /// lines, and the row inside its section.
+    private func emptyLine(_ text: String, in list: SidebarOutlineView, width: CGFloat) async throws -> CGRect {
+        let window = try #require(list.window)
+        window.setContentSize(NSSize(width: width, height: 800))
+        window.layoutIfNeeded()
+        window.displayIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        window.layoutIfNeeded()
+        try #require(list.numberOfRows == 1, "\(text): the line alone")
+        let cell = try #require(list.view(atColumn: 0, row: 0, makeIfNecessary: true) as? SidebarCellView)
+        let rowView = try #require(list.rowView(atRow: 0, makeIfNecessary: false))
+        #expect(
+            cell.frame.maxX <= rowView.bounds.width && rowView.frame.width == list.bounds.width,
+            "\(width): the cell, \(cell.frame), in its row, \(rowView.frame)",
+        )
+        let label = try #require(cell.subviews.compactMap { $0 as? NSTextField }.first)
+        #expect(label.stringValue == text)
+        let font = try #require(label.font)
+        #expect(font.pointSize == SidebarCellView.SourceListLayout.placeholderSize)
+        #expect(label.textColor == .secondaryLabelColor, "in the hint's size and colour")
+        let needed = try #require(label.cell).cellSize(
+            forBounds: CGRect(x: 0, y: 0, width: label.bounds.width, height: .greatestFiniteMagnitude),
+        )
+        #expect(
+            needed.width <= label.bounds.width && needed.height <= label.bounds.height,
+            "\(width): “\(text)” needs \(needed) of its label's \(label.bounds.size)",
+        )
+        let row = list.rect(ofRow: 0)
+        let shown = list.convert(label.bounds, from: label)
+        #expect(row.insetBy(dx: 0, dy: -0.5).contains(shown), "\(width): the row, \(row), holds the label, \(shown)")
+        #expect(
+            row.height <= list.rowHeight || row.height - needed.height < NSLayoutManager().defaultLineHeight(for: font),
+            "\(width): the row, \(row.height) tall, has no room for a line more than the label's \(needed.height)",
+        )
+        let section = try #require(list.superview as? SourceListSectionView)
+        let inSection = section.convert(row, from: list)
+        #expect(
+            section.bounds.insetBy(dx: 0, dy: -0.5).contains(inSection),
+            "\(width): the section, \(section.bounds), holds the row, \(inSection)",
+        )
+        return row
+    }
+
+    @Test func `an empty section's line wraps at the sidebar's width, its row as tall as its lines, fewer as it widens`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try FileManager.default.createDirectory(at: sandbox.root, withIntermediateDirectories: true)
+        let model = try await sandbox.open()
+        let (column, window) = column(model)
+        defer { window.contentView = nil }
+        try await sandbox.counts { $0.isCounted }
+        let library = try #require(views(LibraryOutlineView.self, in: column).first)
+        let collections = try #require(views(CollectionOutlineView.self, in: column).first)
+        @MainActor func line(of list: SidebarOutlineView) -> String? {
+            guard list.numberOfRows == 1, case let .placeholder(text)? = (list.item(atRow: 0) as? SidebarNode)?.kind
+            else { return nil }
+            return text
+        }
+        try await sandbox.eventually {
+            line(of: library) == LibrarySourcesText.empty && line(of: collections) == LibrarySourcesText.noCollections
+        }
+        let off = EditorModel(engine: StubEngine())
+        let (offColumn, offWindow) = self.column(off)
+        defer { offWindow.contentView = nil }
+        let offLibrary = try #require(views(LibraryOutlineView.self, in: offColumn).first)
+
+        let (narrowest, widest) = (PanelMetrics.sidebarRange.lowerBound, PanelMetrics.sidebarRange.upperBound)
+        for (list, text) in [
+            (library, LibrarySourcesText.empty), (collections, LibrarySourcesText.noCollections),
+            (offLibrary, LibrarySourcesText.off),
+        ] {
+            var heights: [CGFloat] = []
+            for width in [narrowest, PanelMetrics.sidebarNominal, widest] {
+                try await heights.append(emptyLine(text, in: list, width: width).height)
+            }
+            #expect(heights == heights.sorted(by: >), "“\(text)”: no taller as the sidebar widens, \(heights)")
+            let squeezed = try await emptyLine(text, in: list, width: narrowest - 60)
+            #expect(squeezed.height > heights[2], "a line more in a column narrower than the sidebar goes")
+            #expect(try await emptyLine(text, in: list, width: narrowest).height == heights[0], "as many again")
+        }
+    }
+
     @Test func `a source list's row leaves its drop target and its selection to AppKit`() {
         let row = SidebarRowView()
         row.drawsHighlights = false
