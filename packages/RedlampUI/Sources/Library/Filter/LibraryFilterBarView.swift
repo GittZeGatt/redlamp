@@ -13,7 +13,7 @@ import RedlampLibrary
 ///
 /// `\` shows and hides the rows open, the field taking the keyboard as they're shown; Esc in the field goes back
 /// to the grid.
-final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
+final class LibraryFilterBarView: NSView, NSTokenFieldDelegate, ThemeFollowing {
     static let rowHeight: CGFloat = 44
     static let attributeHeight: CGFloat = 36
     static let metadataHeight: CGFloat = 168
@@ -56,7 +56,7 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
         columns = FilterColumnsView(model: model)
         super.init(frame: CGRect(x: 0, y: 0, width: 1200, height: Self.rowHeight))
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.14, alpha: 1).cgColor
+        layer?.backgroundColor = LibraryLook.bar
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Library Filter")
@@ -126,6 +126,12 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
 
     private func isOpen(_ section: FilterSection) -> Bool {
         model.libraryFilters?.isOpen(section) ?? false
+    }
+
+    func followTheme() {
+        layer?.backgroundColor = LibraryLook.bar
+        needsDisplay = true
+        update()
     }
 
     override func viewDidMoveToWindow() {
@@ -243,7 +249,7 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
             ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted())"
         let error = filters.error?.message
         set(status, error ?? (note.isEmpty ? count : note))
-        let color: NSColor = error == nil ? .secondaryLabelColor : .systemRed
+        let color: NSColor = error == nil ? LibraryLook.tokens.secondaryLabel.nsColor : .systemRed
         if status.textColor != color {
             status.textColor = color
         }
@@ -343,7 +349,7 @@ final class LibraryFilterBarView: NSView, NSTokenFieldDelegate {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        NSColor.separatorColor.setFill()
+        LibraryLook.tokens.divider.nsColor.setFill()
         CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).intersection(dirtyRect).fill()
     }
 }

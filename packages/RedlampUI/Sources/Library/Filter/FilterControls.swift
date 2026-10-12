@@ -94,11 +94,24 @@ func filterWidth(_ label: NSTextField) -> CGFloat {
 /// A small text label for the bar.
 @MainActor
 func filterLabel(_ text: String, secondary: Bool = true) -> NSTextField {
-    let label = NSTextField(labelWithString: text)
-    label.font = Typography.caption.nsFont
-    label.textColor = (secondary ? Palette.secondaryLabel : Palette.label).nsColor
-    label.lineBreakMode = .byTruncatingTail
-    return label
+    FilterLabel(text, secondary: secondary)
+}
+
+/// The bar's label, in the theme's label or secondary label colour as it changes.
+final class FilterLabel: NSTextField, ThemeFollowing {
+    private var secondary = true
+
+    convenience init(_ text: String, secondary: Bool) {
+        self.init(labelWithString: text)
+        self.secondary = secondary
+        font = Typography.caption.nsFont
+        lineBreakMode = .byTruncatingTail
+        followTheme()
+    }
+
+    func followTheme() {
+        textColor = (secondary ? LibraryLook.tokens.secondaryLabel : LibraryLook.tokens.label).nsColor
+    }
 }
 
 /// A pop-up of the bar, its menu's items calling back with their tags: `large`, the system's pop-up button at the
@@ -168,13 +181,14 @@ final class FilterPopUp: NSPopUpButton {
 }
 
 /// A button of the filter bar's row at the search field's size (LIB-45): a title, as an accessory bar's action
-/// button, or a symbol, as a push button, tinted with the accent colour while it's on.
-final class FilterBarButton: NSButton {
+/// button, or a symbol, as a push button, tinted while it's on as the system's controls are
+/// (`LibraryLook.nativeTint`).
+final class FilterBarButton: NSButton, ThemeFollowing {
     var onPress: (() -> Void)?
     var isOn = false {
         didSet {
             if isOn != oldValue {
-                contentTintColor = isOn ? .controlAccentColor : nil
+                followTheme()
                 setAccessibilityValue(isOn ? "on" : "off")
             }
         }
@@ -219,6 +233,10 @@ final class FilterBarButton: NSButton {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    func followTheme() {
+        contentTintColor = isOn ? LibraryLook.nativeTint : nil
     }
 
     /// The width its title or symbol needs.

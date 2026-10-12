@@ -7,7 +7,7 @@ import RedlampLibrary
 /// one field (dates by year, month and day, cameras, lenses, ISO, focal lengths, keywords, labels,
 /// folders and more), with All at the top. Choosing values in a column (⌘-click for several) narrows
 /// the columns after it; the counts come once the grid shows the photos.
-final class FilterColumnsView: NSView {
+final class FilterColumnsView: NSView, ThemeFollowing {
     private let model: EditorModel
     private var trackers: [Tracker] = []
     private var columns: [FilterColumnView] = []
@@ -16,7 +16,7 @@ final class FilterColumnsView: NSView {
         self.model = model
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.13, alpha: 1).cgColor
+        layer?.backgroundColor = LibraryLook.background
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Metadata")
@@ -30,6 +30,10 @@ final class FilterColumnsView: NSView {
 
     override var isFlipped: Bool {
         true
+    }
+
+    func followTheme() {
+        layer?.backgroundColor = LibraryLook.background
     }
 
     override func viewDidMoveToWindow() {
@@ -77,7 +81,7 @@ final class FilterColumnsView: NSView {
 }
 
 /// One metadata column: its header, which chooses what it counts by, and its rows.
-final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate {
+final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate, ThemeFollowing {
     private let model: EditorModel
     let index: Int
     private let header: FilterPopUp
@@ -97,7 +101,7 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         header = FilterPopUp(identifier: "library.filter.column.\(index)", tip: "Column \(index + 1)")
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.17, alpha: 1).cgColor
+        layer?.backgroundColor = LibraryLook.raised
         header.onChoose = { [weak self] tag in self?.headerChosen(tag) }
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("value"))
         column.resizingMask = .autoresizingMask
@@ -127,6 +131,11 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
 
     override var isFlipped: Bool {
         true
+    }
+
+    func followTheme() {
+        layer?.backgroundColor = LibraryLook.raised
+        outline.enumerateAvailableRowViews { row, _ in row.needsDisplay = true }
     }
 
     override func layout() {
@@ -290,6 +299,10 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         return row === all || row.value != nil
     }
 
+    func outlineView(_: NSOutlineView, rowViewForItem _: Any) -> NSTableRowView? {
+        ThemedRowView()
+    }
+
     func outlineViewItemDidExpand(_ notification: Notification) {
         if let row = notification.userInfo?["NSObject"] as? FilterColumnRow {
             expanded.insert(row.key)
@@ -347,11 +360,12 @@ final class FilterColumnOutline: NSOutlineView {
 }
 
 /// A row's name and count, and a label's colour before its name.
-final class FilterColumnCell: NSTableCellView {
+final class FilterColumnCell: NSTableCellView, ThemeFollowing {
     static let identifier = NSUserInterfaceItemIdentifier("filter.column.cell")
     private let name = filterLabel("", secondary: false)
     private let number = filterLabel("")
     private let swatch = CALayer()
+    private var isUnknown = false
 
     init() {
         super.init(frame: .zero)
@@ -372,7 +386,8 @@ final class FilterColumnCell: NSTableCellView {
 
     func show(_ title: String, count: Int, isUnknown: Bool, color: NSColor? = nil) {
         name.stringValue = title
-        name.textColor = (isUnknown ? Palette.tertiaryLabel : Palette.label).nsColor
+        self.isUnknown = isUnknown
+        followTheme()
         number.stringValue = count.formatted()
         setAccessibilityLabel("\(title), \(count)")
         CATransaction.begin()
@@ -381,6 +396,12 @@ final class FilterColumnCell: NSTableCellView {
         swatch.backgroundColor = color?.cgColor
         CATransaction.commit()
         needsLayout = true
+    }
+
+    func followTheme() {
+        let tokens = LibraryLook.tokens
+        name.textColor = (isUnknown ? tokens.tertiaryLabel : tokens.label).nsColor
+        number.textColor = tokens.secondaryLabel.nsColor
     }
 
     /// Clicks go on to the column, which chooses the row.

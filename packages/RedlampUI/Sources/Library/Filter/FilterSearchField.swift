@@ -94,7 +94,7 @@ final class FilterSearchField: NSTokenField {
     /// Lights a row's button while its row is open.
     func setOpen(attribute: Bool, metadata: Bool) {
         for (button, open) in [(attributeButton, attribute), (metadataButton, metadata)] {
-            let tint: NSColor = open ? .controlAccentColor : .secondaryLabelColor
+            let tint: NSColor = open ? LibraryLook.nativeTint : .secondaryLabelColor
             if button.contentTintColor != tint {
                 button.contentTintColor = tint
                 button.setAccessibilityValue(open ? "on" : "off")
