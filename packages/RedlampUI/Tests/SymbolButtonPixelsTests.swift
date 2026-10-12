@@ -427,7 +427,13 @@ struct SymbolButtonPixelsTests {
         ("slider.horizontal.3", 8.5, .semibold, 0), ("square.stack.3d.down.right.fill", 8, .regular, 0),
         ("ellipsis", 8, .bold, 0), ("star.fill", 6, .regular, 0), ("icloud.and.arrow.down", 14, .regular, 0),
         ("trash.fill", 8, .semibold, 0), ("hand.raised.fill", 8, .semibold, 0), ("star.fill", 9, .regular, 0),
-        ("cube", 9, .regular, 0), ("questionmark.circle", 10, .regular, 0),
+        ("cube", 9, .regular, 0), ("questionmark.circle", 10, .regular, 0), ("wand.and.stars", 11, .regular, 0),
+        ("clock.arrow.circlepath", 11, .regular, 0), ("camera.filters", 11, .regular, 0),
+        ("camera.aperture", 11, .regular, 0), ("dial.medium", 11, .regular, 0),
+        ("circle.dashed.inset.filled", 13, .regular, 0), ("square.stack.3d.down.right", 8, .regular, 0),
+        ("ellipsis", 8.5, .bold, 0), ("flag", 8.5, .regular, 0), ("checkmark", 8, .semibold, 0),
+        ("pencil", 8, .semibold, 0), ("exclamationmark.triangle.fill", 8, .semibold, 0), ("flag.fill", 8, .regular, 0),
+        ("xmark", 8, .bold, 0), ("slider.horizontal.3", 8, .semibold, 0),
     ]
 
     @Test func `every symbol drawn through Symbol.draw is its own shape, on whole pixels, at 1x and 2x`() throws {
@@ -513,34 +519,36 @@ struct SymbolButtonPixelsTests {
         }
     }
 
+    /// A row each look shows: a recipe group in the panels, Marked in the Library's source list.
+    private func row(in look: SidebarOutlineView.Look) -> SidebarNode {
+        look == .panel ? SidebarNode(.group("Favorites")) : SidebarNode(.source(SourceRow(source: .marked, count: 12)))
+    }
+
     @Test func `a row's icon and chevron are their own shape, on whole pixels, at 1x and 2x, in both looks`() throws {
         let model = EditorModel(engine: StubEngine())
         for scale in [1, 2] as [CGFloat] {
             for look in [SidebarOutlineView.Look.panel, .sourceList] {
-                let cell = SidebarCellView(
-                    node: SidebarNode(.group("Favorites")),
-                    model: model,
-                    look: look,
-                    rowSize: .medium,
-                )
+                let cell = SidebarCellView(node: row(in: look), model: model, look: look, rowSize: .medium)
                 let window = window(cell, size: CGSize(width: 220, height: look == .panel ? 24 : 28), scale: scale)
                 defer { window.contentView = nil }
                 let label = "the \(look) row at \(Int(scale))x"
                 if look == .panel {
                     let icon = try #require(views(in: cell).first { $0 is SymbolImageView })
                     try check(icon, "folder", pointSize: 11, weight: .regular)
+                    let chevron = try #require(views(in: cell)
+                        .first { String(describing: type(of: $0)) == "ChevronView" })
+                    try check(
+                        glyph(of: chevron), against: symbol("chevron.right", pointSize: 9, weight: .bold),
+                        label: "\(label): its chevron",
+                    )
                 } else {
                     let icon = try #require(views(in: cell).compactMap { $0 as? NSImageView }.first)
                     try check(
-                        glyph(of: icon), against: symbol("folder", pointSize: 13, weight: .regular, scale: .large),
+                        glyph(of: icon),
+                        against: symbol("circle.inset.filled", pointSize: 13, weight: .regular, scale: .large),
                         label: "\(label): its icon",
                     )
                 }
-                let chevron = try #require(views(in: cell).first { String(describing: type(of: $0)) == "ChevronView" })
-                try check(
-                    glyph(of: chevron), against: symbol("chevron.right", pointSize: 9, weight: .bold),
-                    label: "\(label): its chevron",
-                )
             }
         }
     }
@@ -726,12 +734,7 @@ struct SymbolButtonPixelsTests {
 
             let rows = NSView(frame: CGRect(x: 0, y: 0, width: 220, height: 52))
             for (index, look) in [SidebarOutlineView.Look.panel, .sourceList].enumerated() {
-                let cell = SidebarCellView(
-                    node: SidebarNode(.group("Favorites")),
-                    model: model,
-                    look: look,
-                    rowSize: .medium,
-                )
+                let cell = SidebarCellView(node: row(in: look), model: model, look: look, rowSize: .medium)
                 cell.frame = CGRect(x: 0, y: CGFloat(index) * 24, width: 220, height: look == .panel ? 24 : 28)
                 rows.addSubview(cell)
             }
