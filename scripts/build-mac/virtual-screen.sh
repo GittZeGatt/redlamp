@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Gives the build Mac a screen with its lid closed (ARC-15): a virtual screen from BetterDisplay,
-# created once and connected each time, so the tests that open windows and the regression suite
-# have a display without a monitor or a dummy plug. scripts/build-mac/setup.sh installs
+# created once and connected each time, at a Retina resolution, so the tests that open windows and
+# the regression suite have a display without a monitor or a dummy plug. scripts/build-mac/setup.sh installs
 # BetterDisplay, runs this, and has it run at each login
 # (~/Library/LaunchAgents/app.redlamp.build-mac.screen.plist).
 #
@@ -47,3 +47,11 @@ case "$identifiers" in
 esac
 "$CLI" set -name="$NAME" -connected=on
 printf '==> Virtual screen "%s": connected\n' "$NAME"
+# Retina, as the main Mac's screens are: tests that choose their references by the screen's scale
+# (HistogramGraphViewTests) then choose the same ones with the lid open or closed.
+if "$CLI" set -name="$NAME" -virtualScreenHiDPI=on && sleep 2 \
+    && "$CLI" set -name="$NAME" -resolution=2560x1440 -hiDPI=on; then
+    printf '==> Virtual screen "%s": Retina, looks like 2560 × 1440\n' "$NAME"
+else
+    echo "note: the virtual screen stays at 1x; choose a HiDPI resolution for it in BetterDisplay's menu" >&2
+fi
