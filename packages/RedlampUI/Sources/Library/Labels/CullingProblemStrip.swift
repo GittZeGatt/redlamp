@@ -8,9 +8,7 @@ final class CullingProblemStrip: NSView, ThemeFollowing {
     private let model: EditorModel
     private var tracker: Tracker?
     private let message = NSTextField(labelWithString: "")
-    private let symbol = NSImageView(
-        image: NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil) ?? NSImage(),
-    )
+    private let symbol = NSImageView(image: PixelSymbol.image("exclamationmark.triangle.fill", pointSize: 13))
     private var buttons: [NSButton] = []
 
     init(model: EditorModel) {
@@ -26,7 +24,7 @@ final class CullingProblemStrip: NSView, ThemeFollowing {
         let select = ActionButton(title: "Select") { [weak model] in model?.selectCullingProblem() }
         let retry = ActionButton(title: "Try Again") { [weak model] in _ = model?.retryCulling() }
         let close = ActionButton(title: "") { [weak model] in model?.closeCullingProblem() }
-        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")
+        close.image = PixelSymbol.image("xmark", pointSize: 13, accessibilityDescription: "Close")
         close.imagePosition = .imageOnly
         let buttons = [
             (select, "select", "Select the photos it wasn't saved to"),

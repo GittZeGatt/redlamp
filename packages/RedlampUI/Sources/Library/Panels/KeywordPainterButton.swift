@@ -11,7 +11,7 @@ final class KeywordPainterButton: NSButton {
         self.model = model
         super.init(frame: .zero)
         title = ""
-        image = NSImage(systemSymbolName: "paintbrush.pointed", accessibilityDescription: "Painter")
+        image = PixelSymbol.image("paintbrush.pointed", pointSize: 13, accessibilityDescription: "Painter")
         imagePosition = .imageOnly
         setAccessibilityLabel("Painter")
         setButtonType(.pushOnPushOff)

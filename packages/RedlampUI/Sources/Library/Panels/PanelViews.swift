@@ -168,7 +168,7 @@ enum PanelControls {
         _ symbol: String, _ description: String, identifier: String, action: @escaping @MainActor () -> Void,
     ) -> NSButton {
         let button = ActionButton(title: "", action: action)
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)
+        button.image = PixelSymbol.image(symbol, pointSize: 13, accessibilityDescription: description)
         button.isBordered = false
         button.toolTip = description
         button.setAccessibilityIdentifier(identifier)

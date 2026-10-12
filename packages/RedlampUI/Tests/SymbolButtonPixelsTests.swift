@@ -582,6 +582,81 @@ struct SymbolButtonPixelsTests {
         }
     }
 
+    @Test func `the Library's other symbol buttons and images are their own shape, on whole pixels, at 1x and 2x`(
+    ) throws {
+        let model = EditorModel(engine: StubEngine())
+        for scale in [1, 2] as [CGFloat] {
+            let root = NSView(frame: CGRect(x: 0, y: 0, width: 700, height: 200))
+            let field = FilterSearchField()
+            field.frame = CGRect(x: 12, y: 160, width: 600, height: FilterSearchField.height)
+            let token = KeywordToken()
+            token.frame = CGRect(x: 10, y: 120, width: 90, height: 20)
+            let strip = CullingProblemStrip(model: model)
+            strip.frame = CGRect(x: 120, y: 110, width: 560, height: 40)
+            let judging = ToolbarButton(symbol: "chart.bar.xaxis", identifier: "test.judging")
+            judging.frame = CGRect(x: 10, y: 80, width: 26, height: 22)
+            let palette = [NSColor(white: 0.1, alpha: 0.9), NSColor(white: 0.72, alpha: 0.9)]
+            let survey = ToolbarButton(symbol: "xmark.circle.fill", identifier: "test.survey", palette: palette)
+            survey.frame = CGRect(x: 70, y: 80, width: 22, height: 20)
+            let slider = ToolbarSlider(identifier: "test.slider")
+            slider.frame = CGRect(x: 100, y: 80, width: 200, height: 22)
+            let painter = KeywordPainterButton(model: nil)
+            painter.frame = CGRect(x: 310, y: 80, width: 32, height: 22)
+            let plus = PanelControls.symbolButton("plus", "Create", identifier: "test.plus") {}
+            plus.frame = CGRect(origin: CGPoint(x: 350, y: 80), size: plus.fittingSize)
+            [field, token, strip, judging, survey, slider, painter, plus].forEach(root.addSubview)
+            let window = window(root, size: root.frame.size, scale: scale)
+            defer { window.contentView = nil }
+            root.layoutSubtreeIfNeeded()
+            let suffix = "at \(Int(scale))x"
+            let glass = try #require(field.subviews.compactMap { $0 as? NSImageView }.first)
+            try check(glass, "magnifyingglass", pointSize: 13, weight: .regular)
+            let remove = try #require(token.subviews.compactMap { $0 as? NSButton }.first)
+            try check(remove, "xmark", pointSize: 8, weight: .bold)
+            let icon = try #require(views(in: strip).compactMap { $0 as? NSImageView }.first)
+            try check(icon, "exclamationmark.triangle.fill", pointSize: 13, weight: .regular)
+            let close = try #require(views(in: strip).compactMap { $0 as? NSButton }.first { $0.title.isEmpty })
+            try check(close, "xmark", pointSize: 13, weight: .regular)
+            let buttons: [(ToolbarButton, String, CGFloat, [NSColor]?)] = [
+                (judging, "chart.bar.xaxis", 13, nil), (survey, "xmark.circle.fill", 15, palette),
+            ]
+            for (button, name, size, colors) in buttons {
+                let image = try #require(button.subviews.compactMap { $0 as? NSImageView }.first)
+                let fitted = size * fitting(name, pointSize: size, in: image.frame.size)
+                try check(
+                    glyph(of: image), against: symbol(name, pointSize: fitted, weight: .regular, palette: colors),
+                    label: "\(name) in a toolbar button \(suffix)",
+                )
+            }
+            let icons = slider.subviews.compactMap { $0 as? NSImageView }.sorted { $0.frame.minX < $1.frame.minX }
+            try #require(icons.count == 2)
+            try check(icons[0], "photo", pointSize: 9, weight: .regular)
+            try check(icons[1], "photo", pointSize: 13, weight: .regular)
+            try check(
+                glyph(ofImageIn: painter), against: symbol("paintbrush.pointed", pointSize: 13, weight: .regular),
+                label: "the painter's button \(suffix)",
+            )
+            try check(plus, "plus", pointSize: 13, weight: .regular)
+            let cursor = KeywordPainter.cursor.image
+            let rep = try drawing(size: CGSize(width: 30, height: 30), scale: scale) {
+                cursor.draw(in: CGRect(origin: CGPoint(x: 4, y: 4), size: cursor.size))
+            }
+            try check(
+                glyph(rep, scale: scale),
+                against: symbol("paintbrush.pointed.fill", pointSize: 16, weight: .regular, palette: [.white]),
+                label: "the painter's pointer \(suffix)",
+            )
+        }
+    }
+
+    /// The share of `pointSize` an image view `size` across draws a symbol at: as it scales one down to fit.
+    private func fitting(_ name: String, pointSize: CGFloat, in size: CGSize) -> CGFloat {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular))
+        let own = CGSize(width: ceil(image?.size.width ?? 1), height: ceil(image?.size.height ?? 1))
+        return min(1, size.width / own.width, size.height / own.height)
+    }
+
     private func views(in root: NSView) -> [NSView] {
         root.subviews.flatMap { [$0] + views(in: $0) }
     }

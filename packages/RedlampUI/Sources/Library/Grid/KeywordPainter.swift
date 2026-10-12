@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import RedlampDesign
 import RedlampLibrary
 
 /// The painter (LIB-21), as Lightroom Classic's: a tool of the grid's toolbar and the Keywording panel that puts
@@ -91,11 +92,9 @@ public final class KeywordPainter {
 
     /// The pointer over the grid while it's out: a brush, its tip the point it paints.
     static let cursor: NSCursor = {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)
-            .applying(.init(paletteColors: [.white]))
-        guard let image = NSImage(systemSymbolName: "paintbrush.pointed.fill", accessibilityDescription: "Painter")?
-            .withSymbolConfiguration(configuration)
-        else { return .crosshair }
+        let image = PixelSymbol.image(
+            "paintbrush.pointed.fill", pointSize: 16, palette: [.white], accessibilityDescription: "Painter",
+        )
         return NSCursor(image: image, hotSpot: CGPoint(x: 1, y: image.size.height - 1))
     }()
 }

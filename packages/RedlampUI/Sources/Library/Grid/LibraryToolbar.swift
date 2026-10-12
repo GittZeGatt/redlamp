@@ -455,11 +455,12 @@ final class ToolbarButton: NSView, ThemeFollowing {
 
     private let image = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private let symbol: String?
     /// The symbol's own colours, which the button's state doesn't tint (Survey's ×).
     var palette: [NSColor]? {
         didSet {
             if palette != oldValue {
-                configureSymbol()
+                needsLayout = true
             }
         }
     }
@@ -469,13 +470,12 @@ final class ToolbarButton: NSView, ThemeFollowing {
         symbol: String? = nil, title: String? = nil, identifier: String, palette: [NSColor]? = nil,
         small: Bool = false,
     ) {
+        self.symbol = symbol
         self.palette = palette
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        if let symbol {
-            image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            configureSymbol()
+        if symbol != nil {
             addSubview(image)
         }
         if let title {
@@ -516,16 +516,23 @@ final class ToolbarButton: NSView, ThemeFollowing {
         update()
     }
 
-    private func configureSymbol() {
-        let size = NSImage.SymbolConfiguration(pointSize: palette == nil ? 13 : 15, weight: .regular)
-        image.symbolConfiguration = palette.map { size.applying(.init(paletteColors: $0)) } ?? size
-    }
-
     override func layout() {
         super.layout()
-        image.frame = bounds.insetBy(dx: 4, dy: 3)
+        image.frame = PixelGrid.snap(bounds.insetBy(dx: 4, dy: 3), scale: backingScale)
+        if let symbol {
+            image.image = Self.image(symbol, palette: palette, in: image.frame.size)
+        }
         let height = label.intrinsicContentSize.height
         label.frame = CGRect(x: 0, y: (bounds.height - height) / 2, width: bounds.width, height: height)
+    }
+
+    /// The symbol at 13 points (15 in its own colours), smaller where it doesn't fit `size`, as an image view scales
+    /// one down, at the middle of an image `size` across.
+    private static func image(_ symbol: String, palette: [NSColor]?, in size: CGSize) -> NSImage {
+        let pointSize: CGFloat = palette == nil ? 13 : 15
+        let own = PixelSymbol.size(symbol, pointSize: pointSize)
+        let fit = min(1, size.width / max(own.width, 1), size.height / max(own.height, 1))
+        return PixelSymbol.image(symbol, pointSize: pointSize * fit, size: size, palette: palette)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -585,9 +592,11 @@ final class ToolbarSlider: NSView, ThemeFollowing {
             layer.actions = LibraryGridCell.noActions
             self.layer?.addSublayer(layer)
         }
-        for (view, size) in [(small, 9.0), (large, 13.0)] {
-            view.image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
-            view.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
+        let icons: [(NSImageView, CGFloat, CGSize)] = [
+            (small, 9, CGSize(width: 16, height: 14)), (large, 13, CGSize(width: 20, height: 16)),
+        ]
+        for (view, size, canvas) in icons {
+            view.image = PixelSymbol.image("photo", pointSize: size, size: canvas)
             view.setAccessibilityElement(false)
             addSubview(view)
         }
@@ -634,8 +643,12 @@ final class ToolbarSlider: NSView, ThemeFollowing {
         filled.frame = CGRect(x: left, y: bounds.midY - 2, width: width * fraction, height: 4)
         knob.frame = CGRect(x: left + width * fraction - 7, y: bounds.midY - 7, width: 14, height: 14)
         CATransaction.commit()
-        small.frame = CGRect(x: 2, y: bounds.midY - 7, width: 16, height: 14)
-        large.frame = CGRect(x: bounds.width - 22, y: bounds.midY - 8, width: 20, height: 16)
+        let scale = backingScale
+        small.frame = PixelGrid.snap(CGRect(x: 2, y: bounds.midY - 7, width: 16, height: 14), scale: scale)
+        large.frame = PixelGrid.snap(
+            CGRect(x: bounds.width - 22, y: bounds.midY - 8, width: 20, height: 16),
+            scale: scale,
+        )
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

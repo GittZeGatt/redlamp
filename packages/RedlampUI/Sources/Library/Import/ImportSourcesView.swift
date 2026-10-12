@@ -79,7 +79,7 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
     /// A borderless symbol button at the sidebar's foot, as the system's sidebars have them.
     private static func barButton(_ symbol: String, _ title: String) -> NSButton {
         let button = NSButton()
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+        button.image = PixelSymbol.image(symbol, pointSize: 13, accessibilityDescription: title)
         button.isBordered = false
         button.toolTip = title
         button.setAccessibilityLabel(title)
@@ -154,10 +154,10 @@ final class ImportSourceRow: NSTableCellView {
         box.action = #selector(toggled)
         box.setAccessibilityLabel("Import from \(source.source.name)")
         box.setAccessibilityIdentifier("import.source." + source.source.name)
-        let symbol = NSImageView(image: NSImage(
-            systemSymbolName: source.isCard ? "sdcard" : "folder",
+        let symbol = NSImageView(image: PixelSymbol.image(
+            source.isCard ? "sdcard" : "folder", pointSize: 13,
             accessibilityDescription: source.isCard ? "Card" : "Folder",
-        ) ?? NSImage())
+        ))
         symbol.contentTintColor = .secondaryLabelColor
         symbol.toolTip = source.isCard ? "Card" : source.source.url.path
         let name = NSTextField(labelWithString: source.source.name)
@@ -172,7 +172,7 @@ final class ImportSourceRow: NSTableCellView {
         text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         var top: [NSView] = [box, symbol, name]
         if source.isCard, source.source.medium.isEjectable, !source.isEjected, source.progress == nil {
-            ejectButton.image = NSImage(systemSymbolName: "eject", accessibilityDescription: "Eject")
+            ejectButton.image = PixelSymbol.image("eject", pointSize: 13, accessibilityDescription: "Eject")
             ejectButton.isBordered = false
             ejectButton.contentTintColor = .secondaryLabelColor
             ejectButton.toolTip = "Eject \(source.source.name)"

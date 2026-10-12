@@ -514,7 +514,7 @@ final class KeywordRowView: NSTableCellView {
         check.allowsMixedState = true
         check.target = self
         check.action = #selector(checked)
-        arrow.image = NSImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: "Show Photos")
+        arrow.image = PixelSymbol.image("arrow.right.circle", pointSize: 13, accessibilityDescription: "Show Photos")
         arrow.isBordered = false
         arrow.contentTintColor = Palette.secondaryLabel.nsColor
         arrow.target = self

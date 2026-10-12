@@ -109,9 +109,10 @@ final class KeywordToken: NSView {
         name.lineBreakMode = .byTruncatingMiddle
         partial.font = PanelControls.noteFont
         partial.textColor = Palette.secondaryLabel.nsColor
-        let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
-        remove.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove")?
-            .withSymbolConfiguration(configuration)
+        remove.image = PixelSymbol.image(
+            "xmark", pointSize: 8, weight: .bold, size: CGSize(width: Self.removeSide, height: Self.removeSide),
+            accessibilityDescription: "Remove",
+        )
         remove.isBordered = false
         remove.imagePosition = .imageOnly
         remove.contentTintColor = Palette.secondaryLabel.nsColor
