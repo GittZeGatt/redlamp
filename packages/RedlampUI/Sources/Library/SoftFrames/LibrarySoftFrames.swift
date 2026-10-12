@@ -142,10 +142,13 @@ public final class LibrarySoftFrames {
         let measurer = measurer(engine: engine, index: index, service: service)
         let asked = measuring.map { $0.source == source && $0.setting == setting } ?? false
         let unindexed = model.library.showsIndexIDs ? [] : model.items.map(\.url)
-        measuring = (source, setting)
+        // A folder listed from the disk finds its photos' IDs in the index, a moment before the query engine has them.
+        let live = unindexed.isEmpty ? nil : service.core?.live
         refreshing?.cancel()
         refreshing = Task { [weak self] in
             try? await Task.sleep(for: Self.settle)
+            guard !Task.isCancelled else { return }
+            await live?.settle()
             guard !Task.isCancelled,
                   let found = try? await engine.softFrames(of: source, setting: setting) else { return }
             let ids = unindexed.isEmpty ? [:] : await LibraryService.indexIDs(of: unindexed, in: index)
@@ -157,6 +160,7 @@ public final class LibrarySoftFrames {
             }
             if !asked, let candidates = try? await engine.softFrameCandidates(of: source, setting: setting) {
                 measurer.measure(candidates)
+                measuring = (source, setting)
             }
         }
     }
