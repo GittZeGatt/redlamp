@@ -64,12 +64,11 @@ final class FilterSearchField: NSTokenField {
 
     private static func button(_ symbol: String, identifier: String, tip: String) -> NSButton {
         let button = NSButton(
-            image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip) ?? NSImage(),
+            image: PixelSymbol.image(symbol, pointSize: 13, size: CGSize(width: buttonWidth, height: buttonWidth)),
             target: nil, action: nil,
         )
         button.isBordered = false
         button.imagePosition = .imageOnly
-        button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
         button.contentTintColor = .secondaryLabelColor
         button.refusesFirstResponder = true
         button.toolTip = tip
@@ -85,11 +84,9 @@ final class FilterSearchField: NSTokenField {
         var x = bounds.width - 5
         for button in [metadataButton, attributeButton, clearButton] {
             x -= Self.buttonWidth
-            button.frame = CGRect(
-                x: x,
-                y: (height - Self.buttonWidth) / 2,
-                width: Self.buttonWidth,
-                height: Self.buttonWidth,
+            button.frame = PixelGrid.snap(
+                CGRect(x: x, y: (height - Self.buttonWidth) / 2, width: Self.buttonWidth, height: Self.buttonWidth),
+                scale: backingScale,
             )
         }
     }

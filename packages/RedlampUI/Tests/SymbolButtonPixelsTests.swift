@@ -3,10 +3,10 @@ import Foundation
 import Testing
 @testable import RedlampUI
 
-/// The small symbol buttons of the sidebars' headers (LIB-45): each glyph drawn at the symbol's own size and shape,
-/// its strokes on whole pixels, at 1x as well as 2x. For a 1x screen AppKit draws a symbol stretched, and a button
-/// cell centres one by its alignment rect, which can leave it on half a pixel: the source list header's + came out
-/// 11.5 pixels wide and 8.7 tall, its upright blurred across four columns.
+/// The small symbol buttons of the sidebars' headers and of the Library's filter field (LIB-45): each glyph drawn at
+/// the symbol's own size and shape, its strokes on whole pixels, at 1x as well as 2x. For a 1x screen AppKit draws a
+/// symbol stretched, and a button cell centres one by its alignment rect, which can leave it on half a pixel: the
+/// source list header's + came out 11.5 pixels wide and 8.7 tall, its upright blurred across four columns.
 @MainActor
 @Suite(.serialized)
 struct SymbolButtonPixelsTests {
@@ -309,12 +309,28 @@ struct SymbolButtonPixelsTests {
         }
     }
 
+    @Test func `the filter field's buttons are the symbols' own shape, on whole pixels, at 1x and 2x`() throws {
+        for scale in [1, 2] as [CGFloat] {
+            let root = NSView(frame: CGRect(x: 0, y: 0, width: 800, height: 40))
+            let field = FilterSearchField()
+            root.addSubview(field)
+            field.frame = CGRect(x: 12, y: 6, width: 600, height: FilterSearchField.height)
+            let window = window(root, size: root.frame.size, scale: scale)
+            defer { window.contentView = nil }
+            try check(
+                field.attributeButton, "line.3.horizontal.decrease.circle", pointSize: 13, weight: .regular,
+            )
+            try check(field.metadataButton, "tablecells", pointSize: 13, weight: .regular)
+            try check(field.clearButton, "xmark.circle.fill", pointSize: 13, weight: .regular)
+        }
+    }
+
     private func views(in root: NSView) -> [NSView] {
         root.subviews.flatMap { [$0] + views(in: $0) }
     }
 
-    /// Writes the source list's header under the pointer and the panel look's sidebar at 1x and 2x as PNGs to the
-    /// folder in `REDLAMP_POLISH_SHOTS`, each called `REDLAMP_POLISH_SHOTS_PREFIX`-name-scale.png.
+    /// Writes the source list's header under the pointer, the panel look's sidebar and the filter field at 1x and
+    /// 2x as PNGs to the folder in `REDLAMP_POLISH_SHOTS`, each called `REDLAMP_POLISH_SHOTS_PREFIX`-name-scale.png.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_POLISH_SHOTS"] != nil))
     func `pictures of the buttons`() throws {
         let folder = try #require(ProcessInfo.processInfo.environment["REDLAMP_POLISH_SHOTS"])
@@ -354,6 +370,14 @@ struct SymbolButtonPixelsTests {
             let listWindow = window(list, size: CGSize(width: 260, height: 900), scale: scale)
             defer { listWindow.contentView = nil }
             try save(list, "panel-sidebar")
+
+            let root = NSView(frame: CGRect(x: 0, y: 0, width: 624, height: 40))
+            let field = FilterSearchField()
+            root.addSubview(field)
+            field.frame = CGRect(x: 12, y: 6, width: 600, height: FilterSearchField.height)
+            let fieldWindow = window(root, size: root.frame.size, scale: scale)
+            defer { fieldWindow.contentView = nil }
+            try save(root, "filter-field")
         }
     }
 }
