@@ -17,7 +17,7 @@ final class FilterToggle: NSButton {
     var symbol: String? {
         didSet {
             if symbol != oldValue {
-                image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+                image = symbol.map { Self.image($0) }
             }
         }
     }
@@ -33,7 +33,7 @@ final class FilterToggle: NSButton {
         font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         self.title = title ?? ""
         if let symbol {
-            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            image = Self.image(symbol)
             imagePosition = title == nil ? .imageOnly : .imageLeading
         }
         self.symbol = symbol
@@ -66,9 +66,13 @@ final class FilterToggle: NSButton {
         state = isOn ? .on : .off
         if let color, let symbol {
             let tint = isOn ? color : color.withAlphaComponent(0.55)
-            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-                .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [tint]))
+            image = Self.image(symbol, palette: [tint])
         }
+    }
+
+    /// The symbol at a small control's size, 11 points, on whole pixels.
+    private static func image(_ symbol: String, palette: [NSColor]? = nil) -> NSImage {
+        PixelSymbol.image(symbol, pointSize: 11, palette: palette)
     }
 
     override func accessibilityValue() -> Any? {
@@ -197,7 +201,7 @@ final class FilterBarButton: NSButton, ThemeFollowing {
     var symbol: String? {
         didSet {
             if symbol != oldValue {
-                image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+                image = symbol.map { PixelSymbol.image($0, pointSize: 13) }
             }
         }
     }
@@ -219,8 +223,9 @@ final class FilterBarButton: NSButton, ThemeFollowing {
         setButtonType(.momentaryPushIn)
         title = ""
         if let symbol {
-            image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            image = PixelSymbol.image(symbol, pointSize: 13)
             imagePosition = .imageOnly
+            imageScaling = .scaleNone
         }
         self.symbol = symbol
         target = self

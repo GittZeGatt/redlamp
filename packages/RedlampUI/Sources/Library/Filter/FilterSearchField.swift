@@ -46,8 +46,7 @@ final class FilterSearchField: NSTokenField {
         cell?.isScrollable = true
         cell?.wraps = false
         (cell as? Cell)?.trailing = 3 * Self.buttonWidth + 6
-        glass.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
-        glass.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+        glass.image = PixelSymbol.image("magnifyingglass", pointSize: 13, size: CGSize(width: 16, height: 16))
         glass.contentTintColor = .secondaryLabelColor
         addSubview(glass)
         for button in [clearButton, attributeButton, metadataButton] {

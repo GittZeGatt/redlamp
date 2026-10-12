@@ -545,6 +545,43 @@ struct SymbolButtonPixelsTests {
         }
     }
 
+    @Test func `the filter bar's toggles and sort arrow are their own shape, on whole pixels, at 1x and 2x`() throws {
+        for scale in [1, 2] as [CGFloat] {
+            let root = NSView(frame: CGRect(x: 0, y: 0, width: 160, height: 40))
+            let flag = FilterToggle(symbol: "flag.fill", identifier: "test.flag", tip: "Picked")
+            let red = FilterToggle(symbol: "circle.fill", color: .systemRed, identifier: "test.red", tip: "Red")
+            let direction = FilterBarButton(identifier: "test.direction", symbol: "arrow.up", tip: "Ascending")
+            flag.frame = CGRect(x: 10, y: 9, width: 24, height: 22)
+            red.frame = CGRect(x: 40, y: 9, width: 24, height: 22)
+            direction.frame = CGRect(x: 80, y: 6, width: 32, height: 28)
+            [flag, red, direction].forEach(root.addSubview)
+            let window = window(root, size: root.frame.size, scale: scale)
+            defer { window.contentView = nil }
+            let suffix = "at \(Int(scale))x"
+            try check(
+                glyph(ofImageIn: flag), against: symbol("flag.fill", pointSize: 11, weight: .regular),
+                label: "flag.fill \(suffix)",
+            )
+            for on in [false, true] {
+                red.isOn = on
+                let tint = on ? NSColor.systemRed : NSColor.systemRed.withAlphaComponent(0.55)
+                try check(
+                    glyph(ofImageIn: red), against: symbol(
+                        "circle.fill",
+                        pointSize: 11,
+                        weight: .regular,
+                        palette: [tint],
+                    ),
+                    label: "circle.fill \(on ? "on" : "off") \(suffix)",
+                )
+            }
+            try check(
+                glyph(ofImageIn: direction), against: symbol("arrow.up", pointSize: 13, weight: .regular),
+                label: "arrow.up \(suffix)",
+            )
+        }
+    }
+
     private func views(in root: NSView) -> [NSView] {
         root.subviews.flatMap { [$0] + views(in: $0) }
     }
