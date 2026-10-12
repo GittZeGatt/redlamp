@@ -32,11 +32,16 @@
     ///   opens What's New from the Help menu playing its film (`film`), on its highlights
     ///   (`highlights`) or on a page (`page1`, `page2`, …). `filmstrip=shown` keeps the filmstrip
     ///   up with a photo selected, `inspector=end` scrolls the inspector to its end, `extend=<n>`
-    ///   selects from the open photo to the nth, as ⇧-click does, `type=<identifier>` clicks a value
+    ///   selects from the open photo to the nth, or to the one with that file name, as ⇧-click does,
+    ///   `wait=<seconds>` pauses the script, and `wait=library` until the library has opened and the
+    ///   launch has reopened what it showed, `type=<identifier>` clicks a value
     ///   field to type in it, such as `type=slider.basic.exposure.value`, `off=<panel>[+<panel>]`
     ///   switches Develop panels off, `scrollers=flash` shows every window's scrollers twice a second
     ///   so a capture finds them showing, `settings=open` opens Settings, and `filmstrip-menu=<n>` opens
     ///   the context menu of the nth photo on screen; the menu holds the app, so it comes last.
+    ///   `import=<folder>[;<destination>[;<backup>]]` opens the import window on a folder as on a card
+    ///   whose photos are in its `DCIM`, importing to the destination and backing up to the backup, and
+    ///   `lightroom=<catalog>` opens Import from Lightroom Classic on a catalog, as Choose… picks it.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
@@ -129,6 +134,20 @@
                 await beginTyping(in: value)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
+            case "extend" where Int(value) == nil:
+                guard let index = model.items.firstIndex(where: { $0.url.lastPathComponent == value }) else {
+                    return true
+                }
+                model.applyDebugCommand(key, String(index))
+            case "wait" where value == "library":
+                for _ in 0 ..< 300 {
+                    if model.library.service?.isReady == true, !model.librarySources.isReopening {
+                        break
+                    }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            case "wait":
+                try? await Task.sleep(for: .seconds(Double(value) ?? 1))
             case "mask":
                 await createMask(value, model: model)
             case "mask-select":
@@ -152,6 +171,10 @@
                 model.sendFeedback(value == "error" ? model.openErrorReport : nil)
             case "palette":
                 await drivePalette(value, model: model)
+            case "import":
+                await openImport(value, model: model)
+            case "lightroom":
+                await openLightroom(catalog: URL(fileURLWithPath: value), model: model)
             case "quit":
                 NSApp.terminate(nil)
             default:
@@ -268,6 +291,45 @@
 
         private static func openMenuWindow(titled title: String) {
             AppDelegate.performMenuItem(titled: title)
+        }
+
+        /// The import window on `<folder>[;<destination>[;<backup>]]`, the folder shown as a card in a reader
+        /// is, with the standard folders and the camera's names.
+        private static func openImport(_ value: String, model: EditorModel) async {
+            let folders = value.split(separator: ";").map { URL(fileURLWithPath: String($0), isDirectory: true) }
+            guard let card = folders.first else { return }
+            model.applyDebugCommand("action", ShortcutAction.importPhotos.rawValue)
+            guard let window = await shown({ ImportWindowController.current }) else { return }
+            if folders.count > 1 {
+                window.prepare(
+                    destination: folders[1],
+                    backup: folders.count > 2 ? folders[2] : nil,
+                    folders: "{date:yyyy}/{date:yyyy-MM-dd}",
+                    names: "{name}",
+                )
+            }
+            try? await window.add(card: card)
+        }
+
+        /// Import from Lightroom Classic, given `catalog` as Choose…'s open panel would give it.
+        private static func openLightroom(catalog: URL, model: EditorModel) async {
+            model.applyDebugCommand("action", ShortcutAction.importFromLightroom.rawValue)
+            await shown { LightroomWindowController.current }?.choose(catalog: catalog)
+        }
+
+        /// The window controller `current` gives once its window shows, moved to the capture screen.
+        @discardableResult
+        private static func shown<Controller: NSWindowController>(_ current: () -> Controller?) async -> Controller? {
+            for _ in 0 ..< 50 {
+                if let controller = current(), let window = controller.window, window.isVisible {
+                    if let captureScreen {
+                        center(window, on: captureScreen)
+                    }
+                    return controller
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            return nil
         }
 
         /// Overlay scrollers show only while scrolling: every window's are shown again and again, as long as
