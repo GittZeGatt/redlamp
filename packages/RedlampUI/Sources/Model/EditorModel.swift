@@ -2019,6 +2019,14 @@ public final class EditorModel {
                 if let action = ShortcutAction(rawValue: value) {
                     perform(action)
                 }
+            case "source":
+                // `all-photographs`, `marked` and the Library section's other entries as their keys name them,
+                // `collection:<path>`, or `folder:<path>`.
+                if value.hasPrefix("folder:") {
+                    showFolder(URL(fileURLWithPath: String(value.dropFirst("folder:".count)), isDirectory: true))
+                } else if let source = LibrarySource(key: value.hasPrefix("collection:") ? value : "library:" + value) {
+                    librarySources.show(source)
+                }
             case "before":
                 showBefore = value == "1"
             case "compare":

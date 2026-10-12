@@ -119,6 +119,17 @@ final class LibraryGridContentView: NSView {
         grid.scrollView.reflectScrolledClipView(clip)
     }
 
+    /// Where a grid made by `make` or found by `grid(in:)` is scrolled to, as `scroll(_:to:)` takes it, a
+    /// fraction of its height, and the fraction a row of its cells takes; nil for a view that isn't one.
+    @MainActor public static func position(of view: NSView) -> (fraction: Double, row: Double)? {
+        guard let grid = view as? LibraryGridView else { return nil }
+        let clip = grid.scrollView.contentView
+        let height = max(grid.content.frame.height - clip.bounds.height, 0)
+        guard height > 0 else { return (0, 0) }
+        let row = grid.gridLayout.cellSize.height + grid.gridLayout.spacing
+        return (clip.bounds.minY / height, row / height)
+    }
+
     /// The grid's thumbnails in memory, in bytes.
     @MainActor public static func memoryUsed(_ view: NSView) -> Int {
         (view as? LibraryGridView)?.thumbnails.memoryUsed ?? 0

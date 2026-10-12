@@ -42,6 +42,14 @@
     ///   `import=<folder>[;<destination>[;<backup>]]` opens the import window on a folder as on a card
     ///   whose photos are in its `DCIM`, importing to the destination and backing up to the backup, and
     ///   `lightroom=<catalog>` opens Import from Lightroom Classic on a catalog, as Choose… picks it.
+    ///   `scroll=<to>[:<seconds>]` scrolls the Library grid to `<to>`, a fraction of its height (`0.5`) or a
+    ///   number of rows from where it is (`+40`, `-12`), over the seconds given (2), easing in and out, a step
+    ///   for each frame the display draws; `find=<text>` types the text at the end of the filter bar's, a key
+    ///   every 120 ms, showing the bar first; and `source=<source>` shows one of the Library section's entries
+    ///   by its key (`all-photographs`, `marked`), a collection (`collection:<path>`) or a folder
+    ///   (`folder:<path>`). A command's value is everything after its first `=`, so `find=rating>=4` types
+    ///   `rating>=4`. Every command but `wait`, `scroll`, `find`, `source` and `quit` waits for the photo
+    ///   open in Develop first, which a source shown in the Library may leave none of.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
     /// - `--window-size <width>x<height>` sizes the editor's content in points and centres it
@@ -87,15 +95,20 @@
             RunLoop.main.add(timer, forMode: .common)
         }
 
+        /// The commands that don't wait for a photo to open in Develop.
+        private static let libraryCommands: Set = ["wait", "scroll", "find", "source", "quit"]
+
         private static func run(_ script: String, model: EditorModel) {
             let commands = script.split(separator: ",").compactMap { command -> (String, String)? in
-                let parts = command.split(separator: "=").map(String.init)
+                let parts = command.split(separator: "=", maxSplits: 1).map(String.init)
                 return parts.count == 2 ? (parts[0], parts[1]) : nil
             }
             Task { @MainActor in
                 for (key, value) in commands {
-                    // Edits only stick once the image has finished opening, or failed to.
-                    while (model.info == nil && model.errorMessage == nil) || model.isLoading {
+                    // Edits only stick once the image has finished opening, or failed to; the Library's
+                    // sources open none in Develop.
+                    while !libraryCommands.contains(key),
+                          (model.info == nil && model.errorMessage == nil) || model.isLoading {
                         try? await Task.sleep(for: .milliseconds(100))
                     }
                     if await runAppCommand(key, value, model: model) {
@@ -132,6 +145,10 @@
                 await openSettings()
             case "type":
                 await beginTyping(in: value)
+            case "scroll":
+                await scrollGrid(value)
+            case "find":
+                await find(value, model: model)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "extend" where Int(value) == nil:
@@ -409,6 +426,37 @@
             inspector.reflectScrolledClipView(clip)
         }
 
+        /// The Library grid scrolled as `<to>[:<seconds>]` says, where it should be at each frame a capture records.
+        private static func scrollGrid(_ value: String) async {
+            let parts = value.split(separator: ":").map(String.init)
+            guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+                  let grid = LibraryGridViews.grid(in: window), let position = LibraryGridViews.position(of: grid),
+                  let amount = parts.first.flatMap(Double.init)
+            else { return }
+            let byRows = parts[0].hasPrefix("+") || parts[0].hasPrefix("-")
+            let from = position.fraction
+            let to = min(max(byRows ? from + amount * position.row : amount, 0), 1)
+            let seconds = parts.count > 1 ? Double(parts[1]) ?? 2 : 2
+            await DisplayFrames.run(in: window, for: seconds) { progress in
+                LibraryGridViews.scroll(grid, to: from + (to - from) * (1 - cos(progress * .pi)) / 2)
+            }
+        }
+
+        /// Types `text` at the end of the filter bar's text a key at a time, at a typist's pace.
+        private static func find(_ text: String, model: EditorModel) async {
+            guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+                  let filters = model.libraryFilters
+            else { return }
+            if !filters.isBarShown {
+                filters.setBarShown(true)
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            for character in text {
+                guard LibraryFilterBars.type(String(character), in: window) else { return }
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+        }
+
         private static func showFilmstripMenu(at index: Int) async {
             try? await Task.sleep(for: .seconds(1))
             guard let root = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView,
@@ -496,6 +544,42 @@
 
         private static func canvases(in view: NSView) -> [CanvasMetalView] {
             (view as? CanvasMetalView).map { [$0] } ?? view.subviews.flatMap(canvases)
+        }
+    }
+
+    /// Calls a step at each frame a window's display draws, with the fraction of the time given that will have gone
+    /// when the frame shows, the last call with 1.
+    @MainActor
+    private final class DisplayFrames: NSObject {
+        private let seconds: Double
+        private let step: (Double) -> Void
+        private var started: CFTimeInterval?
+        private var finished: CheckedContinuation<Void, Never>?
+
+        private init(seconds: Double, step: @escaping (Double) -> Void) {
+            self.seconds = seconds
+            self.step = step
+        }
+
+        static func run(in window: NSWindow, for seconds: Double, _ step: @escaping (Double) -> Void) async {
+            let frames = DisplayFrames(seconds: max(seconds, 0), step: step)
+            // The link holds its target until it's invalidated.
+            let link = window.displayLink(target: frames, selector: #selector(frame(_:)))
+            await withCheckedContinuation { continuation in
+                frames.finished = continuation
+                link.add(to: .main, forMode: .common)
+            }
+        }
+
+        @objc private func frame(_ link: CADisplayLink) {
+            let started = started ?? link.timestamp
+            self.started = started
+            let progress = seconds > 0 ? min((link.targetTimestamp - started) / seconds, 1) : 1
+            step(progress)
+            guard progress >= 1 else { return }
+            link.invalidate()
+            finished?.resume()
+            finished = nil
         }
     }
 #endif
