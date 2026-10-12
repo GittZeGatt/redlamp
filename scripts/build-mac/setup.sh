@@ -16,7 +16,8 @@
 # In order: Homebrew, which installs the Command Line Tools; the clone at ~/src/build-mac/redlamp,
 # put on origin/main; the tools in scripts/build-mac/Brewfile; Xcode, from the App Store (mas) when
 # the App Store's version is the main Mac's, or else from Apple's developer downloads (xcodes, which
-# asks for an Apple Account), with its licence, first launch, Metal toolchain and iOS SDK; PATH for
+# asks for an Apple Account), with its licence, first launch, Metal toolchain and an iOS simulator
+# runtime, which compiling the app's icon needs; PATH for
 # commands run over SSH; mise's tools (mise.toml); the sample raws (2.1 GB); `mise run generate`;
 # and the settings a Mac left on its own needs (--no-settings leaves them out): no sleep on the
 # charger or with the lid closed, a virtual screen at each login (virtual-screen.sh), no screen
@@ -212,8 +213,12 @@ xcode() {
             xcodebuild -downloadComponent MetalToolchain || sudo xcodebuild -downloadComponent MetalToolchain
             ;;
     esac
-    if ! xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
-        say "Downloading the iOS platform: the workspace builds the Bench app's framework for iOS too"
+    # Compiling the app's Icon Composer icon (AppIcon.icon) needs an iOS simulator runtime, even for
+    # the Mac app, and the workspace builds the Bench app's framework for iOS.
+    local runtimes
+    runtimes="$(xcrun simctl list runtimes 2>/dev/null || true)"
+    if [ "$(printf '%s\n' "$runtimes" | grep -c '^iOS ')" = 0 ]; then
+        say "Downloading the iOS platform with its simulator runtime, several GB"
         xcodebuild -downloadPlatform iOS || sudo xcodebuild -downloadPlatform iOS
     fi
     # Lets the test runners and debugger start without asking for authorization.
@@ -379,7 +384,7 @@ report() {
         "macOS" "$(sw_vers -productVersion) (main Mac: $MACOS_VERSION)" \
         "Xcode" "$(xcode_field "$XCODE_APP" CFBundleShortVersionString) ($(xcode_field "$XCODE_APP" ProductBuildVersion)) (main Mac: $XCODE_VERSION, $XCODE_BUILD)" \
         "Metal toolchain" "${metal:-not installed}" \
-        "iOS SDK" "$(xcrun --sdk iphoneos --show-sdk-version 2>/dev/null || echo missing)" \
+        "iOS simulator" "$(xcrun simctl list runtimes 2>/dev/null | awk '/^iOS / { last = $1 " " $2 } END { print last ? last : "none" }')" \
         "Python" "$(python3 --version 2>&1)"
     (cd "$CLONE" && mise ls --current 2>/dev/null | sed 's/^/    /') || true
     if [ "${#NOTES[@]}" -gt 0 ]; then
