@@ -116,6 +116,7 @@ private struct AppearanceSettings: View {
                 .formFooter()
             }
         }
+        .overlayScrollers()
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
     }

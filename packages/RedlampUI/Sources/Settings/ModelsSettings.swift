@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -41,6 +42,7 @@ struct ModelsSettings: View {
                 }
             }
         }
+        .overlayScrollers()
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
         .task { await refresh() }

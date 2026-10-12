@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampRecipes
 import SwiftUI
 
@@ -41,6 +42,7 @@ struct RecipeImportSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
             }
+            .overlayScrollers()
             HStack {
                 Spacer()
                 Button("OK", action: dismiss).keyboardShortcut(.defaultAction)

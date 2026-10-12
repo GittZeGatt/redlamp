@@ -1,4 +1,5 @@
 import Observation
+import RedlampDesign
 import RedlampLibrary
 import SwiftUI
 
@@ -62,6 +63,7 @@ struct LibrarySettings: View {
                 }
             }
         }
+        .overlayScrollers()
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
         .disabled(!model.isAvailable)

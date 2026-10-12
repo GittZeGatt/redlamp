@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampEngineAPI
 import RedlampRecipes
 import SwiftUI
@@ -202,6 +203,7 @@ struct CreateRecipeSheet: View {
                 TextField("Name", text: $name)
                 TextField("List", text: $group)
             }
+            .overlayScrollers()
             Text("Settings to include").font(.subheadline).foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
@@ -221,6 +223,7 @@ struct CreateRecipeSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .overlayScrollers()
             HStack {
                 Button("Check All") { includes = Set(RecipeSettingGroup.allCases) }
                 Button("Check None") { includes = [] }
@@ -293,6 +296,7 @@ struct LookTableSpaceAccessory: View {
             }
             .disabled(!choice.isForCameraFootage)
         }
+        .overlayScrollers()
         .padding(12)
         .frame(width: 420)
     }

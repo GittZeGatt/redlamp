@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampLibrary
 
 /// The import window's From (LIB-27): the cards on this Mac and the folders added, each with a box to
@@ -41,10 +42,8 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
         table.dataSource = self
         table.delegate = self
         table.setAccessibilityIdentifier("import.sources")
-        let scroll = NSScrollView()
+        let scroll = OverlayScrollView()
         scroll.documentView = table
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         addButton.target = self
         addButton.action = #selector(addFolder)

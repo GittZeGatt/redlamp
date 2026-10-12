@@ -234,6 +234,7 @@ private struct PaletteResults: View {
                 }
                 .padding(6)
             }
+            .overlayScrollers()
             .scrollIndicators(.never)
             // An inset rather than an overlay: the list still scrolls under the bar, but
             // scrolling to the highlighted row keeps it clear of the bar.

@@ -1,3 +1,4 @@
+import RedlampDesign
 import SwiftUI
 
 /// Settings › Shortcuts (LIB-36): every action in the command list behind the menus, the palette and the keys,
@@ -44,6 +45,7 @@ struct ShortcutsSettings: View {
                     }
                 }
             }
+            .overlayScrollers()
             .frame(height: 400)
             Text("""
             Click a key to record another in its place, and press the new one. Keys with ⌘ are the menus’; \

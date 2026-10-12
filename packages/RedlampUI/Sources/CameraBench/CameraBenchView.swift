@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import RedlampRecipes
 import SwiftUI
@@ -87,10 +88,12 @@ struct CameraBenchView: View {
                     }
                     .tag(mode.id)
                 }
+                .overlayScrollers()
                 .frame(width: 280)
                 Divider()
                 if let mode = model.selected {
                     ScrollView { detail(mode).padding(20) }
+                        .overlayScrollers()
                 } else {
                     Text("No raw files found.").frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -142,6 +145,7 @@ struct CameraBenchView: View {
                     }
                 }
             }
+            .overlayScrollers()
         }
     }
 
@@ -239,6 +243,7 @@ struct CameraBenchView: View {
                 Text(model.reportJSON).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .overlayScrollers()
             HStack {
                 Button("Reset Contributor ID") { model.resetContributor() }
                 Spacer()

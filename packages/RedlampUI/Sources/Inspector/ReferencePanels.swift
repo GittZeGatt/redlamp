@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -415,6 +416,7 @@ struct ProcessVersion: View {
                     PlannedToolCard(tool: model.activeTool)
                 }
             }
+            .overlayScrollers()
             .scrollIndicators(.automatic)
 
             Rectangle().fill(Theme.divider).frame(height: 1)

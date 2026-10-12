@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampLibrary
 import UniformTypeIdentifiers
 
@@ -76,10 +77,8 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
         let rootsContainer = FlippedView()
         rootsContainer.translatesAutoresizingMaskIntoConstraints = false
         rootsContainer.addSubview(roots)
-        let rootsScroll = NSScrollView()
+        let rootsScroll = OverlayScrollView()
         rootsScroll.documentView = rootsContainer
-        rootsScroll.hasVerticalScroller = true
-        rootsScroll.autohidesScrollers = true
         rootsScroll.drawsBackground = false
         NSLayoutConstraint.activate([
             roots.topAnchor.constraint(equalTo: rootsContainer.topAnchor),
@@ -98,9 +97,8 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
         reportView.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         reportView.textContainerInset = NSSize(width: 6, height: 6)
         reportView.setAccessibilityIdentifier("lightroom.report")
-        let scroll = NSScrollView()
+        let scroll = OverlayScrollView()
         scroll.documentView = reportView
-        scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         reportView.autoresizingMask = [.width]
         reportView.isVerticallyResizable = true

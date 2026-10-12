@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampDocument
 import RedlampLibrary
 
@@ -15,7 +16,7 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     let model: ImportWindowModel
     let thumbnails: ImportThumbnails?
     let collectionView = ImportCollectionView()
-    private let scrollView = NSScrollView()
+    private let scrollView = OverlayScrollView()
     private let layout = NSCollectionViewFlowLayout()
     private let sourceName = NSTextField(labelWithString: "")
     private let sourceDetail = NSTextField(labelWithString: "")
@@ -61,8 +62,6 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         collectionView.setAccessibilityIdentifier("import.photos")
         collectionView.onKey = { [weak self] event in self?.handle(event) ?? false }
         scrollView.documentView = collectionView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,

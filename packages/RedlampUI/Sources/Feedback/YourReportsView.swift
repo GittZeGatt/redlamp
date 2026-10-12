@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import SwiftUI
 
 /// Help › Your Reports: what this Mac has sent and what's waiting to be, each opening on GitHub,
@@ -81,6 +82,7 @@ struct YourReportsView: View {
                         }
                     }
                 }
+                .overlayScrollers()
             }
             HStack {
                 Toggle("Check for replies and changes", isOn: $history.checksForReplies)

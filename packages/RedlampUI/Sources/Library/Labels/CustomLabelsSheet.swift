@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampDocument
 import RedlampLibrary
 
@@ -107,8 +108,7 @@ enum CustomLabelsSheet {
 
     /// `rows` in a scroll view `height` points tall, from the top.
     private static func scrolled(_ rows: NSStackView, height: CGFloat) -> NSView {
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
+        let scroll = OverlayScrollView()
         scroll.drawsBackground = false
         scroll.contentView = TopClipView()
         rows.translatesAutoresizingMaskIntoConstraints = false

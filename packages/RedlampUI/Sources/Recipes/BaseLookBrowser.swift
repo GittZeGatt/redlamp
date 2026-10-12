@@ -1,4 +1,5 @@
 import CoreGraphics
+import RedlampDesign
 import RedlampEngineAPI
 import RedlampRecipes
 import SwiftUI
@@ -73,6 +74,7 @@ struct BaseLookBrowser: View {
             }
             .padding(14)
         }
+        .overlayScrollers()
         .frame(width: 420, height: 520)
         .task(id: model.info?.url) { await renderThumbnails(groups.sections.flatMap(\.looks)) }
         .onDisappear { model.previewRecipe(nil) }

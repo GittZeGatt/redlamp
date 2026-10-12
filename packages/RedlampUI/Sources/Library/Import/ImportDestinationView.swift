@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampLibrary
 
 /// The import window's To (LIB-27): the destination, the folder template and the name template (each a
@@ -130,8 +131,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             field.translatesAutoresizingMaskIntoConstraints = false
             field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
+        let scroll = OverlayScrollView()
         scroll.drawsBackground = false
         let document = ImportFlippedView()
         document.addSubview(stack)

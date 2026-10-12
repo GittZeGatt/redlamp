@@ -1,4 +1,5 @@
 import CoreGraphics
+import RedlampDesign
 import RedlampEngineAPI
 import RedlampRecipes
 import SwiftUI
@@ -73,6 +74,7 @@ public struct FilmCatalogView: View {
                     )
                 }
             }
+            .overlayScrollers()
         }
         .task(id: model.info?.url) {
             previews = [:]

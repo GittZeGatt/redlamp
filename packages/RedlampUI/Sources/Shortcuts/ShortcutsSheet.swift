@@ -1,3 +1,4 @@
+import RedlampDesign
 import SwiftUI
 
 /// Lightroom's ⌘/ shortcut overlay: every shortcut, grouped, generated from the registry.
@@ -43,6 +44,7 @@ struct ShortcutsSheet: View {
                         PaletteKeysGroup()
                     }
                 }
+                .overlayScrollers()
             }
             .padding(24)
             .frame(maxWidth: 1080, maxHeight: 720)

@@ -1,3 +1,4 @@
+import RedlampDesign
 import SwiftUI
 
 /// Where a report belongs: the areas on the left, their features on the right, and a search
@@ -55,6 +56,7 @@ struct AreaPicker: View {
             List(FeedbackArea.catalog, selection: $areaID) { area in
                 Label(area.title, systemImage: area.symbol).tag(area.id)
             }
+            .overlayScrollers()
             .frame(width: 220)
             Divider()
             VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +70,7 @@ struct AreaPicker: View {
                     List(area.features) { feature in
                         row(feature.title, detail: nil, id: feature.id)
                     }
+                    .overlayScrollers()
                 }
             }
         }
@@ -87,6 +90,7 @@ struct AreaPicker: View {
                 List(found) { topic in
                     row(topic.feature.title, detail: topic.area.title, id: topic.id)
                 }
+                .overlayScrollers()
             }
         }
     }

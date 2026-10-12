@@ -81,7 +81,7 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
     private let model: EditorModel
     let index: Int
     private let header: FilterPopUp
-    private let scroll = NSScrollView()
+    private let scroll = OverlayScrollView()
     let outline = FilterColumnOutline()
     private let all = FilterColumnRow(key: "\u{0}all", title: "All", count: 0, value: nil)
     private(set) var rows: [FilterColumnRow] = []
@@ -115,8 +115,6 @@ final class FilterColumnView: NSView, NSOutlineViewDataSource, NSOutlineViewDele
         outline.delegate = self
         outline.setAccessibilityIdentifier("library.filter.column.\(index).rows")
         scroll.documentView = outline
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         addSubview(header)
         addSubview(scroll)

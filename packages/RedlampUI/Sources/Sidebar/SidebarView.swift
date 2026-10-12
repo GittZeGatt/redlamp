@@ -1,4 +1,5 @@
 import RedlampCanvas
+import RedlampDesign
 import RedlampDocument
 import RedlampRecipes
 import SwiftUI
@@ -118,6 +119,7 @@ import SwiftUI
                 }
             }
         }
+        .overlayScrollers()
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .font(Theme.labelFont)

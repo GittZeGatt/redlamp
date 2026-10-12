@@ -390,7 +390,7 @@ enum PanelSheets {
 final class CodeReplacementsEditor: NSObject, NSTextViewDelegate, NSTextFieldDelegate {
     private static let size = NSSize(width: 480, height: 220)
     let text = NSTextView(frame: NSRect(origin: .zero, size: CodeReplacementsEditor.size))
-    let scroll = NSScrollView()
+    let scroll = OverlayScrollView()
     let summary = NSTextField(wrappingLabelWithString: "")
     let trial = NSTextField()
     let expansion = NSTextField(labelWithString: "")
@@ -422,7 +422,6 @@ final class CodeReplacementsEditor: NSObject, NSTextViewDelegate, NSTextFieldDel
         text.delegate = self
         text.setAccessibilityIdentifier("codes.text")
         scroll.documentView = text
-        scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.widthAnchor.constraint(equalToConstant: Self.size.width).isActive = true
         scroll.heightAnchor.constraint(equalToConstant: Self.size.height).isActive = true

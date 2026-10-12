@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -198,6 +199,7 @@ private struct FeedbackForm: View {
                     .formFooter()
                 }
             }
+            .overlayScrollers()
             .formStyle(.grouped)
 
             Divider()
@@ -303,6 +305,7 @@ private struct WordsField: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
             TextEditor(text: $text)
+                .overlayScrollers()
                 .font(.body)
                 .frame(height: height)
                 .scrollContentBackground(.hidden)
@@ -423,6 +426,7 @@ private struct ReportPreview: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }
+            .overlayScrollers()
             .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
             HStack {
                 Button("Copy") {
@@ -511,6 +515,7 @@ private struct FeedbackSent: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                 }
+                .overlayScrollers()
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
             }
             HStack {

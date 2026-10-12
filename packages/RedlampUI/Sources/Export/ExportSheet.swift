@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampDocument
 import RedlampEngineAPI
 import SwiftUI
@@ -144,6 +145,7 @@ public struct ExportSheet: View {
                 .formFooter()
             }
         }
+        .overlayScrollers()
         .formStyle(.grouped)
     }
 

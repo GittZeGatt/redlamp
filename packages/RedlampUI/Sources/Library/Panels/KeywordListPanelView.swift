@@ -15,7 +15,7 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     private let model: EditorModel
     private let filter = NSSearchField()
     private let outline = KeywordOutlineView()
-    private let scroll = NSScrollView()
+    private let scroll = OverlayScrollView()
     private let empty = PanelControls.note("No keywords yet")
     /// The bar's −: deletes the keyword of the row chosen.
     private var remove = NSButton()
@@ -82,8 +82,6 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         menu.delegate = self
         outline.menu = menu
         scroll.documentView = outline
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.heightAnchor.constraint(equalToConstant: Self.height).isActive = true
         let spacer = NSView()

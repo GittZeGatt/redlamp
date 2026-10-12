@@ -32,7 +32,7 @@ import RedlampLibrary
 /// - Out of sight (Develop or the loupe is shown) it does nothing: changes to the photos wait, and it
 ///   reloads once shown.
 final class LibraryGridView: NSView, NSViewToolTipOwner {
-    let scrollView = NSScrollView()
+    let scrollView = OverlayScrollView()
     let content = LibraryGridContentView()
     private(set) var gridLayout = LibraryGridLayout()
     let model: EditorModel
@@ -130,9 +130,6 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         scrollView.autoresizingMask = [.width, .height]
         scrollView.documentView = content
         scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.scrollerStyle = .overlay
         scrollView.contentView.postsBoundsChangedNotifications = true
         addSubview(scrollView)
         NotificationCenter.default.addObserver(

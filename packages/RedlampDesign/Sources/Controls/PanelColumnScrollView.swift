@@ -11,6 +11,7 @@ open class PanelColumnScrollView: NSView {
     public init(spacing: CGFloat = 0, insets: NSEdgeInsets = NSEdgeInsets(), views: [NSView]) {
         document = PanelColumnDocumentView(spacing: spacing, insets: insets, views: views)
         super.init(frame: .zero)
+        scrollView.drawsBackground = false
         scrollView.documentView = document
         addSubview(scrollView)
         document.onHeightChange = { [weak self] in self?.needsLayout = true }

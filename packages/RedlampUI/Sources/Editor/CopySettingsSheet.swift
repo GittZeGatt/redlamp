@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -39,6 +40,7 @@ struct CopySettingsSheet: View {
                 .toggleStyle(.checkbox)
                 .padding(.vertical, 2)
             }
+            .overlayScrollers()
             .frame(minHeight: 380)
             HStack {
                 Button("Check All") { selection = .everything }

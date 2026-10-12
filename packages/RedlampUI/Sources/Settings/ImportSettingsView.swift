@@ -1,3 +1,4 @@
+import RedlampDesign
 import SwiftUI
 
 /// Settings › Import (LIB-27): what the app does around a card. The import window opens on a card as
@@ -24,6 +25,7 @@ struct ImportSettingsView: View {
                 .formFooter()
             }
         }
+        .overlayScrollers()
         .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
     }

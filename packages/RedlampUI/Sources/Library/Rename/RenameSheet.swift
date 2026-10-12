@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampLibrary
 
 /// Rename Photos… (LIB-25, LIB-26), a sheet on the editor window: the template (a preset, typed, or tokens put in
@@ -139,9 +140,8 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = false
         table.setAccessibilityIdentifier("rename.preview")
-        let scroll = NSScrollView()
+        let scroll = OverlayScrollView()
         scroll.documentView = table
-        scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true

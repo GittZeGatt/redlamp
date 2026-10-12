@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -142,6 +143,7 @@ struct StackWorkspaceView: View {
             }
             .padding(10)
         }
+        .overlayScrollers()
         .frame(height: 96)
         .disabled(workspace.isMerging)
     }
