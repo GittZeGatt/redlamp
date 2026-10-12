@@ -108,6 +108,10 @@ enum ImageFile {
 
     /// Writes `image` to `url`, replacing any file there that isn't one of `sources` or another photo.
     static func write(_ image: CGImage, to url: URL, quality: Double = 0.92, protecting sources: [URL] = []) throws {
+        if url.pathExtension.lowercased() == ExportFormat.jxl.fileExtension {
+            try writeJPEGXL(image, to: url, quality: quality, protecting: sources)
+            return
+        }
         let type: UTType = switch url.pathExtension.lowercased() {
         case "png": .png
         case "tif", "tiff": .tiff
@@ -127,6 +131,21 @@ enum ImageFile {
             guard CGImageDestinationFinalize(destination)
             else { throw CLIError(description: "failed to write \(url.path)") }
         }
+    }
+
+    /// JPEG XL, which ImageIO doesn't write, encoded as the app exports it, at the render's bit depth.
+    private static func writeJPEGXL(_ image: CGImage, to url: URL, quality: Double, protecting sources: [URL]) throws {
+        var settings = ExportSettings()
+        settings.setFormat(.jxl)
+        settings.quality = Int((quality * 100).rounded())
+        let data: Data
+        do {
+            data = try ImageExporter.encode(image, settings: settings, metadata: tag)
+        } catch let error as ExportError {
+            throw CLIError(description: error.localizedDescription)
+        }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try place(at: url, protecting: sources) { try data.write(to: $0) }
     }
 
     /// Writes an encoded image (a mask's PNG, say) to `url` as `write` does, pixels unchanged.

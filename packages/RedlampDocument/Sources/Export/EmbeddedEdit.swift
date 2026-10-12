@@ -187,7 +187,7 @@ extension EmbeddedEdit {
     }
 
     /// One black pixel in `image`'s pixel format and colour space.
-    private static func pixel(like image: CGImage) -> CGImage? {
+    static func pixel(like image: CGImage) -> CGImage? {
         let bytesPerRow = (image.bitsPerPixel + 7) / 8
         guard let space = image.colorSpace,
               let provider = CGDataProvider(data: Data(count: bytesPerRow) as CFData)

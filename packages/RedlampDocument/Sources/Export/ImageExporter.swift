@@ -16,8 +16,8 @@ public enum ImageExporter {
         reading files: any FileInspecting,
     ) throws {
         try place(at: url, source: source, reading: files) { temporary in
-            if settings.appliesFileSizeLimit {
-                let data = try encodeWithinLimit(image, settings: settings, metadata: metadata)
+            if settings.appliesFileSizeLimit || settings.format.isJPEGXL {
+                let data = try encode(image, settings: settings, metadata: metadata)
                 do {
                     try data.write(to: temporary)
                 } catch {
@@ -127,13 +127,16 @@ public enum ImageExporter {
         quality: Double,
         metadata: [CFString: Any],
     ) throws -> Data {
+        let properties = properties(settings: settings, quality: quality, metadata: metadata)
+        if settings.format.isJPEGXL {
+            return try JPEGXLEncoder.encode(image, settings: settings, quality: quality, properties: properties)
+        }
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             data as CFMutableData, settings.format.typeIdentifier as CFString, 1, nil,
         ) else {
             throw ExportError.cannotEncode(settings.format)
         }
-        let properties = properties(settings: settings, quality: quality, metadata: metadata)
         try finish(destination, image, properties, settings.format)
         return data as Data
     }
@@ -171,6 +174,12 @@ public enum ImageExporter {
         }
         if settings.format == .tiff {
             tiff[kCGImagePropertyTIFFCompression] = settings.tiffCompression.tag
+        }
+        // JPEG XL keeps a resolution only in its Exif, where ImageIO writes one only from these.
+        if settings.format.isJPEGXL {
+            tiff[kCGImagePropertyTIFFXResolution] = settings.sizing.ppi
+            tiff[kCGImagePropertyTIFFYResolution] = settings.sizing.ppi
+            tiff[kCGImagePropertyTIFFResolutionUnit] = 2
         }
         properties[kCGImagePropertyTIFFDictionary] = tiff
         // The pixels are rendered upright, whatever the source's orientation tag said. ImageIO

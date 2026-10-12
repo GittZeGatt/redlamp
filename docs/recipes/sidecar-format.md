@@ -457,7 +457,9 @@ When writing a sidecar for Redlamp:
 
 An exported file carries the edit that made it in its XMP, as Lightroom's exports carry its develop settings, so the file says how it was made and the edit can be recovered from it. Exports are new files: Redlamp still never writes into a photo.
 
-Exports in every format (JPEG, HEIC, AVIF, PNG and TIFF) carry the edit when the Export dialog's Metadata is All or All Except Location. With None it is left out, like the rest of the metadata. An edit holds no location, so both settings embed the same edit.
+Exports in every format (JPEG, HEIC, AVIF, JPEG XL, PNG and TIFF) carry the edit when the Export dialog's Metadata is All or All Except Location. With None it is left out, like the rest of the metadata. An edit holds no location, so both settings embed the same edit.
+
+ImageIO reads JPEG XL but doesn't write it, so libjxl writes Redlamp's JPEG XL files. Their XMP and Exif are what ImageIO writes into a PNG with the same metadata, in the file's `xml ` and `Exif` boxes, uncompressed and ahead of the image: JPEG XL has no box for IPTC, and ImageIO keeps a PNG's IPTC fields in its XMP.
 
 The properties are in the namespace `https://redlamp.app/ns/edit/1.0/`, which Redlamp writes with the prefix `redlamp`:
 
@@ -477,7 +479,7 @@ The properties are in the namespace `https://redlamp.app/ns/edit/1.0/`, which Re
 
 - **Only the recipe.** Snapshots, history, rating, flag and label stay in the sidecar. Mask bitmaps aren't embedded: an AI mask, a depth map or a spot's picked region keeps its `bitmap` (`sha256`, `width` and `height`) but not its pixels. Applied to the photo it came from, the recipe finds them in that photo's sidecar, as `masks/<sha256>.png`; anywhere else a missing bitmap covers nothing, as it does in a sidecar. Brush strokes and range masks are in the JSON, so they come back whole.
 - **Size.** An edit is embedded when its XMP takes at most 256,000 bytes. Most edits take a few kilobytes, and a long brush stroke adds about 10 KB. A bigger edit is left out rather than cut short. A JPEG's main XMP segment holds about 64 KB; when the edit doesn't fit there, ImageIO writes `Recipe` in Extended XMP segments, as part 3 of the XMP specification describes, and keeps the other properties in the main segment. A reader without Extended XMP sees the versions but not the recipe. ImageIO doesn't make the segments' GUID the MD5 digest of their content that the specification asks for, so a reader that checks the digest misses the recipe too. The edit counts toward a file size limit, as the rest of the metadata does.
-- **The rest of the metadata is unchanged.** ImageIO keeps some metadata only in XMP: lens details and a rating, and, in HEIC and AVIF, every IPTC field. Redlamp writes the edit beside them, and first checks, on a file of one pixel with the same metadata, that everything else reads back as it does without the edit. If it wouldn't, the edit is left out.
+- **The rest of the metadata is unchanged.** ImageIO keeps some metadata only in XMP: lens details and a rating, and, in HEIC, AVIF and JPEG XL, every IPTC field. Redlamp writes the edit beside them, and first checks, on a file of one pixel with the same metadata, that everything else reads back as it does without the edit. If it wouldn't, the edit is left out.
 - **Reading it back.** Find `Recipe` by its namespace, whatever prefix the file gives it, and decode it as a recipe. An edit with a `version` or `processVersion` newer than the reader's is treated as a newer sidecar is; see [Versions and compatibility](#versions-and-compatibility). In Redlamp, `EmbeddedEdit.read` returns the recipe and its format version, or nothing when the file has no edit or it can't be read.
 
 ## The schema

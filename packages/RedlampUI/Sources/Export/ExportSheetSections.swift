@@ -158,8 +158,10 @@ struct ExportFileSection: View {
         case .jpeg: "Lossy and 8-bit: opens everywhere."
         case .heic: "Lossy, about half the size of a JPEG of the same quality. 10-bit avoids banding in skies."
         case .avif: "Lossy, smaller still than HEIC, and read by current browsers. 10-bit avoids banding in skies."
+        case .jxl: "Lossy, 8 or 16 bits, in smaller files than JPEG at the same quality. Read by macOS, Safari and Chrome."
         case .png: "Lossless: every pixel kept exactly, in larger files."
         case .tiff: "Lossless, for printing and further editing. LZW and ZIP shrink the file without losing anything."
+        case .jxlLossless: "Lossless: every pixel kept exactly, 8 or 16 bits, in smaller files than PNG. Read by macOS, Safari and Chrome."
         }
     }
 }

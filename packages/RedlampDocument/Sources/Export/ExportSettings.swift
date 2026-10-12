@@ -1,18 +1,20 @@
 import Foundation
 import RedlampEngineAPI
 
-/// The file formats Redlamp exports, all written by ImageIO.
+/// The file formats Redlamp exports: JPEG XL with libjxl (`JPEGXLEncoder`), since ImageIO reads it
+/// but doesn't write it, and the rest with ImageIO.
 public enum ExportFormat: String, Codable, Sendable, Hashable, CaseIterable {
-    case jpeg, heic, avif, png, tiff
+    case jpeg, heic, avif, jxl, png, tiff, jxlLossless
 
-    public static let lossy: [ExportFormat] = [.jpeg, .heic, .avif]
-    public static let lossless: [ExportFormat] = [.png, .tiff]
+    public static let lossy: [ExportFormat] = [.jpeg, .heic, .avif, .jxl]
+    public static let lossless: [ExportFormat] = [.png, .tiff, .jxlLossless]
 
     public var name: String {
         switch self {
         case .jpeg: "JPEG"
         case .heic: "HEIC"
         case .avif: "AVIF"
+        case .jxl, .jxlLossless: "JPEG XL"
         case .png: "PNG"
         case .tiff: "TIFF"
         }
@@ -23,6 +25,7 @@ public enum ExportFormat: String, Codable, Sendable, Hashable, CaseIterable {
         case .jpeg: "jpg"
         case .heic: "heic"
         case .avif: "avif"
+        case .jxl, .jxlLossless: "jxl"
         case .png: "png"
         case .tiff: "tif"
         }
@@ -33,13 +36,18 @@ public enum ExportFormat: String, Codable, Sendable, Hashable, CaseIterable {
         case .jpeg: "public.jpeg"
         case .heic: "public.heic"
         case .avif: "public.avif"
+        case .jxl, .jxlLossless: "public.jpeg-xl"
         case .png: "public.png"
         case .tiff: "public.tiff"
         }
     }
 
     public var isLossless: Bool {
-        self == .png || self == .tiff
+        self == .png || self == .tiff || self == .jxlLossless
+    }
+
+    var isJPEGXL: Bool {
+        self == .jxl || self == .jxlLossless
     }
 
     /// Bits per channel the file can hold. HEIC and AVIF store 10 bits from a 16-bit render.
@@ -47,7 +55,7 @@ public enum ExportFormat: String, Codable, Sendable, Hashable, CaseIterable {
         switch self {
         case .jpeg: [8]
         case .heic, .avif: [8, 10]
-        case .png, .tiff: [8, 16]
+        case .jxl, .png, .tiff, .jxlLossless: [8, 16]
         }
     }
 
@@ -55,9 +63,10 @@ public enum ExportFormat: String, Codable, Sendable, Hashable, CaseIterable {
         self == .tiff ? 16 : 8
     }
 
-    /// ImageIO's AVIF encoder fails at quality 1.0, and files stop changing above 0.99.
+    /// ImageIO's AVIF encoder fails at quality 1.0, and files stop changing above 0.99. libjxl
+    /// encodes quality 1.0 losslessly.
     var maximumQuality: Double {
-        self == .avif ? 0.99 : 1
+        self == .avif || self == .jxl ? 0.99 : 1
     }
 }
 

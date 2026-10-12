@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 let usage = """
 usage: redlamp info <image>
-       redlamp render <image> -o <output.{jpg,png,tif,heic}> [options]
+       redlamp render <image> -o <output.{jpg,png,tif,heic,jxl}> [options]
        redlamp recipe <command> …   recipes and look development (redlamp recipe help)
        redlamp stack <frames…> …    merge a focus stack (redlamp stack --help)
        redlamp mask <image> …       write an AI mask as a PNG (redlamp mask --help)

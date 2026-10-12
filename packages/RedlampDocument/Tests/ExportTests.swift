@@ -196,8 +196,10 @@ struct ExportWriterTests {
         (ExportFormat.jpeg, 8, 8), (.jpeg, 16, 8),
         (.heic, 8, 8), (.heic, 16, 10),
         (.avif, 8, 8), (.avif, 16, 10),
+        (.jxl, 8, 8), (.jxl, 16, 16),
         (.png, 8, 8), (.png, 16, 16),
         (.tiff, 8, 8), (.tiff, 16, 16),
+        (.jxlLossless, 8, 8), (.jxlLossless, 16, 16),
     ])
     func `each format keeps its type, depth, profile and resolution`(
         format: ExportFormat,
@@ -495,7 +497,7 @@ struct ExportSettingsTests {
         #expect(decoded.sizing.longEdge == ExportSizing().longEdge)
         #expect(decoded.naming == ExportNaming())
 
-        let newer = #"{"format":"jxl","metadata":"copyrightOnly"}"#
+        let newer = #"{"format":"bmp","metadata":"copyrightOnly"}"#
         let fallback = try JSONDecoder().decode(ExportSettings.self, from: Data(newer.utf8))
         #expect(fallback.format == .jpeg)
         #expect(fallback.metadata == .all)
