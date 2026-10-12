@@ -45,7 +45,7 @@ export default async function ComparePage() {
           <p className="eyebrow">Compare</p>
           <h1 className="font-display mt-3 text-[clamp(2.2rem,5vw,3.4rem)] leading-[1.05] text-paper">{title}</h1>
           <p className="mt-5 text-[17px] leading-relaxed text-mute">
-            The Lightroom features photographers know, and where Redlamp stands on each. Redlamp is in pre-alpha, so much
+            The Lightroom features photographers know, and where Redlamp stands on each. Redlamp is in alpha, so much
             of the list is still ahead; each row says plainly what works, what&apos;s being built and what isn&apos;t
             coming. Features that work haven&apos;t yet been compared with Lightroom&apos;s results unless a row says so.
           </p>

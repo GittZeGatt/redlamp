@@ -9,8 +9,8 @@ sources = [
 
 This manual explains how to develop raw photos with Redlamp: what each panel and tool is for, how to use it, and every control it has, with its range, its default and its shortcut. It describes Redlamp at commit `{{commit}}` ({{date}}), after the 0.2.4 pre-alpha release, on an Apple silicon Mac running macOS 26 or later.
 
-::: caution Pre-alpha
-Redlamp is pre-alpha: features are added and changed between releases. Everything here is true of the commit above. Where a later Redlamp differs, the app is right and this manual is out of date.
+::: caution Alpha
+Redlamp is in alpha: features are added and changed between releases. Everything here is true of the commit above. Where a later Redlamp differs, the app is right and this manual is out of date.
 :::
 
 ## Who it's for

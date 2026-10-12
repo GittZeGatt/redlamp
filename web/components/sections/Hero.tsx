@@ -9,7 +9,7 @@ import { site } from "@/lib/site";
 
 export async function Hero() {
   const release = await latestRelease();
-  // The pill already names the stage, so the version drops its -prealpha suffix.
+  // The pill already names the stage, so the version drops its stage suffix.
   const version = release?.version?.split("-")[0];
   const status = `${site.status.stage}${version ? ` ${version}` : ""} · ${site.status.platform}`;
   return (
