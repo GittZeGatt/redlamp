@@ -258,9 +258,8 @@ private struct FilmstripPin: View {
         )) {
             Image(systemName: pinned ? "pin.fill" : "pin")
                 .frame(width: 26, height: 22)
-                .foregroundStyle(pinned ? Color.accentColor : Theme.secondaryLabel)
-                .background(Capsule().fill(pinned ? Theme.selection : .clear))
-                .contentShape(Capsule())
+                .foregroundStyle(Theme.secondaryLabel)
+                .contentShape(Rectangle())
         }
         .toggleStyle(.button)
         .buttonStyle(.plain)
