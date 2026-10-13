@@ -11,9 +11,12 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     /// The window sheets attach to: the one in front, or the editor's when Redlamp isn't the
     /// active app (scripted captures and the regression suite run it in the background).
     public static var frontWindow: NSWindow? {
-        NSApp.keyWindow ?? NSApp.mainWindow
+        NSApp.keyWindow ?? NSApp.mainWindow ?? harnessWindow
             ?? NSApp.windows.first { $0.isVisible && $0.windowController is EditorWindowController }
     }
+
+    /// The window the harness shows the library's sheets over while it runs in the background, with no key window.
+    @_spi(Harness) public weak static var harnessWindow: NSWindow?
 
     private let model: EditorModel
     private let theme: ThemeSettings

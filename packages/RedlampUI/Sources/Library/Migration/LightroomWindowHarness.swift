@@ -14,6 +14,16 @@ import RedlampLibrary
         model.locate(path, at: url)
     }
 
+    /// Import, as its button does.
+    func pressImport() {
+        model.startImport()
+    }
+
+    /// Undo Import, as its button does.
+    func pressUndoImport() {
+        model.undo()
+    }
+
     /// The catalog is read and its report shown.
     var isReported: Bool {
         model.phase == .reported && model.report != nil

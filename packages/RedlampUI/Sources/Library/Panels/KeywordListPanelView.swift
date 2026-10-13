@@ -354,6 +354,23 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     // MARK: - Sheets
 
     private func editKeyword(_ path: KeywordPath) {
+        KeywordSheets.edit(path, panels: panels, model: model)
+    }
+
+    private func createKeyword(inside parent: KeywordPath?) {
+        KeywordSheets.create(inside: parent, panels: panels, model: model)
+    }
+
+    private func mergeKeyword(_ path: KeywordPath) {
+        KeywordSheets.merge(path, panels: panels, model: model)
+    }
+}
+
+/// The Keyword List's sheets, Edit Keyword…, Create Keyword… and Merge Into…: opened from its rows' menus and buttons,
+/// and by the harness.
+@MainActor
+enum KeywordSheets {
+    static func edit(_ path: KeywordPath, panels: LibraryPanels, model: EditorModel) {
         guard let keyword = panels.keywordList?[path] else { return }
         let sheet = PanelSheet(title: "Edit Keyword", model: model)
         let name = NSTextField(string: path.name)
@@ -382,7 +399,7 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         for box in boxes {
             sheet.add(nil, box)
         }
-        sheet.begin(button: "Save", first: name) { [weak self] in
+        sheet.begin(button: "Save", first: name) { [weak panels] in
             var edited = options
             edited.synonyms = synonyms.stringValue.split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces)
@@ -395,28 +412,28 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
             edited.isCategory = boxes[5].state == .on
             let newName = name.stringValue.trimmingCharacters(in: .whitespaces)
             guard !newName.isEmpty else { return false }
-            _ = self?.panels.edit(path, name: newName, options: edited)
+            _ = panels?.edit(path, name: newName, options: edited)
             return true
         }
     }
 
-    private func createKeyword(inside parent: KeywordPath?) {
+    static func create(inside parent: KeywordPath?, panels: LibraryPanels, model: EditorModel) {
         let sheet = PanelSheet(title: "Create Keyword", model: model)
         let name = NSTextField(string: "")
         name.placeholderString = parent == nil ? "Places > Portugal > Lisbon" : "Name"
         name.setAccessibilityIdentifier("createKeyword.name")
         name.widthAnchor.constraint(equalToConstant: 260).isActive = true
         sheet.add(parent.map { "Inside “\($0.displayName)”:" } ?? "Name:", name)
-        sheet.begin(button: "Create", first: name) { [weak self] in
+        sheet.begin(button: "Create", first: name) { [weak panels] in
             let text = name.stringValue.trimmingCharacters(in: .whitespaces)
             guard !text.isEmpty else { return false }
             let entered = parent.map { $0.names.joined(separator: " > ") + " > " + text } ?? text
-            _ = self?.panels.create(entered)
+            _ = panels?.create(entered)
             return true
         }
     }
 
-    private func mergeKeyword(_ path: KeywordPath) {
+    static func merge(_ path: KeywordPath, panels: LibraryPanels, model: EditorModel) {
         guard let list = panels.keywordList else { return }
         let sheet = PanelSheet(title: "Merge Keyword", model: model)
         let targets = list.ordered.map(\.path).filter { !$0.isWithin(path) }
@@ -426,12 +443,12 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         target.setAccessibilityIdentifier("mergeKeyword.target")
         target.widthAnchor.constraint(equalToConstant: 260).isActive = true
         sheet.add("Merge “\(path.displayName)” into:", target)
-        sheet.begin(button: "Merge", first: target) { [weak self] in
+        sheet.begin(button: "Merge", first: target) { [weak panels] in
             let text = target.stringValue
             guard let into = targets.first(where: { $0.displayName == text })
                 ?? list.resolve(text.replacingOccurrences(of: " › ", with: "/"))
             else { return false }
-            _ = self?.panels.merge(path, into: into)
+            _ = panels?.merge(path, into: into)
             return true
         }
     }
