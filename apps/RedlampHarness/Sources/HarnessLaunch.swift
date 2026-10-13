@@ -15,6 +15,9 @@ import RedlampDesign
 /// - `--open-export` opens the Export dialog once the Export ▸ Live scene's photo is open.
 /// - `--history-height <points>` sets the History scene's list height.
 /// - `--folders-root <path>` is the folder the Folders scene opens (the raw fixtures by default).
+/// - `--library-surface <id>` opens a library sheet or window once the Library scenes' library is ready, in
+///   `--library-state <state>` (`opened` by default), such as `--scene library-lightroom --library-surface
+///   lightroom --library-state minimum`; with `--snapshot`, the snapshot is of what it opened.
 /// - `--window <width>x<height>` sizes the window in points and moves it to a Retina screen
 ///   when one is connected, so captures come out at 2x even when the main display is 1x;
 ///   with `--main-screen` it stays on the main display, for a parity capture taller than the

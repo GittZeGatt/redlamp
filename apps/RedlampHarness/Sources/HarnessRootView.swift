@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct HarnessRootView: View {
@@ -30,6 +31,10 @@ struct HarnessRootView: View {
             }
         }
         .preferredColorScheme(settings.theme.appearance == .dark ? .dark : .light)
+        // AppKit's sheets and windows, the Library scenes', take the app's appearance, not the scene's.
+        .onChange(of: settings.theme.appearance, initial: true) { _, appearance in
+            NSApp.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
+        }
         .task {
             MetricsProbe.runIfRequested()
             await HarnessLaunch.placeWindowIfRequested()

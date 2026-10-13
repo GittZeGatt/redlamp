@@ -11,6 +11,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
     case palette = "Command Palette"
     case export = "Export"
     case masks = "Masks Panel"
+    case library = "Library"
 
     var id: String {
         rawValue
@@ -27,6 +28,7 @@ enum HarnessSection: String, CaseIterable, Identifiable {
         case .palette: "command"
         case .export: "square.and.arrow.up"
         case .masks: "circle.dashed.inset.filled"
+        case .library: "photo.on.rectangle.angled"
         }
     }
 }

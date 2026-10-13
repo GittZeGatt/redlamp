@@ -24,6 +24,9 @@ enum BuiltInScenes {
         catalog.register(.exportStates)
         catalog.register(.masksPanel)
         catalog.register(.masksPanelStates)
+        catalog.register(.libraryImport)
+        catalog.register(.libraryLightroom)
+        catalog.register(.librarySheets)
         return catalog
     }
 }
