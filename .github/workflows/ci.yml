@@ -49,15 +49,17 @@ jobs:
       - name: Performance card in step with the history
         run: scripts/perf-card.py --check
 
-      - name: Cache vendored LibRaw
-        uses: actions/cache@v4
+      - name: Restore vendored LibRaw
+        id: libraw-cache
+        uses: actions/cache/restore@v4
         with:
           path: vendor/build
           key: libraw-${{ hashFiles('config/vendored-libs.json', 'vendor/shims/**', 'scripts/vendor-libraw.sh') }}
 
       # After LibRaw's, whose cache holds all of vendor/build, so this one's libjxl is the one used.
-      - name: Cache vendored libjxl
-        uses: actions/cache@v4
+      - name: Restore vendored libjxl
+        id: libjxl-cache
+        uses: actions/cache/restore@v4
         with:
           path: vendor/build/libjxl.xcframework
           key: libjxl-${{ hashFiles('config/vendored-libs.json', 'scripts/vendor-libjxl.sh') }}
@@ -79,6 +81,21 @@ jobs:
 
       - name: Generate workspace
         run: mise run generate
+
+      # Saved once built, not at the end of the job, so a run whose tests fail or time out keeps them.
+      - name: Save vendored LibRaw
+        if: steps.libraw-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vendor/build
+          key: ${{ steps.libraw-cache.outputs.cache-primary-key }}
+
+      - name: Save vendored libjxl
+        if: steps.libjxl-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vendor/build/libjxl.xcframework
+          key: ${{ steps.libjxl-cache.outputs.cache-primary-key }}
 
       - name: Lint (SwiftFormat)
         run: mise exec -- swiftformat --lint .
