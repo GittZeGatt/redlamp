@@ -79,7 +79,7 @@ struct RecipeImportTests {
         #expect(summary.imported.map(\.recipe.name) == ["Warm"])
         #expect(summary.failures == [
             "DSC01234.xmp: This isn't a Lightroom develop preset",
-            "Photos: There are no Lightroom presets in this folder",
+            "Photos: There are no Lightroom presets or Fujifilm LUTs in this folder",
         ])
         #expect(catalog.all.map(\.name) == ["Warm"])
         #expect(catalog.revision == revision + 1 && catalog.lastError == nil)

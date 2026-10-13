@@ -19,6 +19,13 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
     case vLog = "vlog-vgamut"
     /// Apple Log, with Rec.2020 primaries: Apple, "Apple Log Profile White Paper" (2023).
     case appleLog = "applelog"
+    /// Fujifilm F-Log with F-Gamut, whose primaries are Rec.2020's: Fujifilm, "F-Log Data
+    /// Sheet" Ver.1.2.
+    case fLog = "flog-fgamut"
+    /// Fujifilm F-Log2 with F-Gamut: Fujifilm, "F-Log2 Data Sheet" Ver.1.1.
+    case fLog2 = "flog2-fgamut"
+    /// Fujifilm F-Log2 C: F-Log2's curve with F-Gamut C, Fujifilm, "F-Log2C Data Sheet" Ver.1.0.
+    case fLog2C = "flog2c-fgamutc"
 
     public var name: String {
         switch self {
@@ -27,6 +34,9 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
         case .logC3: "ARRI LogC3 (EI 800) / AWG3"
         case .vLog: "Panasonic V-Log / V-Gamut"
         case .appleLog: "Apple Log"
+        case .fLog: "Fujifilm F-Log / F-Gamut"
+        case .fLog2: "Fujifilm F-Log2 / F-Gamut"
+        case .fLog2C: "Fujifilm F-Log2 C / F-Gamut C"
         }
     }
 
@@ -49,6 +59,8 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
             } else {
                 0
             }
+        case .fLog: FujifilmLog.fLog.encode(x)
+        case .fLog2, .fLog2C: FujifilmLog.fLog2.encode(x)
         }
     }
 
@@ -69,6 +81,8 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
             y >= AppleLog.c * (AppleLog.rt - AppleLog.r0) * (AppleLog.rt - AppleLog.r0)
                 ? exp2((y - AppleLog.delta) / AppleLog.gamma) - AppleLog.beta
                 : (max(y, 0) / AppleLog.c).squareRoot() + AppleLog.r0
+        case .fLog: FujifilmLog.fLog.decode(y)
+        case .fLog2, .fLog2C: FujifilmLog.fLog2.decode(y)
         }
     }
 
@@ -97,7 +111,8 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
         case .sLog3SGamut3: [[0.730, 0.280], [0.140, 0.855], [0.100, -0.050]]
         case .logC3: [[0.6840, 0.3130], [0.2210, 0.8480], [0.0861, -0.1020]]
         case .vLog: [[0.730, 0.280], [0.165, 0.840], [0.100, -0.030]]
-        case .appleLog: Self.rec2020Primaries
+        case .appleLog, .fLog, .fLog2: Self.rec2020Primaries
+        case .fLog2C: [[0.7347, 0.2653], [0.0263, 0.9737], [0.1173, -0.0224]]
         }
     }
 
@@ -158,6 +173,28 @@ public enum CameraLogSpace: String, Sendable, CaseIterable {
         static let beta: Float = 0.00964052
         static let gamma: Float = 0.08550479
         static let delta: Float = 0.69336945
+    }
+
+    /// Fujifilm's log curves share one form: a log segment above `cut1`, a line below it.
+    private struct FujifilmLog {
+        let a, b, c, d, e, f, cut1, cut2: Float
+
+        func encode(_ x: Float) -> Float {
+            x >= cut1 ? c * log10(a * x + b) + d : e * x + f
+        }
+
+        func decode(_ y: Float) -> Float {
+            y >= cut2 ? (pow(10, (y - d) / c) - b) / a : (y - f) / e
+        }
+
+        static let fLog = FujifilmLog(
+            a: 0.555556, b: 0.009468, c: 0.344676, d: 0.790453, e: 8.735631, f: 0.092864,
+            cut1: 0.00089, cut2: 0.100537775223865,
+        )
+        static let fLog2 = FujifilmLog(
+            a: 5.555556, b: 0.064829, c: 0.245281, d: 0.384316, e: 8.799461, f: 0.092864,
+            cut1: 0.000889, cut2: 0.100686685370811,
+        )
     }
 }
 

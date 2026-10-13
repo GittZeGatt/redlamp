@@ -60,6 +60,16 @@ struct CameraLogSpaceTests {
         #expect(abs(CameraLogSpace.appleLog.encode(0) - 0.150476) < 1e-5)
         #expect(abs(CameraLogSpace.appleLog.encode(0.18) - 0.488272) < 1e-5)
         #expect(CameraLogSpace.appleLog.encode(-0.1) == 0)
+        // Fujifilm's 10-bit code values: F-Log 95, 470 and 705; F-Log2 (and F-Log2 C) 95, 400 and 570.
+        for (space, codes) in [
+            (CameraLogSpace.fLog, [95, 470, 705]),
+            (.fLog2, [95, 400, 570]),
+            (.fLog2C, [95, 400, 570]),
+        ] {
+            for (reflectance, code) in zip([0, 0.18, 0.9] as [Float], codes) {
+                #expect(abs(space.encode(reflectance) * 1023 - Float(code)) < 0.5, "\(space) \(reflectance)")
+            }
+        }
     }
 
     @Test(arguments: CameraLogSpace.allCases)
@@ -76,11 +86,15 @@ struct CameraLogSpaceTests {
     @Test func `each curve's pieces meet`() {
         let joins: [(CameraLogSpace, Float)] = [
             (.sLog3SGamut3Cine, 0.01125), (.logC3, 0.010591), (.vLog, 0.01), (.appleLog, 0.01),
+            (.fLog2, 0.000889),
         ]
         for (space, x) in joins {
             #expect(abs(space.encode(x.nextUp) - space.encode(x.nextDown)) < 1e-6, "\(space)")
             #expect(abs(space.decode(space.encode(x)) - x) < 1e-7, "\(space)")
         }
+        // Fujifilm's published F-Log constants step by about a tenth of a 10-bit code at the join.
+        let cut: Float = 0.00089
+        #expect(abs(CameraLogSpace.fLog.encode(cut.nextUp) - CameraLogSpace.fLog.encode(cut.nextDown)) < 0.2 / 1023)
     }
 
     @Test(arguments: CameraLogSpace.allCases)
@@ -130,6 +144,9 @@ struct CameraLogSpaceTests {
                 SIMD3(-0.009310, -0.004612, 1.102980),
             ])),
             (.appleLog, rec2020ToXYZ),
+            // F-Gamut's primaries are Rec.2020's.
+            (.fLog, rec2020ToXYZ),
+            (.fLog2, rec2020ToXYZ),
         ]
         for (space, published) in toXYZ {
             let derived = rec2020ToXYZ * space.toRec2020
@@ -188,7 +205,10 @@ struct CameraLogImportTests {
         // light, within half a percent of the display range.
         for grey in Self.ramp {
             let error = abs(Self.display(table, scene: grey) - SIMD3(repeating: ColorMath.srgbEncode(grey))).max()
-            #expect(error < 0.005, "\(grey): \(error)")
+            // F-Log puts 0.9 in the 33-point LUT's last cell before white, where the fixture
+            // clips; a straight line across that cell misses the bend by up to 1%.
+            let tolerance: Float = space == .fLog && grey == 0.9 ? 0.01 : 0.005
+            #expect(error < tolerance, "\(grey): \(error)")
         }
     }
 

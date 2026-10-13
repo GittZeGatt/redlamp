@@ -12,8 +12,9 @@ public enum ImportedTableSpace: Sendable, Hashable {
     /// Already Redlamp's own space (display Rec.2020, sRGB transfer).
     case displayRec2020
     /// A camera's log footage in, a display's encoding out: imported as a scene-referred
-    /// table, which takes the place of Redlamp's tone curve.
-    case cameraLog(CameraLogSpace, output: LookTableOutput = .rec709)
+    /// table, which takes the place of Redlamp's tone curve. `exposure`, in stops, scales
+    /// Redlamp's scene light before it's encoded for the table.
+    case cameraLog(CameraLogSpace, output: LookTableOutput = .rec709, exposure: Float = 0)
 }
 
 public enum LookTableImportError: Error, CustomStringConvertible, Equatable {
@@ -60,10 +61,11 @@ public enum LookTableImport {
                 let back = ColorMath.rec709ToRec2020 * (looked + outside)
                 return ColorMath.srgbEncode(simd_max(back, .zero))
             }
-        case let .cameraLog(camera, output):
+        case let .cameraLog(camera, output, exposure):
             try LookTable(size: storedSize, space: .sceneLog) { encoded in
                 // The LUT clamps signals outside its domain.
-                let signal = camera.encode(camera.fromRec2020 * SceneLogEncoding.decode(encoded))
+                let scene = SceneLogEncoding.decode(encoded) * exp2(exposure)
+                let signal = camera.encode(camera.fromRec2020 * scene)
                 let display = ColorMath.rec709ToRec2020 * output.decode(sample(signal))
                 return ColorMath.srgbEncode(simd_max(display, .zero))
             }

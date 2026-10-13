@@ -345,13 +345,15 @@ public extension CameraRecipeCard {
         .treatment, .baseLook, .whiteBalance, .tone, .presence, .colorChrome, .effects, .detail, .colorGrading,
     ]
 
-    /// A recipe built from the card, keeping the card as its source.
+    /// A recipe built from the card, keeping the card as its source. `slotLooks` are looks
+    /// that fill slots on this Mac in place of the bundled ones (`RecipeLibrary.filledSlots`).
     func recipe(
         id: String,
         name: String,
         group: String = "Camera Recipes",
         summary: String? = nil,
         tags: [String] = [],
+        slotLooks: [FilmSlot: BaseLookReference] = [:],
     ) -> Recipe {
         let card = clamped
         let slot = card.slot ?? .standard
@@ -363,7 +365,7 @@ public extension CameraRecipeCard {
             tags: tags + ["camera-card", slot.rawValue],
             includes: Self.includes,
             settings: card.resolvedSettings(),
-            baseLook: slot.baseLook,
+            baseLook: slotLooks[slot] ?? slot.baseLook,
             source: .cameraCard(card, mappingVersion: Self.mappingVersion),
             lintWaivers: slot.isMonochrome ? ["neutral-axis", "skin-hue"] : [],
         )
@@ -372,13 +374,14 @@ public extension CameraRecipeCard {
 
 public extension Recipe {
     /// Re-resolves a recipe from its camera card after the card was edited.
-    func updatingCard(_ card: CameraRecipeCard) -> Recipe {
+    func updatingCard(_ card: CameraRecipeCard, slotLooks: [FilmSlot: BaseLookReference] = [:]) -> Recipe {
         var updated = card.recipe(
             id: id,
             name: name,
             group: group,
             summary: summary,
             tags: tags.filter { $0 != "camera-card" && FilmSlot(rawValue: $0) == nil },
+            slotLooks: slotLooks,
         )
         updated.version = version
         updated.author = author

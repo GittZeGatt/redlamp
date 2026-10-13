@@ -18,10 +18,11 @@ struct BaseLookGroups {
             BuiltInBaseLook(rawValue: $0.id) == nil && $0.id.hasPrefix(RecipeNamespace.bundled + "/")
                 && !catalogue.contains($0.id)
         }
-        let other = looks.filter { !$0.id.hasPrefix(RecipeNamespace.bundled + "/") }
+        let fujifilm = looks.filter(\.reference.isFromMakerLUT)
+        let other = looks.filter { !$0.id.hasPrefix(RecipeNamespace.bundled + "/") && !$0.reference.isFromMakerLUT }
         sections = [
-            ("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), ("Installed", other),
-            ("Reproduction", reproduction),
+            ("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), (FujifilmLUT.group, fujifilm),
+            ("Installed", other), ("Reproduction", reproduction),
         ].filter { !$0.1.isEmpty }
     }
 
@@ -71,6 +72,16 @@ struct BaseLookBrowser: View {
                         }
                     }
                 }
+                slotSwitches
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Fujifilm's own film-simulation LUTs import from the Recipes panel and work on any photo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Link("Get Them from Fujifilm…", destination: FujifilmLUT.downloadPage).font(.caption)
+                }
             }
             .padding(14)
         }
@@ -78,6 +89,31 @@ struct BaseLookBrowser: View {
         .frame(width: 420, height: 520)
         .task(id: model.info?.url) { await renderThumbnails(groups.sections.flatMap(\.looks)) }
         .onDisappear { model.previewRecipe(nil) }
+    }
+
+    /// For each film slot an imported LUT fills, whether recipe cards use it or Redlamp's own look.
+    @ViewBuilder private var slotSwitches: some View {
+        let _ = model.recipes.revision
+        let library = model.recipes.library
+        let imported = library.importedSlotLooks
+        let slots = FilmSlot.allCases.filter { imported[$0] != nil }
+        if !slots.isEmpty {
+            Text("Recipe Cards").font(.headline)
+            Text("Cards that name these slots use the LUTs you imported. Turn one off to use Redlamp's own look.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(slots, id: \.self) { slot in
+                Toggle(isOn: Binding(
+                    get: { !library.slotsKeepingRedlampLooks.contains(slot) },
+                    set: { model.recipes.setUsesImportedLook(slot, $0) },
+                )) {
+                    Text("\(slot.name): \(imported[slot]?.name ?? "")").font(.caption).lineLimit(1)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+            }
+        }
     }
 
     private func key(_ look: BaseLookPackage) -> String {

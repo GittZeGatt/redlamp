@@ -9,18 +9,21 @@ import RedlampEngineAPI
 /// - `Recipes/*.redrecipe`: recipes made here (the `local/` namespace);
 /// - `Recipes/Installed/*.redrecipe`: recipes installed from files;
 /// - `Recipes/favorites.json`: favorite recipe ids;
+/// - `Recipes/slots.json`: film slots that keep Redlamp's look though an imported LUT fills them;
 /// - `Looks/`: every Base Look ever installed, by content (see `LookStore`).
 public final class RecipeLibrary {
     public struct Locations: Sendable {
         public var recipes: URL
         public var installed: URL
         public var favorites: URL
+        public var slots: URL
         public var looks: URL
 
         public init(root: URL) {
             recipes = root.appendingPathComponent("Recipes", isDirectory: true)
             installed = recipes.appendingPathComponent("Installed", isDirectory: true)
             favorites = recipes.appendingPathComponent("favorites.json")
+            slots = recipes.appendingPathComponent("slots.json")
             looks = root.appendingPathComponent("Looks", isDirectory: true)
         }
     }
@@ -39,6 +42,8 @@ public final class RecipeLibrary {
     public private(set) var userRecipes: [Recipe] = []
     public private(set) var installed: [Recipe] = []
     public private(set) var favorites: Set<String> = []
+    /// Film slots that keep Redlamp's own look, though an imported LUT fills them.
+    public private(set) var slotsKeepingRedlampLooks: Set<FilmSlot> = []
     public private(set) var storedLooks: [BaseLookPackage] = []
     /// Files that couldn't be read, with the reasons.
     public private(set) var loadIssues: [URL: [RecipeIssue]] = [:]
@@ -61,6 +66,12 @@ public final class RecipeLibrary {
             favorites = Set(ids)
         } else {
             favorites = []
+        }
+        if let data = try? Data(contentsOf: locations.slots),
+           let slots = try? JSONDecoder().decode([String].self, from: data) {
+            slotsKeepingRedlampLooks = Set(slots.compactMap(FilmSlot.init(rawValue:)))
+        } else {
+            slotsKeepingRedlampLooks = []
         }
     }
 
@@ -108,6 +119,40 @@ public final class RecipeLibrary {
         }
         try FileManager.default.createDirectory(at: locations.recipes, withIntermediateDirectories: true)
         try JSONEncoder().encode(favorites.sorted()).write(to: locations.favorites, options: .atomic)
+    }
+
+    // MARK: - Film slots
+
+    /// The looks imported from camera makers' LUTs that fill film slots on this Mac (TON-44),
+    /// the latest import for each slot, whether or not the slot keeps Redlamp's look.
+    public var importedSlotLooks: [FilmSlot: BaseLookPackage] {
+        var looks: [FilmSlot: BaseLookPackage] = [:]
+        let imported = (userRecipes + installed).filter { $0.baseLook?.isFromMakerLUT == true }
+        for recipe in imported.sorted(by: { ($0.created ?? .distantPast) < ($1.created ?? .distantPast) }) {
+            for package in recipe.embeddedBaseLooks where package.reference.isFromMakerLUT {
+                if let slot = package.slot.flatMap(FilmSlot.init(rawValue:)) {
+                    looks[slot] = package
+                }
+            }
+        }
+        return looks
+    }
+
+    /// What recipe cards resolve each slot to on this Mac, in place of the bundled looks.
+    public var filledSlots: [FilmSlot: BaseLookReference] {
+        importedSlotLooks.filter { !slotsKeepingRedlampLooks.contains($0.key) }.mapValues(\.reference)
+    }
+
+    /// Whether recipe cards' `slot` uses the LUT imported for it, or Redlamp's own look.
+    public func setUsesImportedLook(_ slot: FilmSlot, _ imported: Bool) throws {
+        if imported {
+            slotsKeepingRedlampLooks.remove(slot)
+        } else {
+            slotsKeepingRedlampLooks.insert(slot)
+        }
+        try FileManager.default.createDirectory(at: locations.recipes, withIntermediateDirectories: true)
+        try JSONEncoder().encode(slotsKeepingRedlampLooks.map(\.rawValue).sorted())
+            .write(to: locations.slots, options: .atomic)
     }
 
     /// Named sections for a recipe list: Favorites, your recipes in their lists (My Recipes
@@ -285,14 +330,19 @@ public final class RecipeLibrary {
     /// Reads a file to import as a recipe, without installing it: a `.redrecipe`, a Lightroom
     /// develop preset, or a `.cube`, `.3dl` or HaldCLUT look table made for `tableSpace`. A
     /// preset is recognised by its content (`LightroomPreset.isPreset`), so a photo's `.xmp`
-    /// sidecar isn't taken for one. A look table or preset is named `name`, or by its own
-    /// name, or the file's. `files` decodes a HaldCLUT image.
+    /// sidecar isn't taken for one, and one of Fujifilm's LUTs by its header, read in the space
+    /// it names. A look table or preset is named `name`, or by its own name, or the file's.
+    /// `files` decodes a HaldCLUT image.
     public static func read(
         importing url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
         name: String? = nil,
         reading files: any FileInspecting,
     ) throws -> RecipeImport {
+        if let lut = FujifilmLUT.recognise(contentsOf: url) {
+            let cube = try LookTableImport.parseCube(String(contentsOf: url, encoding: .utf8), space: lut.space)
+            return RecipeImport(recipe: lut.recipe(for: cube.table, name: name ?? FujifilmLUT.name(of: url)))
+        }
         if let imported = try lookTable(contentsOf: url, tableSpace: tableSpace, reading: files) {
             let name = name ?? imported.title ?? url.deletingPathExtension().lastPathComponent
             return RecipeImport(recipe: LookTableImport.recipe(for: imported.table, name: name))
@@ -311,9 +361,9 @@ public final class RecipeLibrary {
         return RecipeImport(recipe: recipe, issues: issues)
     }
 
-    /// Reads files, and the Lightroom presets in folders and their subfolders, as
-    /// `read(importing:)` reads each. A file that can't be read, or a folder without presets,
-    /// is listed with the reason.
+    /// Reads files, and the Lightroom presets and a downloaded pack of Fujifilm's LUTs in
+    /// folders and their subfolders, as `read(importing:)` reads each. A file that can't be
+    /// read, or a folder with neither, is listed with the reason.
     public static func read(
         importing urls: [URL],
         tableSpace: ImportedTableSpace = .sRGB,
@@ -324,9 +374,12 @@ public final class RecipeLibrary {
         for url in urls {
             var isFolder: ObjCBool = false
             FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder)
-            let found = isFolder.boolValue ? presets(in: url) : [url]
+            let found = isFolder.boolValue ? presets(in: url) + FujifilmLUT.pack(in: url) : [url]
             if found.isEmpty {
-                items.append(.init(file: url, outcome: .failed("There are no Lightroom presets in this folder")))
+                items.append(.init(
+                    file: url,
+                    outcome: .failed("There are no Lightroom presets or Fujifilm LUTs in this folder"),
+                ))
             }
             for file in found where seen.insert(file.standardizedFileURL.path).inserted {
                 do {
@@ -412,11 +465,13 @@ public final class RecipeLibrary {
     }
 
     /// A self-contained copy for sharing: the Base Look travels inside the file, unless it
-    /// came from a photo's camera profile, whose maker's terms Redlamp doesn't pass on.
+    /// came from a photo's camera profile or a camera maker's LUT, whose makers' terms Redlamp
+    /// doesn't pass on. Those leave only the reference, which finds the look on a Mac that has it.
     public func exportable(_ recipe: Recipe) -> Recipe {
         var recipe = recipe
+        recipe.embeddedBaseLooks.removeAll { $0.reference.staysOnThisMac }
         if let look = recipe.baseLook, !recipe.embeddedBaseLooks.contains(where: { $0.matches(look) }),
-           BuiltInBaseLook(reference: look) == nil, !look.isEmbedded,
+           BuiltInBaseLook(reference: look) == nil, !look.staysOnThisMac,
            let package = package(for: look) {
             recipe.embeddedBaseLooks.append(package)
         }

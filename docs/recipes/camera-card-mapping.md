@@ -28,6 +28,12 @@ Redlamp uses **its own slot names**. Each slot is filled by a bundled Base Look 
 
 A card resolves its slot to whichever look fills it when the card is resolved, and pins that look by id, version and table hash. When a better look later fills a slot (for example one fitted by the planned `redlamp-profiler`), existing edits keep the look they were made with.
 
+### Slots filled by Fujifilm's LUTs
+
+Fujifilm's published LUTs, downloaded by the user and imported ([recipe format](recipe-format.md#fujifilms-published-luts)), fill the slots of the simulations they render, on the Mac they were imported on (TON-44): PROVIA fills `standard`, Velvia `vivid-slide`, ASTIA `soft-slide`, Classic Chrome `chrome`, Classic Neg `negative-classic`, Nostalgic Neg `negative-nostalgic`, PRO Neg Std `negative-standard`, PRO Neg Hi `negative-high`, ETERNA `cinema`, ETERNA Bleach Bypass `bleach`, ACROS and Monochrome `monochrome`, and Sepia `sepia`. Reala Ace has no slot yet (TON-47). When two LUTs fill a slot, the later import does.
+
+A card resolved on that Mac (made or edited in the Recipe Lab) pins the imported look; slots with no imported LUT keep the bundled look. The Base Look browser lists the filled slots under *Recipe Cards*, each with a switch back to Redlamp's own look, kept in `Recipes/slots.json` (`RecipeLibrary.filledSlots`). Edits made before keep the looks they pinned. Bundled camera recipes keep their bundled looks.
+
 ## Mapping, version 1
 
 `mappingVersion` records which mapping a recipe was resolved with. Improving a row means bumping the version; recipes are only re-resolved when the user edits their card.

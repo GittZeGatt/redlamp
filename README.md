@@ -178,6 +178,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 - [x] **One `.redrecipe` format** for presets, profiles and LUTs: an explicit list of setting groups, an optional Base Look pinned by content hash, immutable versions, and namespaced ids ready for sharing ([format](docs/recipes/recipe-format.md), [JSON Schema](docs/recipes/recipe-format.schema.json)).
 - [x] **Camera recipe cards:** Fujifilm-style recipes (film simulation, dynamic range, highlight and shadow tone, color, Color Chrome, white balance shift, grain) are a recipe dialect you can type in as the card lists them ([mapping](docs/recipes/camera-card-mapping.md)).
+- [x] **Fujifilm's published LUTs.** Download Fujifilm's film-simulation LUTs from [its LUT page](https://www.fujifilm-x.com/global/support/download/lut/) and drop the unzipped folder on the Recipes panel: Redlamp recognises each file, reads it in the F-Log, F-Log2 or F-Log2 C space it names, and imports one look per simulation (ten from the GFX ETERNA 55 pack), for any camera's raws. Fujifilm's terms allow personal use only, so the looks stay on your Mac and exported recipes carry only a reference to them ([details](docs/recipes/recipe-format.md#fujifilms-published-luts)).
 - [x] **Measured film looks.** The profiler fits a look to cameras' own JPEGs of the same raw files: Fujifilm raws carry the camera's rendering inside. On photos the fit never saw:
 
   | Base Look | Like | Measured from | ΔE to the camera (lower is closer) |

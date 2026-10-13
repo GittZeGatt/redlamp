@@ -125,7 +125,7 @@ The look the edit renders with (Lightroom's profile), referenced as in the recip
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `id` | string | **Required.** Redlamp's own looks are `redlamp/base/` followed by `color` (the default), `neutral`, `vivid`, `landscape`, `portrait`, `monochrome` or `reproduction` (Redlamp Reproduction, which has no tone curve; see [Exposure anchor](#exposure-anchor)). Looks made or imported on the Mac are `local/…`, and looks baked from a photo's embedded camera profile `local/embedded/…`. An older Redlamp renders a look id it doesn't know with Redlamp Color's curve and shows the look as missing. |
+| `id` | string | **Required.** Redlamp's own looks are `redlamp/base/` followed by `color` (the default), `neutral`, `vivid`, `landscape`, `portrait`, `monochrome` or `reproduction` (Redlamp Reproduction, which has no tone curve; see [Exposure anchor](#exposure-anchor)). Looks made or imported on the Mac are `local/…`, looks baked from a photo's embedded camera profile `local/embedded/…`, and looks imported from a camera maker's published LUTs `local/maker/…` (Fujifilm's are `local/maker/fujifilm-` and the start of the table's hash). Neither of the last two travels in exported recipes. An older Redlamp renders a look id it doesn't know with Redlamp Color's curve and shows the look as missing. |
 | `version` | integer | Default 1. Published versions of a look never change. |
 | `name` | string | For display. Defaults to the built-in look's name, or else to the id. |
 | `amount` | number | Strength in percent, 0 to 200; 100 is the look as designed. Default 100. |

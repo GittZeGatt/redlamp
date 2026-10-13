@@ -298,7 +298,7 @@ struct RecipeLibraryPresetTests {
         ], reading: InProcessDecoder())
         #expect(summary.imported.map(\.recipe.name) == ["Teal"])
         #expect(summary.failures.prefix(2) == [
-            "Old Matte.xmp: \(refusal)", "Photos: There are no Lightroom presets in this folder",
+            "Old Matte.xmp: \(refusal)", "Photos: There are no Lightroom presets or Fujifilm LUTs in this folder",
         ])
         #expect(summary.failures.last?.hasPrefix("missing.redrecipe: The file") == true)
         #expect(library.all.map(\.name) == ["Teal"] && library.all.first?.id == summary.imported.first?.recipe.id)

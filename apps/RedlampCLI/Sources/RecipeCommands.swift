@@ -342,9 +342,11 @@ enum RecipeCommands {
         }
         let recipe = try context.library.resolve(spec)
         try context.library.export(recipe, to: URL(fileURLWithPath: output))
-        if let cube = context.arguments.value("--cube"),
-           let package = context.library.exportable(recipe).embeddedBaseLooks.first,
-           let table = try package.definition().table {
+        if let cube = context.arguments.value("--cube"), recipe.baseLook?.staysOnThisMac == true {
+            printError("didn't write \(cube): the Base Look stays on this Mac, as its maker's terms ask (DEC-73)")
+        } else if let cube = context.arguments.value("--cube"),
+                  let package = context.library.exportable(recipe).embeddedBaseLooks.first,
+                  let table = try package.definition().table {
             try LookTableImport.cubeText(table, title: package.name).write(
                 toFile: cube,
                 atomically: true,

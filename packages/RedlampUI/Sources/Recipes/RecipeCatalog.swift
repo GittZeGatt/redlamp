@@ -162,6 +162,11 @@ public final class RecipeCatalog {
         perform { try library.export(recipe, to: url) }
     }
 
+    /// Whether recipe cards' `slot` uses the LUT imported for it, or Redlamp's own look.
+    public func setUsesImportedLook(_ slot: FilmSlot, _ imported: Bool) {
+        perform { try library.setUsesImportedLook(slot, imported) }
+    }
+
     @discardableResult
     private func perform<T>(_ work: () throws -> T) -> T? {
         do {

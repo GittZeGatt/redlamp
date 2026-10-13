@@ -112,11 +112,23 @@ A LUT made for a camera's log footage, such as a camera maker's conversion to Re
 | `logc3-awg3` | ARRI LogC3, EI 800 | ARRI Wide Gamut 3 | 0.391 |
 | `vlog-vgamut` | Panasonic V-Log | V-Gamut | 433/1023 |
 | `applelog` | Apple Log | Rec.2020 | 0.488 |
+| `flog-fgamut` | Fujifilm F-Log | F-Gamut (Rec.2020's primaries) | 470/1023 |
+| `flog2-fgamut` | Fujifilm F-Log2 | F-Gamut | 400/1023 |
+| `flog2c-fgamutc` | Fujifilm F-Log2 (F-Log2 C) | F-Gamut C | 400/1023 |
 
 The LUT's output is taken to be Rec.709 for a BT.1886 display (a pure 2.4 gamma), the target of camera makers' Rec.709 LUTs, unless sRGB is chosen.
 
 Such a LUT is converted at import into a scene-referred table (`sceneLog`, 33 points per side), which takes the place of Redlamp's tone curve. At each grid point the scene light (linear Rec.2020) is converted to the camera's gamut and encoded with its log curve, so middle grey (0.18) reaches the LUT at the camera's own grey; the LUT is sampled tetrahedrally, with signals outside its domain clamped to its edge; and its output is decoded to linear light and converted from Rec.709 to Rec.2020. White balance, Exposure and the Basic tone sliders act on scene light before the table, and the colour controls and the tone curve on its output. The table spans −10 to +6.5 stops around middle grey, so brighter scene light renders as +6.5 stops does.
 
-The curves are the makers' published formulas: Sony's *Technical Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3*; ARRI's *ALEXA Log C Curve: Usage in VFX* (2017), with its exposure-value parameters for EI 800; Panasonic's *V-Log/V-Gamut Reference Manual* (2014); and Apple's *Apple Log Profile White Paper* (2023). Each gamut matrix is derived from the maker's published primaries and D65 white by SMPTE RP 177, and matches the matrices the makers print.
+The curves are the makers' published formulas: Sony's *Technical Summary for S-Gamut3.Cine/S-Log3 and S-Gamut3/S-Log3*; ARRI's *ALEXA Log C Curve: Usage in VFX* (2017), with its exposure-value parameters for EI 800; Panasonic's *V-Log/V-Gamut Reference Manual* (2014); Apple's *Apple Log Profile White Paper* (2023); and Fujifilm's *F-Log Data Sheet* Ver.1.2, *F-Log2 Data Sheet* Ver.1.1 and *F-Log2C Data Sheet* Ver.1.0 (F-Log2 C is F-Log2's curve with F-Gamut C's primaries). Each gamut matrix is derived from the maker's published primaries and D65 white by SMPTE RP 177, and matches the matrices the makers print. Fujifilm's published F-Log constants leave a step of about a tenth of a 10-bit code where the curve's two pieces meet; Redlamp keeps them as published.
 
-In the app, the import panel's *Look tables are for* menu sets the input space (sRGB unless changed) and *Output* the display. From the command line: `redlamp recipe import <file> --space slog3-sgamut3cine [--display srgb]`.
+### Fujifilm's published LUTs
+
+Fujifilm publishes LUTs that render its log footage in its film simulations ([look development](look-development.md#fujifilms-published-luts)). Each file names itself in comment lines, `#FUJIFILM Corporation`, `#Gamma:F-Log2 to CLASSIC CHROME` and `#Gamut:F-Gamut to ITU-R BT.709`, so Redlamp recognises it and imports it in the space it names, whatever the import panel chose (`FujifilmLUT` in RedlampRecipes):
+
+- **Space.** The curve and gamut the header names; output decoded as sRGB, with Redlamp's scene light raised by 0.9 stops before it's encoded, since the LUTs render middle grey darker than Redlamp's tone curve. Both are provisional until they're measured on real photos (TON-45).
+- **A downloaded pack.** A folder imports one LUT per simulation: F-Log2 first, then F-Log2 C, then F-Log, and the largest table of each; the wide dynamic range rendering and the log-to-BT.709 conversions are left out. Unzipped on a Mac, Fujifilm's zips, made on Windows, can leave the folders in each file's name (`F-Log2\X100VI_FLog2_FGamut_to_ETERNA_BT.709_33grid_V.1.00.cube`); the files are found by their headers wherever they are.
+- **Names.** Each recipe is named for its file and joins the *Fujifilm LUTs* group.
+- **They stay on this Mac.** Fujifilm's terms allow downloads for personal use and forbid passing them on, so the look's id starts `local/maker/` (DEC-73). An exported recipe keeps only the reference to it, and `redlamp recipe export --cube` won't write it. The ids come from the table's content, so the same file imported on another Mac is the same look, and a recipe that refers to it finds it there.
+
+In the app, the import panel's *Look tables are for* menu sets the input space (sRGB unless changed) and *Output* the display; *Get Them from Fujifilm…* opens Fujifilm's LUT page. From the command line: `redlamp recipe import <file> --space slog3-sgamut3cine [--display srgb]`, or `redlamp recipe import <folder>` for a pack of Fujifilm's LUTs.

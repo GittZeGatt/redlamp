@@ -663,7 +663,7 @@
     }
 
     enum RecipeScenarios {
-        static let all: [Scenario] = [apply, createAndImport, favorites, filmLooks]
+        static let all: [Scenario] = [apply, createAndImport, fujifilmPack, favorites, filmLooks]
 
         static let apply = Scenario(
             "recipes.apply", "Bundled recipes preview, apply and take an Amount",
@@ -714,6 +714,56 @@
             }
             try app.choose(.resetAll)
             app.covered([.feature("recipes.creating"), .feature("recipes.importing")], via: .model)
+        }
+
+        static let fujifilmPack = Scenario(
+            "recipes.import-fujifilm-pack",
+            "A downloaded pack of Fujifilm's LUTs imports from its folder, one look per simulation",
+            claims: [.feature("recipes.importing")],
+        ) { app in
+            try app.openWorking()
+            let pack = app.runDirectory.appending(path: "Fujifilm pack")
+            // Each a different table: looks are identified by their tables.
+            let files = [
+                ("F-Log2/FLog2_to_PROVIA.cube", "F-Log2 to PROVIA", 0.9),
+                ("F-Log2/FLog2_to_CLASSIC-CHROME.cube", "F-Log2 to CLASSIC CHROME", 0.8),
+                ("F-Log/FLog_to_PROVIA.cube", "F-Log to PROVIA", 0.7),
+                ("F-Log2/FLog2_to_WDR.cube", "F-Log2 to Wide Dynamic Range curve", 0.6),
+            ]
+            for (path, gamma, gain) in files {
+                var lines = [
+                    "#FUJIFILM Corporation",
+                    "#Gamma:\(gamma)",
+                    "#Gamut:F-Gamut to ITU-R BT.709",
+                    "LUT_3D_SIZE 2",
+                ]
+                for b in 0 ... 1 {
+                    for g in 0 ... 1 {
+                        for r in 0 ... 1 {
+                            lines.append("\(Double(r) * gain) \(Double(g) * gain) \(Double(b) * gain)")
+                        }
+                    }
+                }
+                let url = pack.appending(path: path)
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true,
+                )
+                try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+            }
+            try app.main { RecipeActions.importFiles([pack], model: $0) }
+            try app.wait("the pack's two simulations", timeout: 20) { model in
+                model.recipes.all.filter { $0.group == FujifilmLUT.group }.count == 2
+            }
+            let stayLocal = try app.main { model in
+                model.recipes.all.filter { $0.group == FujifilmLUT.group }
+                    .allSatisfy {
+                        $0.baseLook?.staysOnThisMac == true && model.recipes.library.exportable($0).embeddedBaseLooks
+                            .isEmpty
+                    }
+            }
+            try app.expect(stayLocal, "An imported Fujifilm look would leave this Mac in an exported recipe")
+            app.covered(.feature("recipes.importing"), via: .model)
         }
 
         static let favorites = Scenario(

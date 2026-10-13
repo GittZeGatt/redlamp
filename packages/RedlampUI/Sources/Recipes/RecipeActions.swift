@@ -295,6 +295,13 @@ struct LookTableSpaceAccessory: View {
                 ForEach(LookTableOutput.allCases, id: \.self) { Text($0.name).tag($0) }
             }
             .disabled(!choice.isForCameraFootage)
+            LabeledContent("Fujifilm's LUTs") {
+                Button("Get Them from Fujifilm…") { NSWorkspace.shared.open(FujifilmLUT.downloadPage) }
+            }
+            Text("Fujifilm's own LUTs are recognised and set up for you: choose the unzipped folder you downloaded.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .overlayScrollers()
         .padding(12)

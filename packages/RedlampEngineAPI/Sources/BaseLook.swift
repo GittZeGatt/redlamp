@@ -39,6 +39,20 @@ public struct BaseLookReference: Sendable, Hashable {
         id.hasPrefix(Self.embeddedIDPrefix)
     }
 
+    /// The id prefix of looks imported from a camera maker's published LUTs (DEC-73).
+    public static let makerIDPrefix = "local/maker/"
+
+    /// Whether the look was imported from a camera maker's published LUT.
+    public var isFromMakerLUT: Bool {
+        id.hasPrefix(Self.makerIDPrefix)
+    }
+
+    /// Whether the look's table must stay on the Mac that has it: its maker's terms don't let
+    /// Redlamp pass it on, so shared recipes carry only the reference.
+    public var staysOnThisMac: Bool {
+        isEmbedded || isFromMakerLUT
+    }
+
     /// Whether it's Redlamp Reproduction, which has no tone curve.
     public var isReproduction: Bool {
         BuiltInBaseLook(reference: self) == .reproduction
