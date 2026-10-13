@@ -7,6 +7,7 @@ fetched one request at a time, about one a second, resumably, and the fetcher st
 first refusal rather than retrying into a block.
 
     python3 research/profiler/fetch_review_pairs.py survey    # reads each file's first 512 KB
+    python3 research/profiler/fetch_review_pairs.py resurvey  # the same again, for every file, with every field
     python3 research/profiler/fetch_review_pairs.py select    # writes review-pairs.json
     python3 research/profiler/fetch_review_pairs.py fetch     # downloads the chosen files
 """
@@ -45,7 +46,17 @@ FILM = {0x000: "Provia", 0x120: "Astia", 0x200: "Velvia", 0x400: "Velvia", 0x500
 MONO = {0x300: "Monochrome", 0x301: "Monochrome+R", 0x302: "Monochrome+Ye", 0x303: "Monochrome+G",
         0x310: "Sepia", 0x500: "Acros", 0x501: "Acros+R", 0x502: "Acros+Ye", 0x503: "Acros+G"}
 TAGS = {0x1401: "film", 0x1003: "saturation", 0x1040: "shadow", 0x1041: "highlight", 0x1403: "dr",
-        0x1048: "chrome", 0x104E: "chromeBlue", 0x1049: "toneWarmCool", 0x104B: "toneMagentaGreen"}
+        0x1048: "chrome", 0x104E: "chromeBlue", 0x1049: "toneWarmCool", 0x104B: "toneMagentaGreen",
+        0x1002: "whiteBalance", 0x1402: "drSetting", 0x1443: "dRangePriority"}
+# Maker-note values with two numbers: the white balance fine-tune's red and blue shifts.
+PAIRS = {0x100A: "whiteBalanceFineTune"}
+# The processor generation a body's film simulations come from.
+GENERATIONS = {
+    "X-Processor 5": {"X-T5", "X-H2", "X-H2S", "X-S20", "X100VI", "X-T50", "X-M5", "X-E5", "X-T30 III", "GFX100 II",
+                      "GFX100RF", "GFX100S II"},
+    "X-Processor 4": {"X-T3", "X-T4", "X-T30", "X-T30 II", "X-Pro3", "X100V", "X-S10", "X-E4", "GFX 100", "GFX100S",
+                      "GFX50S II"},
+}
 # Camera look → Redlamp film slot; Acros is preferred over plain Monochrome for the black and white slots.
 SLOTS = {"Provia": "standard", "Velvia": "vivid-slide", "Astia": "soft-slide", "Classic Chrome": "chrome",
          "Eterna": "cinema", "Eterna Bleach Bypass": "bleach", "Classic Neg": "negative-classic",
@@ -105,11 +116,18 @@ def settings(data: bytes) -> dict:
     ifd0 = _ifd(jpeg, tiff, struct.unpack_from(("<" if little else ">") + "I", jpeg, tiff + 4)[0], little)
     _, count, offset, _ = ifd0[0x0110]
     model = jpeg[tiff + offset:tiff + offset + count].split(b"\0")[0].decode(errors="ignore")
-    note = tiff + _ifd(jpeg, tiff, ifd0[0x8769][2], little)[0x927C][2]
+    exif = _ifd(jpeg, tiff, ifd0[0x8769][2], little)
+    note = tiff + exif[0x927C][2]
+    iso = _number(exif[0x8827]) if 0x8827 in exif else None
+    generation = next((name for name, bodies in GENERATIONS.items() if model in bodies), "older")
     if jpeg[note:note + 8] != b"FUJIFILM":
-        return {"model": model}
+        return {"model": model, "iso": iso, "generation": generation}
     notes = _ifd(jpeg, note, struct.unpack_from("<I", jpeg, note + 8)[0], True)
-    result = {"model": model, **{name: _number(notes[tag]) for tag, name in TAGS.items() if tag in notes}}
+    result = {"model": model, "iso": iso, "generation": generation,
+              **{name: _number(notes[tag]) for tag, name in TAGS.items() if tag in notes}}
+    for tag, name in PAIRS.items():
+        if tag in notes and notes[tag][1] == 2:
+            result[name] = list(struct.unpack_from("<ii", jpeg, note + notes[tag][2]))
     saturation = result.get("saturation")
     result["look"] = MONO.get(saturation) or FILM.get(result.get("film", 0), hex(result.get("film", 0)))
     return result
@@ -124,6 +142,13 @@ def neutral(record: dict) -> bool:
 
 
 # MARK: - Steps
+
+
+def resurvey() -> None:
+    """Surveys every file again, keeping the earlier survey beside the new one."""
+    if SURVEY.exists():
+        SURVEY.rename(SURVEY.with_name(f"survey-{time.strftime('%Y%m%d')}.jsonl"))
+    survey()
 
 
 def survey() -> None:
@@ -227,11 +252,11 @@ def fetch() -> None:
 def main() -> int:
     step = sys.argv[1] if len(sys.argv) > 1 else "survey"
     try:
-        {"survey": survey, "select": select, "fetch": fetch}[step]()
+        {"survey": survey, "resurvey": resurvey, "select": select, "fetch": fetch}[step]()
     except Refused as refused:
         print(f"Stopped: the site refused a request ({refused}). Rerun later to resume.", file=sys.stderr)
         return 1
-    if step == "survey":
+    if step in ("survey", "resurvey"):
         records = [record for _, record in surveyed()]
         print("looks:", dict(collections.Counter(r.get("look", "error") for r in records).most_common()))
     return 0
