@@ -55,7 +55,7 @@ enum RecipeCommands {
     static let valued: Set<String> = [
         "--output", "--query", "--recipe", "--size", "--amount", "--recipes", "--images", "--tile", "--level",
         "--space", "--display", "--name", "--cube", "--out", "--references", "--evaluations", "--seed", "--pairs",
-        "--slots",
+        "--slots", "--evaluate",
     ]
 
     /// One command's inputs.

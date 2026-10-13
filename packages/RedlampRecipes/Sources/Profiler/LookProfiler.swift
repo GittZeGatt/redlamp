@@ -17,10 +17,13 @@ public final class LookProfiler {
         /// Pairs from the same scene share a group, so validation never trains on a scene
         /// it then tests on.
         public var scene: String
+        /// What an evaluation reports it under, such as the camera's processor generation.
+        public var group: String
 
-        public init(raw: URL, scene: String) {
+        public init(raw: URL, scene: String, group: String = "") {
             self.raw = raw
             self.scene = scene
+            self.group = group
         }
     }
 
@@ -43,7 +46,7 @@ public final class LookProfiler {
     }
 
     public static let analysisSize = 512
-    private let renderer: RecipeRenderer
+    public let renderer: RecipeRenderer
 
     public init(renderer: RecipeRenderer) {
         self.renderer = renderer
