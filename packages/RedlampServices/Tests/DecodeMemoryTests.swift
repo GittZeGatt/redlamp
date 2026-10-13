@@ -101,6 +101,10 @@ struct DecodeMemoryTests {
         #expect(CGImageDestinationFinalize(destination))
         let bytes = width * height * 8
         let held = try Self.peak(of: Self.footprint) { _ = try BitmapDecoder.decode(url) }
-        #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
+        withKnownIssue("macOS 27 holds about one more copy of the samples (ARC-19)") {
+            #expect(held < bytes * 3 / 2, "held \(held >> 20) MB for \(bytes >> 20) MB of samples")
+        } when: {
+            ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
+        }
     }
 }

@@ -167,12 +167,16 @@ struct ExportSheetTests {
             try await settle(window)
             focused = (window.firstResponder as? NSTextView)?.delegate as? NSTextField
         }
-        #expect(focused === lowest)
-        let frame = lowest.convert(lowest.bounds, to: document)
-        #expect(
-            scroll.contentView.documentVisibleRect.contains(frame),
-            "\(frame) outside \(scroll.contentView.documentVisibleRect)",
-        )
+        withKnownIssue("On macOS 27 Tab focuses none of the dialog's fields (UX-44)") {
+            #expect(focused === lowest)
+            let frame = lowest.convert(lowest.bounds, to: document)
+            #expect(
+                scroll.contentView.documentVisibleRect.contains(frame),
+                "\(frame) outside \(scroll.contentView.documentVisibleRect)",
+            )
+        } when: {
+            ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
+        }
     }
 
     /// The destination's files are read through the decode service in the app, which may be
