@@ -167,7 +167,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Film stock simulations (Portra, Tri-X and others) | Partly (film-inspired presets) | Done | Beyond | | TON-22, TON-26 | 36 looks from 30 stocks, built from the manufacturers' datasheets; Lightroom's film-inspired presets don't replicate particular films |
 | Film looks fitted from film shot beside digital | No | Planned | | P3 | TON-21 | With charts and lab scans, per stock |
 | Camera recipe cards | No | Done | | | | Fujifilm-style recipes, typed in as the card lists them |
-| Each look in one place, with its icon | No (profiles in Basic, presets in the left panel) | Planned | | P2 | UX-44 | Film looks and LUTs listed once, as recipes, with each film's icon; the Base Look menu keeps Redlamp's own looks, and recipe search finds them too |
+| Each look in one place, with its icon | No (profiles in Basic, presets in the left panel) | Planned | | P2 | UX-45 | Film looks and LUTs listed once, as recipes, with each film's icon; the Base Look menu keeps Redlamp's own looks, and recipe search finds them too |
 | Premium and recommended presets | Yes (cloud) | Out of scope | | | | Redlamp has no cloud service |
 
 ## Working on many photos
