@@ -98,6 +98,9 @@ SHOWN = re.compile(r"✘|(?:^|: )error: |Test run with \d+ tests|unexpected exit
 # e2e.py's options that keep it here: they name this Mac's files or check a signed app, or record
 # performance, which stays with this Mac until the build Mac has a series of its own (ARC-09).
 E2E_HERE = ("--passing-report", "--blackbox", "--app", "--replay", "--out", "--record", "-h", "--help")
+# xcodebuild hands TEST_RUNNER_ variables to the tests, so test sends them along; those that record
+# references write them into the checkout the tests run in, so a run with one stays here.
+RECORDING = re.compile(r"TEST_RUNNER_REDLAMP_(?:RECORD|UPDATE)_")
 # The push gate's levels, each covering the ones before it (scripts/push-gate.py).
 LEVELS = ("checks", "reference", "suite", "full")
 FINAL = ("passed", "failed", "cancelled", "lost")
@@ -296,7 +299,7 @@ def snapshot() -> str:
                 sys.exit(f"build-mac: git {' '.join(step)}: {result.stderr.strip()}")
         tree = result.stdout.strip()
     if tree == git("rev-parse", "HEAD^{tree}"):
-        say(f"On {git('log', '-1', '--format=%h %s', head)[:90]}, with nothing uncommitted")
+        say(f"On {head[:7]}, with nothing uncommitted ({git('log', '-1', '--format=%s', head)[:72]})")
         return head
     commit = git("commit-tree", tree, "-p", head, "-m", f"The working tree on {head[:7]}, for the build Mac")
     say(f"On {head[:7]}, with what's uncommitted ({git('diff', '--shortstat', head, commit)}), as {commit[:7]}")
@@ -586,11 +589,16 @@ def run_tests(root: Path, args: argparse.Namespace, derived: Path, folder: Path,
 
 def test(args: argparse.Namespace) -> int:
     """xcodebuild test for a scheme on the working tree as it is: in a lane there, or here."""
-    if where(args) is None:
+    recording = sorted(name for name in os.environ if RECORDING.match(name))
+    if recording:
+        say(f"{recording[0]} records references into this checkout, so this runs here")
+    if recording or where(args) is None:
         return test_here(args)
     commit = snapshot()
+    runner = sorted(f"{name}={value}" for name, value in os.environ.items() if name.startswith("TEST_RUNNER_"))
     options = ["--scheme", args.scheme, *[part for name in args.only for part in ("--only", name)],
-               *[part for name in args.skip for part in ("--skip", name)]]
+               *[part for name in args.skip for part in ("--skip", name)],
+               *[part for setting in runner for part in ("--env", setting)]]
     return start("test", commit, options, args.detach, size="short" if args.only else "long")
 
 
@@ -1154,7 +1162,9 @@ def test_there(argv: list[str]) -> int:
     parser.add_argument("--scheme", required=True)
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--skip", action="append", default=[])
+    parser.add_argument("--env", action="append", default=[])
     args = parser.parse_args(argv)
+    ENV.update(setting.split("=", 1) for setting in args.env)
     root = Path.cwd()
     return run_tests(root, args, root / "build/DerivedData", folder_there(args.job), generate=True)
 
@@ -1222,6 +1232,13 @@ def main() -> int:
     if options and args.command not in ("setup", "e2e"):
         parser.error(f"unrecognized arguments: {' '.join(options)}")
     args.options = options[1:] if args.command == "e2e" and options[:1] == ["--"] else options
+    # e2e.py has none of these, so `mise run e2e -- --here` means this script's.
+    for flag in ("--there", "--here", "--detach") if args.command == "e2e" else ():
+        if flag in args.options:
+            args.options.remove(flag)
+            setattr(args, flag[2:], True)
+    if args.command == "e2e" and args.there and args.here:
+        parser.error("argument --here: not allowed with argument --there")
     commands_by_name = {"status": status, "test": test, "gate": gate, "e2e": e2e, "release-checks": release_checks,
                         "attach": attach, "cancel": cancel, "models": copy_models, "setup": setup}
     try:
