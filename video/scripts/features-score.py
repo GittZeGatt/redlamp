@@ -129,6 +129,22 @@ def rolling_up(velocity):
     return s.whoosh(0.15, 5000, 700) * velocity
 
 
+def landing(velocity):
+    """A file landing softly where it's dropped, as E12's catalog lands in the import: a low thud under a
+    short, soft tap."""
+    t = s.times(0.25)
+    thud = np.sin(2 * np.pi * np.cumsum(90 + 70 * np.exp(-t / 0.015)) / s.SR) * np.exp(-t / 0.06)
+    tap = s.bandpass(s.rng.standard_normal(len(t)), 3200, octaves=1.4) * np.exp(-t / 0.004) * 0.5
+    return (0.8 * thud + tap) * np.clip(t / 0.0005, 0, 1) * velocity
+
+
+def stepping(velocity):
+    """A soft tick as a held arrow key moves E12's selection on: lower and shorter than a slider's tick, so a
+    run of them doesn't chatter."""
+    t = s.times(0.02)
+    return np.sin(2 * np.pi * 3100 * t) * np.exp(-t / 0.003) * velocity
+
+
 # Each kind of sound on screen: what plays, how loud, and how much of it goes to the room.
 SOUNDS = {
     "press": (lambda: press(0.8), 0.2, 0.05),
@@ -143,6 +159,8 @@ SOUNDS = {
     "looks": (lambda: swept(0.7), 0.32, 0.25),
     "unroll": (lambda: unrolling(0.8), 0.32, 0.3),
     "roll up": (lambda: rolling_up(0.8), 0.28, 0.3),
+    "lands": (lambda: landing(0.8), 0.3, 0.15),
+    "step": (lambda: stepping(0.6), 0.18, 0.06),
 }
 
 
