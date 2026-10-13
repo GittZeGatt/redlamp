@@ -704,7 +704,8 @@ What it changed:
 | warm-launch | the column store built from the index: visible and searchable in 1,293 ms, 486 MB over launch, 72 MB idle after a trim; reconciled behind it by folder signatures in 41.5 s, searches meanwhile p95 7.5 ms. Launched again, the store mapped from its snapshot: 36.2 ms, 72 MB, reconciled from the volume's history in 206 ms | under 1 s and 250 MB: FAIL for the first launch, PASS for the second | 1.07 GB |
 | search | all 43 counts equal the manifest's; first page and count p50 3.7 ms, p95 7.7 ms; every photo in order p95 12.5 ms; the store built in 989 ms, 92.3 bytes a photo | p95 under 16 ms: PASS | 1.26 GB |
 | facets | p50 2.9 ms, p95 7.9 ms | under 100 ms: PASS | 484 MB |
-| lists, groups, stacks, duplicates | every check passed | PASS | 1.57 GB, 843 MB, 770 MB, 682 MB |
+| lists | every check passed; over the index of the fixture, All Photographs in capture order made in 10.5 ms (median of 7, slowest 11.6), and Rejected's 29,961 photos in 4.5 ms (slowest 7.6), both counts the manifest's | PASS | 1.57 GB |
+| groups, stacks, duplicates | every check passed | PASS | 843 MB, 770 MB, 682 MB |
 
 - **The budgets are this design's, set for a million photos;** at two million, three miss. Listing takes four times its budget. The first 1,000 photos take 11.0 s to become searchable, against 3.5 s at a million, which missed too. A launch that has to build the column store takes 1.29 s and 486 MB, where every launch after maps the snapshot the first saved, in 36 ms.
 - **Indexing's memory grows faster than the library:** 5.45 GB at its peak for two million photos, against 1.33 GB for a million.
