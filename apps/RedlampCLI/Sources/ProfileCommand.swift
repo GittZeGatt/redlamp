@@ -60,6 +60,10 @@ enum ProfileCommand {
             )
             return
         }
+        if arguments.has("--diagnose") {
+            try await diagnose(available: available, wanted: wanted, profiler: profiler, output: output)
+            return
+        }
 
         for slot in FilmSlot.allCases where wanted?.contains(slot.rawValue) ?? true {
             // Scenes are grouped by camera: cross-validation leaves out whole bodies, and each
@@ -231,6 +235,49 @@ enum ProfileCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let file = output.appendingPathComponent("evaluate-\(slot.rawValue).json")
             try encoder.encode(results).write(to: file, options: .atomic)
+            print("  wrote \(file.lastPathComponent)")
+        }
+    }
+
+    /// `--diagnose`: where each slot's camera adapts to the scene, and whether processor
+    /// generation, the light or ISO changes its look (TON-45).
+    static func diagnose(
+        available: [(Manifest.Pair, URL)],
+        wanted: Set<String>?,
+        profiler: LookProfiler,
+        output: URL,
+    ) async throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        for slot in FilmSlot.allCases where wanted?.contains(slot.rawValue) ?? true {
+            let matching = available.filter { $0.0.slot == slot.rawValue }
+            guard matching.count >= minimumScenes else { continue }
+            let pairs = matching.map { pair, url in
+                (
+                    pair: LookProfiler.Pair(raw: url, scene: pair.camera, group: generation(pair.camera)),
+                    facts: LookProfiler.facts(of: url, generation: generation(pair.camera)),
+                )
+            }
+            print("\(slot.name) (\(slot.rawValue)): \(pairs.count) photos")
+            let diagnosis = try await profiler.diagnose(pairs)
+            print(String(
+                format: "  %d samples; the fit's error %.2f; median cell spread %.2f; %.0f%% of samples in cells that spread more than the fit's error",
+                diagnosis.samples, diagnosis.fitError, diagnosis.medianCellSpread, diagnosis.adaptiveShare * 100,
+            ))
+            print(String(format: "  %.0f%% of what's left is lightness", diagnosis.lightnessShare * 100))
+            for cell in diagnosis.adaptiveCells.prefix(5) {
+                print(String(
+                    format: "    spread %.2f: L %.2f, chroma %.3f, hue %.0f° (%d scenes, %d samples)",
+                    cell.spread, cell.lightness, cell.chroma, cell.hue, cell.scenes, cell.samples,
+                ))
+            }
+            for split in diagnosis.splits {
+                let groups = split.groups.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }
+                    .joined(separator: ", ")
+                print(String(format: "  %@ (%@): tables differ by %.2f", split.name, groups, split.difference))
+            }
+            let file = output.appendingPathComponent("diagnose-\(slot.rawValue).json")
+            try encoder.encode(diagnosis).write(to: file, options: .atomic)
             print("  wrote \(file.lastPathComponent)")
         }
     }

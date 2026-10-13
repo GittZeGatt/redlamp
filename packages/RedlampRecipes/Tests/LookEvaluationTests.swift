@@ -1,3 +1,4 @@
+import Foundation
 import RedlampEngineAPI
 import simd
 import Testing

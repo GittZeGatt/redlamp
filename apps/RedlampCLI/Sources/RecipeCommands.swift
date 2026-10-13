@@ -35,7 +35,7 @@ enum RecipeCommands {
       fingerprint <image>… [--json]            the style fingerprint of images
       fit --references <image>… [--images <raw>…] [--lut] [--name <name>] [-o <out.redrecipe>]
           [--evaluations <n>]
-      profile [--pairs <manifest.json>] [--slots <slot,…>] [--install]
+      profile [--pairs <manifest.json>] [--slots <slot,…>] [--install] [--evaluate <recipes,…>] [--diagnose]
                                                fit film-slot Base Looks to camera JPEGs in raw files
       film [--film <stock>] [--print <stock>] [--exposure <ev>] [--interlayer <k>] [--grey <display>]
            [--negative-density <d>] [--flare <f>] [--name <name>] [--count <images>] [--out <dir>]
