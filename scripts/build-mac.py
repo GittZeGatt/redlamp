@@ -1,46 +1,59 @@
 #!/usr/bin/env python3
-"""The build Mac: heavy checks run on the owner's MacBook Pro, over SSH from this Mac (ARC-15).
+"""The build Mac: builds and tests run on the owner's MacBook Pro, over SSH from this Mac (ARC-15).
 
-Run from the owner's own Terminal, or from an agent's shell through the sandbox relay
-(scripts/sandbox-relay.py). Without it agents' shells can't reach the local network, and a check
-runs here, as it would without the build Mac:
+Agents run builds and test suites there first, and here only when it doesn't answer (the owner's
+rule, 13 October 2026). It's run from the owner's own Terminal, or from an agent's shell through the
+sandbox relay (scripts/sandbox-relay.py); without the relay agents' shells can't reach the local
+network, and everything runs here, as it would without the build Mac:
 
     scripts/build-mac.py status               # whether it answers, its versions, what it's running
+    scripts/build-mac.py test --scheme <S>    # xcodebuild test on the working tree as it is
+    scripts/build-mac.py test --scheme <S> --only <Target/Suite>    # some of its tests
     scripts/build-mac.py gate [<commit>]      # the push gate on a commit (HEAD by default)
     scripts/build-mac.py gate --suite         # the whole test suite, as CI runs it
     scripts/build-mac.py gate --full          # and CI's Release builds
-    scripts/build-mac.py e2e [-- <arguments>] # the regression suite on this checkout's commit
+    scripts/build-mac.py e2e [-- <arguments>] # the regression suite on the working tree
     scripts/build-mac.py release-checks       # a release's checks on this checkout's commit
     scripts/build-mac.py attach [<job>]       # follow a job again (the one running by default)
     scripts/build-mac.py cancel [<job>]       # stop a job there (the one running by default)
     scripts/build-mac.py models               # this Mac's models, copied to the build Mac where it lacks them
     scripts/build-mac.py setup [<options>]    # scripts/build-mac/setup.sh there, with this Mac's versions
 
-A job sends its commit with git push to the build Mac's clone (~/src/build-mac/redlamp), under
-refs/build-mac/, which the pre-push hook lets through, and runs in the clone in a process of its
-own, so it carries on if the connection drops. Jobs run there one at a time, under caffeinate.
-The command prints what the job prints; Ctrl-C cancels the job, and --detach leaves it running for
-attach to follow. Its log comes back into build/build-mac/<job>/, with the push gate's own log and
-its tests' results (tests.json, which scripts/test-results.py compares with a run here), and a
-gate's pass into build/push-gate/passed, so a push of that commit, by the owner or an agent, goes
-straight through.
+A job sends a commit with git push to the build Mac's clone (~/src/build-mac/redlamp), under
+refs/build-mac/, which the pre-push hook lets through. test and e2e send the working tree,
+uncommitted and new files included, as a commit made with a temporary index, which leaves the
+checkout's index and branch as they are (HEAD itself when nothing differs from it). The job runs
+there in a process of its own, so it carries on if the connection drops, under caffeinate. The
+command prints what the job prints; Ctrl-C cancels the job, and --detach leaves it running for
+attach to follow. Its log comes back into build/build-mac/<job>/, with the push gate's own log or
+xcodebuild's, the tests' results (tests.json, which scripts/test-results.py compares with a run
+here) and, when tests fail, their result bundle; a gate's pass comes back into
+build/push-gate/passed, so a push of that commit, by the owner or an agent, goes straight through.
 
-e2e runs scripts/e2e.py, with the arguments after --, on the checkout's commit as committed, and
-brings the run's folder back into the checkout's build/e2e/, leaving its photos, test home and
-exports there; mise run release finds a passing report in it as it would one made here.
-release-checks, which mise run release-checks runs in the release copy, is the regression suite's
-release tier with focus, then the push gate on every test suite, each skipped if it has passed
-already, on either Mac.
+The build Mac runs several jobs at once, each in a lane of its own: 3 short tests (test with --only)
+and 2 long jobs (a gate, or test for a whole scheme). A test's lane is a worktree beside the clone
+whose DerivedData stays warm between jobs, and a job takes the lane its checkout used last when
+it's free. The regression suite drives the screen, so it runs alone: it waits for the jobs running,
+and jobs that come meanwhile wait for it. A job whose lanes are all taken waits there, saying what
+for, rather than running here (the owner's choice, 13 October 2026).
 
-When the build Mac doesn't answer, or its Xcode isn't this Mac's, gate and e2e say so in one line
-and run here; a different macOS is reported and allowed, since only Xcode has to match. --there
-waits for the build Mac instead, and gate --there checks a commit there even when it passed here;
---here doesn't try it.
+test runs xcodebuild test for the scheme unsigned, as CI and the push gate do, and shows failures,
+errors and each bundle's result. e2e runs scripts/e2e.py, with the arguments after --, and brings
+the run's folder back into the checkout's build/e2e/, leaving its photos, test home and exports
+there; mise run release finds a passing report in it as it would one made here. e2e.py's options
+that name this Mac's files, check a signed app or record performance run it here. release-checks,
+which mise run release-checks runs in the release copy, is the regression suite's release tier with
+focus, then the push gate on every test suite, each skipped if it has passed already, on either Mac.
+
+When the build Mac doesn't answer, or its Xcode isn't this Mac's, a command says so in one line and
+runs here (test in the checkout, with its own build/DerivedData-test); a different macOS is reported
+and allowed, since only Xcode has to match. --there waits for the build Mac instead, and gate
+--there checks a commit there even when it passed here; --here doesn't try it.
 
 The build Mac is the host build-mac in ~/.ssh/config; REDLAMP_BUILD_MAC names another. Under its
-~/src/build-mac: the clone, the push gate's worktree beside it (redlamp-push-gate), and jobs/, with
-a folder per job (job.json and its log) and a copy of this script, sent with each command, which
-runs its side of them.
+~/src/build-mac: the clone, the push gate's worktree beside it (redlamp-push-gate), lanes/, with a
+worktree for each test lane, and jobs/, with a folder per job (job.json and its log) and a copy of
+this script, sent with each command, which runs its side of them.
 """
 
 from __future__ import annotations
@@ -57,6 +70,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -67,9 +81,23 @@ HOST = os.environ.get("REDLAMP_BUILD_MAC", "build-mac")
 BASE_THERE = "src/build-mac"
 CLONE_THERE = f"{BASE_THERE}/redlamp"
 JOBS_THERE = f"{BASE_THERE}/jobs"
-# An answer within 3 seconds or none; a connection that stops answering for a minute has dropped.
-SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "ServerAliveInterval=15",
+LANES_THERE = f"{BASE_THERE}/lanes"
+# An answer within 12 seconds or none: through the sandbox relay that includes the relay's own
+# lookup of the build Mac's name, which took 4.2 s once it had just come back, and the 10 s the
+# relay gives it to answer. A connection that stops answering for a minute has dropped.
+SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=12", "-o", "ServerAliveInterval=15",
        "-o", "ServerAliveCountMax=4"]
+# How many jobs of each size run there at once, each in a lane of its own (the owner's choice).
+LANES = {"short": 3, "long": 2}
+# What a test lane takes from the clone, as the push gate takes them from the main checkout.
+FIXTURES = ("tests/fixtures/raw", "tests/fixtures/cameras", "tests/fixtures/shoots")
+BUILT = ("vendor/build", "vendor/cache", "Tuist/.build")
+# Worth showing while tests run, as the push gate shows them: failures, errors, crashes and each
+# bundle's result. The rest is kept in the job's xcodebuild.log.
+SHOWN = re.compile(r"✘|(?:^|: )error: |Test run with \d+ tests|unexpected exit|\*\* [A-Z ]+ \*\*")
+# e2e.py's options that keep it here: they name this Mac's files or check a signed app, or record
+# performance, which stays with this Mac until the build Mac has a series of its own (ARC-09).
+E2E_HERE = ("--passing-report", "--blackbox", "--app", "--replay", "--out", "--record", "-h", "--help")
 # The push gate's levels, each covering the ones before it (scripts/push-gate.py).
 LEVELS = ("checks", "reference", "suite", "full")
 FINAL = ("passed", "failed", "cancelled", "lost")
@@ -117,13 +145,19 @@ def versions() -> dict:
     return {"macos": macos, "xcode": xcode(found)}
 
 
+def sample(path: Path, base: Path) -> bool:
+    """A sample raw the tests read: not a partial download, nor a sidecar written by opening one."""
+    parts = path.relative_to(base).parts
+    return path.is_file() and not any(part.startswith(".") or part.endswith((".part", ".redlamp")) for part in parts)
+
+
 def samples(root: Path) -> list[str]:
     """The sample raws a checkout's tests read, as paths under tests/fixtures (what the push gate copies)."""
     found = []
-    for folder in ("raw", "cameras", "shoots"):
-        base = root / "tests/fixtures" / folder
+    for folder in FIXTURES:
+        base = root / folder
         for path in sorted(base.rglob("*")) if base.is_dir() else []:
-            if path.is_file() and not path.name.startswith(".") and path.suffix not in (".part", ".redlamp"):
+            if sample(path, base):
                 found.append(str(path.relative_to(root / "tests/fixtures")))
     return found
 
@@ -245,6 +279,49 @@ def where(args: argparse.Namespace) -> dict | None:
         time.sleep(30)
 
 
+def snapshot() -> str:
+    """The working tree as a commit: HEAD when nothing differs from it, else a commit of the working
+    tree on HEAD, uncommitted and new files included, made with a temporary index so the checkout's
+    own index and branch stay as they are."""
+    head = git("rev-parse", "HEAD")
+    with tempfile.TemporaryDirectory() as scratch:
+        index = Path(scratch) / "index"
+        own = Path(git("rev-parse", "--path-format=absolute", "--git-path", "index"))
+        if own.exists():
+            shutil.copyfile(own, index)
+        env = {**ENV, "GIT_INDEX_FILE": str(index)}
+        for step in (["add", "--all"], ["write-tree"]):
+            result = subprocess.run(["git", *step], cwd=ROOT, env=env, capture_output=True, text=True)
+            if result.returncode != 0:
+                sys.exit(f"build-mac: git {' '.join(step)}: {result.stderr.strip()}")
+        tree = result.stdout.strip()
+    if tree == git("rev-parse", "HEAD^{tree}"):
+        say(f"On {git('log', '-1', '--format=%h %s', head)[:90]}, with nothing uncommitted")
+        return head
+    commit = git("commit-tree", tree, "-p", head, "-m", f"The working tree on {head[:7]}, for the build Mac")
+    say(f"On {head[:7]}, with what's uncommitted ({git('diff', '--shortstat', head, commit)}), as {commit[:7]}")
+    return commit
+
+
+def new_job(kind: str, commit: str) -> str:
+    """A job's name, with its folder here for the results, which no other job has."""
+    while True:
+        job = f"{dt.datetime.now():%Y%m%d-%H%M%S}-{kind}-{commit[:7]}"
+        try:
+            results(job).mkdir(parents=True)
+            return job
+        except FileExistsError:
+            time.sleep(1)
+
+
+def prune() -> None:
+    """The newest jobs' results, and no others."""
+    base = checkout() / "build/build-mac"
+    kept = sorted(path for path in base.iterdir() if path.is_dir() and JOB_ID.fullmatch(path.name))
+    for old in kept[:-KEPT_JOBS]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def send(commit: str, job: str) -> None:
     """Puts the commit in the build Mac's clone, under refs/build-mac/, which the pre-push hook lets through."""
     env = {**ENV, "GIT_SSH_COMMAND": shlex.join(SSH)}
@@ -254,15 +331,16 @@ def send(commit: str, job: str) -> None:
         sys.exit(f"build-mac: sending {commit[:7]} to the build Mac failed: {result.stderr.strip()}")
 
 
-def start(kind: str, commit: str, command: list[str], detach: bool, into: Path | None = None) -> int:
-    """Starts a job there; a regression run's folder comes back into `into`'s build/e2e/ when it ends."""
-    job = f"{dt.datetime.now():%Y%m%d-%H%M%S}-{kind}-{commit[:7]}"
+def start(kind: str, commit: str, command: list[str], detach: bool, size: str, into: Path | None = None) -> int:
+    """Starts a job there, in a lane of its size (short, long, or alone); a regression run's folder
+    comes back into `into`'s build/e2e/ when it ends."""
+    job = new_job(kind, commit)
     say(f"On the build Mac, as {job}")
     send(commit, job)
     if into:
-        results(job).mkdir(parents=True, exist_ok=True)
         (results(job) / "into").write_text(f"{into}\n")
-    mode = ["_start", job, kind, commit, *(["--detach"] if detach else []), "--", *command]
+    mode = ["_start", job, kind, commit, f"--size={size}", f"--from={ROOT}", *(["--detach"] if detach else []),
+            "--", *command]
     if not detach:
         return follow(job, mode)
     state, why = ask(*mode)
@@ -316,19 +394,24 @@ def fetch(path: str, target: Path) -> bool:
     return code == 0
 
 
-def bring_back(run: str, into: Path) -> Path | None:
-    """A regression run's folder there, without what each run makes again, into the checkout's build/e2e/."""
-    target = into / "build/e2e" / Path(run).name
-    process = run_there("_pack", run)
+def unpack(path: str, target: Path) -> bool:
+    """A folder there, without what a regression run makes again each time, into the target here."""
+    process = run_there("_pack", path)
     try:
         with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
             archive.extractall(target, filter="data")
     except (tarfile.TarError, OSError) as error:
-        say(f"Its run's folder didn't come back ({error})")
-        return None
+        say(f"{Path(path).name} didn't come back ({error})")
+        return False
     finally:
         process.wait()
-    return target
+    return target.exists()
+
+
+def bring_back(run: str, into: Path) -> Path | None:
+    """A regression run's folder there into the checkout's build/e2e/."""
+    target = into / "build/e2e" / Path(run).name
+    return target if unpack(run, target) else None
 
 
 def remember(state: dict) -> None:
@@ -351,6 +434,11 @@ def finish(job: str, state: dict, folder: Path) -> int:
     if gate_log:
         fetch(f"{gate_log.group(1)}.log", folder / "push-gate.log")
         fetch(f"{gate_log.group(1)}.tests.json", folder / "tests.json")
+    if state.get("kind") == "test":
+        fetch(f"{JOBS_THERE}/{job}/xcodebuild.log", folder / "xcodebuild.log")
+        fetch(f"{JOBS_THERE}/{job}/tests.json", folder / "tests.json")
+        if state["state"] != "passed" and unpack(f"{JOBS_THERE}/{job}/tests.xcresult", folder / "tests.xcresult"):
+            say(f"Its result bundle is in {shown(folder / 'tests.xcresult')}")
     report = re.search(r"Report: (/\S+)/report\.md", printed)
     if report:
         into = Path((folder / "into").read_text().strip()) if (folder / "into").exists() else ROOT
@@ -361,11 +449,10 @@ def finish(job: str, state: dict, folder: Path) -> int:
     ran = between(state.get("started"), state.get("finished"))
     waited = between(state.get("queued"), state.get("started"))
     spent = f" in {took(ran)}" if ran is not None else ""
-    queued = f", after {took(waited)} waiting for the job before it" if waited and waited >= 5 else ""
-    say(f"{job}: {state['state']}{spent} on the build Mac{queued}; its logs are in {shown(folder)}")
-    kept = sorted(path for path in folder.parent.iterdir() if path.is_dir() and JOB_ID.fullmatch(path.name))
-    for old in kept[:-KEPT_JOBS]:
-        shutil.rmtree(old, ignore_errors=True)
+    queued = f", after {took(waited)} waiting for its turn" if waited and waited >= 5 else ""
+    lane = f" (lane {state['lane']})" if state.get("lane") else ""
+    say(f"{job}: {state['state']}{spent} on the build Mac{lane}{queued}; its logs are in {shown(folder)}")
+    prune()
     if state["state"] == "passed":
         return 0
     return 130 if state["state"] == "cancelled" else state.get("exit") or 1
@@ -415,19 +502,122 @@ def gate(args: argparse.Namespace, replace: bool = True, again: bool | None = No
         say(f"Its files passed the gate here ({record['level']}); --there checks them on the build Mac too")
     if where(args) is None:
         return here([str(ROOT / "scripts/push-gate.py"), commit, *flags], replace)
-    return start("gate", commit, ["scripts/push-gate.py", commit, *flags], args.detach)
+    return start("gate", commit, ["scripts/push-gate.py", commit, *flags], args.detach, size="long")
+
+
+def kept_here(options: list[str]) -> str | None:
+    """Why e2e.py's options keep it on this Mac, if they do."""
+    for index, option in enumerate(options):
+        name = option.split("=")[0]
+        if name in E2E_HERE:
+            return f"e2e.py's {name} is about this Mac's files, a signed app or its performance records"
+        if option == "--tier=performance" or (option == "--tier" and options[index + 1:index + 2] == ["performance"]):
+            return "The performance tier measures this Mac until the build Mac has a series of its own (ARC-09)"
+    return None
 
 
 def e2e(args: argparse.Namespace, replace: bool = True) -> int:
-    """The regression suite on the checkout's commit, its run's folder brought back into its build/e2e/."""
-    commit = git("rev-parse", "HEAD")
-    if where(args) is None:
+    """The regression suite on the working tree as it is, its run's folder brought back into build/e2e/."""
+    kept = kept_here(args.options)
+    if kept:
+        say(f"{kept}, so this runs here")
+    if kept or where(args) is None:
         if not (ROOT / "Redlamp.xcworkspace").is_dir():
             subprocess.run(["mise", "run", "generate"], cwd=ROOT, env=ENV, check=True)
         return here([str(ROOT / "scripts/e2e.py"), *args.options], replace)
+    commit = snapshot()
     # Generated at each commit, which may add or remove source files.
     command = ["bash", "-c", 'mise run generate && exec scripts/e2e.py "$@"', "e2e", *args.options]
-    return start("e2e", commit, command, args.detach, into=ROOT)
+    return start("e2e", commit, command, args.detach, size="alone", into=ROOT)
+
+
+def xcodebuild_test(args: argparse.Namespace, derived: Path, bundle: Path) -> list[str]:
+    """xcodebuild test for the scheme and the tests asked for, unsigned, as the push gate and CI run it."""
+    return ["xcodebuild", "test", "-workspace", "Redlamp.xcworkspace", "-scheme", args.scheme,
+            "-destination", "platform=macOS,arch=arm64", "-derivedDataPath", str(derived),
+            "-resultBundlePath", str(bundle), "CODE_SIGNING_ALLOWED=NO",
+            *[f"-only-testing:{name}" for name in args.only], *[f"-skip-testing:{name}" for name in args.skip]]
+
+
+def run_tests(root: Path, args: argparse.Namespace, derived: Path, folder: Path, generate: bool) -> int:
+    """xcodebuild test in the checkout at root, showing failures, errors and each bundle's result, and
+    keeping in the job's folder its whole output (xcodebuild.log), the tests' results (tests.json) and,
+    when it fails, the result bundle (tests.xcresult)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    bundle = folder / "tests.xcresult"
+    shutil.rmtree(bundle, ignore_errors=True)
+    started = beat = time.monotonic()
+    with (folder / "xcodebuild.log").open("w") as log:
+        if generate:
+            say("Generating the workspace")
+            code = subprocess.run(["mise", "run", "generate"], cwd=root, env=ENV, stdin=subprocess.DEVNULL,
+                                  stdout=log, stderr=subprocess.STDOUT).returncode
+            if code != 0:
+                say(f"Generating the workspace failed; its output is in {folder / 'xcodebuild.log'}")
+                return code
+        tests = [*args.only, *(f"all but {name}" for name in args.skip)]
+        say(f"xcodebuild test {args.scheme}: {', '.join(tests) or 'every test'}")
+        log.flush()
+        process = subprocess.Popen(xcodebuild_test(args, derived, bundle), cwd=root, env=ENV,
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, errors="replace")
+        try:
+            for line in process.stdout:
+                log.write(line)
+                if SHOWN.search(line):
+                    print(f"    {line.rstrip()[:400]}", flush=True)
+                if time.monotonic() - beat >= 180:
+                    beat = time.monotonic()
+                    print(f"    {took(beat - started)} so far", flush=True)
+            code = process.wait()
+        except KeyboardInterrupt:
+            process.wait()
+            raise
+    summary = root / "scripts/test-results.py"
+    if bundle.exists() and summary.exists():
+        found = subprocess.run([sys.executable, str(summary), "summary", str(bundle), "--out", str(folder / "tests.json")],
+                               env=ENV, capture_output=True, text=True)
+        if found.returncode == 0 and found.stdout.strip():
+            say(found.stdout.strip())
+    if code == 0:
+        shutil.rmtree(bundle, ignore_errors=True)
+    return code
+
+
+def test(args: argparse.Namespace) -> int:
+    """xcodebuild test for a scheme on the working tree as it is: in a lane there, or here."""
+    if where(args) is None:
+        return test_here(args)
+    commit = snapshot()
+    options = ["--scheme", args.scheme, *[part for name in args.only for part in ("--only", name)],
+               *[part for name in args.skip for part in ("--skip", name)]]
+    return start("test", commit, options, args.detach, size="short" if args.only else "long")
+
+
+def test_here(args: argparse.Namespace) -> int:
+    """The same xcodebuild test in this checkout, on its working tree, with a DerivedData of its own."""
+    head = git("rev-parse", "HEAD")
+    job = new_job("test", head)
+    folder = results(job)
+    say(f"Here, as {job}")
+    build = ROOT / "build"
+    build.mkdir(exist_ok=True)
+    started = now()
+    with (build / "DerivedData-test.lock").open("a") as held:
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            say("Waiting for the test run before it in this checkout, which uses the same DerivedData")
+            fcntl.flock(held, fcntl.LOCK_EX)
+        code = run_tests(ROOT, args, build / "DerivedData-test", folder,
+                         generate=not (ROOT / "Redlamp.xcworkspace").is_dir())
+    state = {"id": job, "kind": "test", "commit": head, "machine": "here", "state": "passed" if code == 0 else "failed",
+             "exit": code, "started": started, "finished": now(), "macos": versions()["macos"]}
+    (folder / "job.json").write_text(json.dumps(state, indent=1) + "\n")
+    say(f"{job}: {state['state']} in {took(between(started, state['finished']))} here; "
+        f"its logs are in {shown(folder)}")
+    prune()
+    return code
 
 
 def release_checks(args: argparse.Namespace) -> int:
@@ -538,7 +728,8 @@ def status(_args: argparse.Namespace) -> int:
     for job in info["jobs"][:8]:
         ran = between(job.get("started"), job.get("finished") or now())
         spent = f" {'for' if job['state'] == 'running' else 'in'} {took(ran)}" if ran is not None else ""
-        print(f"    {job['id']}: {job['state']}{spent}")
+        lane = f" (lane {job['lane']})" if job.get("lane") else ""
+        print(f"    {job['id']}: {job['state']}{spent}{lane}")
     return 0
 
 
@@ -631,40 +822,165 @@ def environment_there() -> dict:
     return env
 
 
+def lock_there(name: str):
+    """A lock file in lanes/, opened; a lock taken on it holds until it's closed or the process ends."""
+    path = Path.home() / LANES_THERE / f"{name}.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path.open("a+")
+
+
+def locked(handle, how: int) -> bool:
+    try:
+        fcntl.flock(handle, how | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def noted(name: str) -> dict:
+    """What lanes/<name>.json says: which job took a lane, the clone or the Mac to itself last."""
+    try:
+        return json.loads((Path.home() / LANES_THERE / f"{name}.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def note(name: str, job: str, source: str = "") -> None:
+    path = Path.home() / LANES_THERE / f"{name}.json"
+    path.with_suffix(".new").write_text(json.dumps({"job": job, "source": source, "used": now()}) + "\n")
+    path.with_suffix(".new").replace(path)
+
+
+def running_jobs() -> list[str]:
+    folders = sorted(path for path in (Path.home() / JOBS_THERE).iterdir() if JOB_ID.fullmatch(path.name))
+    return [path.name for path in folders if read_job(path.name)["state"] == "running"]
+
+
+def take_lane(job: str, size: str, source: str, log) -> tuple[str, object]:
+    """A free lane of the size, held: the one the job's checkout used last, else the one used most recently."""
+    names = [f"{size}-{number}" for number in range(1, LANES[size] + 1)]
+    told = False
+    while True:
+        records = {name: noted(name) for name in names}
+        order = sorted(names, key=lambda name: records[name].get("used", ""), reverse=True)
+        order.sort(key=lambda name: records[name].get("source") != source)
+        for name in order:
+            handle = lock_there(name)
+            if locked(handle, fcntl.LOCK_EX):
+                note(name, job, source)
+                return name, handle
+            handle.close()
+        if not told:
+            taken = ", ".join(records[name].get("job", "?") for name in names)
+            log.write(f"==> Waiting for one of the {len(names)} {size} lanes, which have {taken}\n".encode())
+            told = True
+        time.sleep(1)
+
+
+def wait_turn(job: str, state: dict, log) -> tuple[str | None, list]:
+    """Waits for the job's turn; returns its lane (none for a job that runs alone) and the locks it holds.
+
+    A gate or a regression run puts the clone at its commit, so they take the clone one at a time. A
+    job that runs alone holds the turnstile, which stops the jobs that come after it, until the jobs
+    running have finished. The locks are taken in one order (the clone, a lane, the turnstile, the
+    Mac), so jobs can't end up waiting for each other in a circle.
+    """
+    held, size = [], state.get("size", "long")
+    if state["kind"] in ("gate", "e2e"):
+        clone = lock_there("clone")
+        if not locked(clone, fcntl.LOCK_EX):
+            log.write(f"==> Waiting for the clone, which {noted('clone').get('job', 'another job')} has\n".encode())
+            fcntl.flock(clone, fcntl.LOCK_EX)
+        note("clone", job)
+        held.append(clone)
+    lane = None
+    if size in LANES:
+        lane, handle = take_lane(job, size, state.get("source", ""), log)
+        held.append(handle)
+    turnstile = lock_there("turnstile")
+    alone = noted("alone").get("job", "a job")
+    if not locked(turnstile, fcntl.LOCK_EX):
+        log.write(f"==> Waiting for {alone}, which runs alone\n".encode())
+        fcntl.flock(turnstile, fcntl.LOCK_EX)
+    mac = lock_there("mac")
+    if size in LANES:
+        if not locked(mac, fcntl.LOCK_SH):
+            log.write(f"==> Waiting for {noted('alone').get('job', 'a job')}, which runs alone\n".encode())
+            fcntl.flock(mac, fcntl.LOCK_SH)
+    else:
+        note("alone", job)
+        if not locked(mac, fcntl.LOCK_EX):
+            running = ", ".join(running_jobs()) or "the jobs running"
+            log.write(f"==> This runs alone, so it waits for {running}\n".encode())
+            fcntl.flock(mac, fcntl.LOCK_EX)
+    turnstile.close()
+    return lane, [*held, mac]
+
+
+def prepare_lane(place: Path, commit: str, env: dict, log) -> bool:
+    """Puts a lane's worktree at the commit, with no other file but the clone's sample raws and built
+    inputs, and its build folder, whose DerivedData keeps the lane's builds incremental."""
+    clone = Path.home() / CLONE_THERE
+
+    def run(*command: str, cwd: Path = place) -> bool:
+        return subprocess.run(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log,
+                              stderr=subprocess.STDOUT).returncode == 0
+
+    if (place / ".git").is_file():
+        ready = run("git", "checkout", "--quiet", "--detach", "--force", commit) and \
+            run("git", "clean", "-d", "--force", "--quiet")
+    else:
+        shutil.rmtree(place, ignore_errors=True)
+        run("git", "worktree", "prune", cwd=clone)
+        ready = run("git", "worktree", "add", "--quiet", "--detach", str(place), commit, cwd=clone)
+    if not ready:
+        return False
+    for item in BUILT:
+        if (clone / item).exists() and not (place / item).exists():
+            (place / item).parent.mkdir(parents=True, exist_ok=True)
+            run("cp", "-cR", str(clone / item), str(place / item))
+    for item in FIXTURES:
+        source = clone / item
+        for path in sorted(source.rglob("*")) if source.is_dir() else []:
+            target = place / item / path.relative_to(source)
+            if sample(path, source) and not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                run("cp", "-c", str(path), str(target))
+    return True
+
+
 def supervise(job: str) -> None:
-    """Runs the job in the clone once the job before it has finished, and records what came of it."""
+    """Runs the job at its commit once it's its turn, a test in its lane's worktree and a gate or a
+    regression run in the clone, and records what came of it."""
     state = update_job(job, supervisor=os.getpid())
     clone = Path.home() / CLONE_THERE
     env = environment_there()
     with (folder_there(job) / "log").open("ab", buffering=0) as log:
-        queue = (Path.home() / JOBS_THERE / "lock").open("a+")
-        try:
-            fcntl.flock(queue, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            queue.seek(0)
-            log.write(f"==> Waiting for {queue.read().strip() or 'the job before it'}\n".encode())
-            fcntl.flock(queue, fcntl.LOCK_EX)
-        queue.seek(0)
-        queue.truncate()
-        queue.write(job)
-        queue.flush()
+        lane, held = wait_turn(job, state, log)
         if read_job(job).get("cancel"):
             update_job(job, state="cancelled", finished=now())
             return
-        update_job(job, state="running", started=now())
-        # origin/main as GitHub has it now, which the push gate measures the commit's changes from.
-        subprocess.run(["git", "fetch", "--quiet", "origin"], cwd=clone, env=env, stdin=subprocess.DEVNULL,
-                       stdout=log, stderr=subprocess.STDOUT)
-        moved = subprocess.run(["git", "checkout", "--quiet", "--detach", state["commit"]], cwd=clone, env=env,
-                               stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
-        if moved.returncode != 0:
-            log.write(f"==> The clone couldn't be put at {state['commit'][:7]}\n".encode())
-            update_job(job, state="failed", exit=moved.returncode, finished=now())
+        update_job(job, state="running", started=now(), **({"lane": lane} if lane else {}))
+        if state["kind"] == "test":
+            log.write(f"==> In lane {lane}\n".encode())
+            place = Path.home() / LANES_THERE / lane
+            ready = prepare_lane(place, state["commit"], env, log)
+            command = [sys.executable, str(Path(__file__).resolve()), "_test", job, *state["command"]]
+        else:
+            place, command = clone, state["command"]
+            # origin/main as GitHub has it now, which the push gate measures the commit's changes from.
+            subprocess.run(["git", "fetch", "--quiet", "origin"], cwd=clone, env=env, stdin=subprocess.DEVNULL,
+                           stdout=log, stderr=subprocess.STDOUT)
+            ready = subprocess.run(["git", "checkout", "--quiet", "--detach", state["commit"]], cwd=clone, env=env,
+                                   stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT).returncode == 0
+        if not ready:
+            log.write(f"==> {place.name} couldn't be put at {state['commit'][:7]}\n".encode())
+            update_job(job, state="failed", exit=1, finished=now())
             return
         awake = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())], stdin=subprocess.DEVNULL,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # A process group of its own, so that cancelling stops what it started too.
-        process = subprocess.Popen(state["command"], cwd=clone, env=env, stdin=subprocess.DEVNULL, stdout=log,
+        process = subprocess.Popen(command, cwd=place, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         update_job(job, pid=process.pid)
         if read_job(job).get("cancel"):
@@ -678,6 +994,8 @@ def supervise(job: str) -> None:
                 break
             time.sleep(0.5)
         awake.terminate()
+        for handle in held:
+            handle.close()
         stopped = bool(read_job(job).get("cancel"))
         update_job(job, state="cancelled" if stopped else "passed" if code == 0 else "failed", exit=code,
                    finished=now())
@@ -713,14 +1031,16 @@ def follow_there(job: str, offset: int) -> int:
 def start_there(argv: list[str]) -> int:
     job, kind, commit, *rest = argv
     split = rest.index("--")
-    detach, command = "--detach" in rest[:split], rest[split + 1:]
+    flags, command = rest[:split], rest[split + 1:]
+    detach = "--detach" in flags
+    options = dict(flag[2:].split("=", 1) for flag in flags if "=" in flag)
     folder = folder_there(job)
     folder.mkdir(parents=True)
     (folder / "log").touch()
     macos = subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True).stdout.strip()
     found = subprocess.run(["xcodebuild", "-version"], capture_output=True, text=True).stdout
-    update_job(job, id=job, kind=kind, commit=commit, command=command, state="queued", queued=now(),
-               macos=macos, xcode=xcode(found))
+    update_job(job, id=job, kind=kind, commit=commit, command=command, size=options.get("size", "long"),
+               source=options.get("from", ""), state="queued", queued=now(), macos=macos, xcode=xcode(found))
     # The supervisor, detached from this connection: a session of its own, whose parent exits at once.
     if os.fork() == 0:
         try:
@@ -827,12 +1147,25 @@ def pack_there(run: str) -> int:
     return 0
 
 
+def test_there(argv: list[str]) -> int:
+    """A test job's tests, in its lane's worktree (the folder it runs in), with the lane's DerivedData."""
+    parser = argparse.ArgumentParser(prog="build-mac.py _test")
+    parser.add_argument("job")
+    parser.add_argument("--scheme", required=True)
+    parser.add_argument("--only", action="append", default=[])
+    parser.add_argument("--skip", action="append", default=[])
+    args = parser.parse_args(argv)
+    root = Path.cwd()
+    return run_tests(root, args, root / "build/DerivedData", folder_there(args.job), generate=True)
+
+
 THERE = {
     "_start": start_there,
     "_follow": lambda argv: follow_there(argv[0], int(argv[1])),
     "_cancel": lambda argv: cancel_there(argv[0]),
     "_status": lambda argv: status_there(),
     "_pack": lambda argv: pack_there(argv[0]),
+    "_test": test_there,
 }
 
 
@@ -843,9 +1176,20 @@ def main() -> int:
             emit({"id": argv[0], "state": "unknown"})
             return 1
         return THERE[mode](argv)
-    parser = argparse.ArgumentParser(description="Heavy checks on the build Mac, over SSH (ARC-15).")
+    parser = argparse.ArgumentParser(description="Builds and tests on the build Mac, over SSH (ARC-15).")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status", help="whether the build Mac answers, its versions, what it's running")
+    testing = commands.add_parser("test", help="xcodebuild test for a scheme on the working tree as it is, in a "
+                                               "lane there or, failing that, here")
+    testing.add_argument("--scheme", required=True, help="the scheme (Redlamp-Workspace for every suite)")
+    testing.add_argument("--only", action="append", default=[], metavar="TARGET[/SUITE[/TEST]]",
+                         help="only these tests, as -only-testing names them (repeated for more): a short job")
+    testing.add_argument("--skip", action="append", default=[], metavar="TARGET[/SUITE[/TEST]]",
+                         help="not these tests, as -skip-testing names them (repeated for more)")
+    place = testing.add_mutually_exclusive_group()
+    place.add_argument("--there", action="store_true", help="wait for the build Mac rather than test here")
+    place.add_argument("--here", action="store_true", help="test here, without trying the build Mac")
+    testing.add_argument("--detach", action="store_true", help="start it there and return; attach follows it")
     checking = commands.add_parser("gate", help="the push gate on a commit, there or, failing that, here")
     checking.add_argument("commit", nargs="?", default="HEAD", help="the commit to check (HEAD by default)")
     level = checking.add_mutually_exclusive_group()
@@ -856,8 +1200,8 @@ def main() -> int:
                        help="wait for the build Mac rather than check here, and check there what passed here")
     place.add_argument("--here", action="store_true", help="check here, without trying the build Mac")
     checking.add_argument("--detach", action="store_true", help="start it there and return; attach follows it")
-    regression = commands.add_parser("e2e", help="the regression suite on this checkout's commit, there or, failing "
-                                                 "that, here, passing scripts/e2e.py the arguments after --")
+    regression = commands.add_parser("e2e", help="the regression suite on the working tree as it is, there or, "
+                                                 "failing that, here, passing scripts/e2e.py the arguments after --")
     place = regression.add_mutually_exclusive_group()
     place.add_argument("--there", action="store_true", help="wait for the build Mac rather than run it here")
     place.add_argument("--here", action="store_true", help="run it here, without trying the build Mac")
@@ -878,7 +1222,7 @@ def main() -> int:
     if options and args.command not in ("setup", "e2e"):
         parser.error(f"unrecognized arguments: {' '.join(options)}")
     args.options = options[1:] if args.command == "e2e" and options[:1] == ["--"] else options
-    commands_by_name = {"status": status, "gate": gate, "e2e": e2e, "release-checks": release_checks,
+    commands_by_name = {"status": status, "test": test, "gate": gate, "e2e": e2e, "release-checks": release_checks,
                         "attach": attach, "cancel": cancel, "models": copy_models, "setup": setup}
     try:
         return commands_by_name[args.command](args)
