@@ -200,7 +200,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | Zoom, Navigator and clipping | Yes | Done | Behind | | | Fit, Fill, 1:1 and 2:1; Lightroom zooms to 11:1 |
 | Zoom, pan and brush sizes in every tool | Yes | Done | | | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
-| Panels that hide automatically or stay up | Yes | Done | Different | | UX-19 | The filmstrip hides automatically or stays up with the photo fitted above it (View › Filmstrip, its right-click menu, Settings); Lightroom offers Auto Hide & Show, Auto Hide and Manual for each panel |
+| Panels that hide automatically or stay up | Yes | Done | Different | | UX-19, UX-43 | The filmstrip hides automatically or stays up with the photo fitted above it (the pin on the filmstrip, View › Filmstrip, its right-click menu, Settings); Lightroom offers Auto Hide & Show, Auto Hide and Manual for each panel |
 | Filmstrip scroll bar and thumbnail sizes | Yes (Classic) | Done | | | UX-42 | Also Home and End for the first and last photo, and the line of text above the thumbnails made optional |
 | Histogram you can drag to adjust | Yes | Done | | | | |
 | RGB and L*a*b* values of the pixel under the pointer | Yes | Done | Different | | UX-32 | Under the histogram; RGB in Display P3, where Lightroom uses Melissa RGB, and L*a*b* relative to D50 |
