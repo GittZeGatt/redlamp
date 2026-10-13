@@ -568,10 +568,10 @@ SLOT = w.Rect(BOTTOM.x + 5, BOTTOM.y + 13, 14, 19)
 
 
 def catalog_card(c, r):
-    """The catalog, read and never changed: the file with its lock."""
+    """The catalog, read only and never changed: the file with its lock."""
     c.sprite(r.x, r.y + 1, LRCAT, LRCAT_COLOURS)
     c.sprite(r.x + 7, r.y + 10, LOCK, {"#": "gold"}, outline="shadow")
-    c.text(r.x + 17, r.y + 1, "READ,", "white", font="large")
+    c.text(r.x + 17, r.y + 1, "READ ONLY", "white", font="large")
     c.text(r.x + 17, r.y + 11, "NEVER CHANGED", "text")
 
 
@@ -746,7 +746,8 @@ def result(c, b):
     caption(c, b)
     w.develop(c, before.img, w.between(b, CUE["flip"], CUE["flip"] + 8 / w.PER_BEAT))
     if b < CUE["flip"] + 1:
-        c.sparkles(RESULT_GRID.x, RESULT_GRID.y, RESULT_GRID.w, RESULT_GRID.h, 26, ["gold.light", "white", "sky.light"],
+        # Below the count and the filter bar, where a sparkle reads as a character (1,000,000+).
+        c.sparkles(RESULT_GRID.x, RESULT_GRID.y + 30, RESULT_GRID.w, RESULT_GRID.h - 30, 26, ["gold.light", "white", "sky.light"],
                    seed=int(b * w.PER_BEAT))
     return []
 
