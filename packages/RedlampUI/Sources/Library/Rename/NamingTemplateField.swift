@@ -64,6 +64,18 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
         return [presets, row, error]
     }()
 
+    /// The same for a narrow column: the presets with the tokens beside them, then the field across the column, so
+    /// a template of dates has the room it needs; then the error.
+    private(set) lazy var columnRows: [NSView] = {
+        let row = NSStackView(views: [presets, tokens])
+        row.orientation = .horizontal
+        row.spacing = 6
+        presets.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        presets.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        tokens.setContentHuggingPriority(.required, for: .horizontal)
+        return [row, field, error]
+    }()
+
     /// The template's text; set while the field isn't being edited.
     var text: String {
         get { field.stringValue }

@@ -67,7 +67,6 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         names.options = { [weak self] in self?.model.settings.naming ?? NamingOptions() }
         texts.orientation = .vertical
         texts.alignment = .leading
-        example.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         example.textColor = .secondaryLabelColor
         example.setAccessibilityIdentifier("import.example")
 
@@ -97,7 +96,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         ejects.setAccessibilityIdentifier("import.eject-after")
         destinations.font = .systemFont(ofSize: 11)
 
-        let (folderRows, nameRows) = (folders.rows, names.rows)
+        let (folderRows, nameRows) = (folders.columnRows, names.columnRows)
         for error in [folders.error, names.error] {
             error.preferredMaxLayoutWidth = 260
         }
@@ -126,8 +125,8 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             }
         }
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 16, right: 16)
-        for field in [destinationRow, example, backupRow, keywords, destinations] as [NSView] + folderRows.dropFirst()
-            + nameRows.dropFirst() {
+        for field in [destinationRow, example, backupRow, keywords, presets, destinations] as [NSView] + folderRows
+            + nameRows {
             field.translatesAutoresizingMaskIntoConstraints = false
             field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
@@ -199,6 +198,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         updateTexts()
         example.stringValue = model.example ?? (model.folderError ?? model.namesError).map { _ in "—" }
             ?? "Choose a photo to see where it goes."
+        example.font = model.example == nil ? .systemFont(ofSize: 11) : .monospacedSystemFont(
+            ofSize: 11,
+            weight: .regular,
+        )
         backupBox.state = settings.backup == nil ? .off : .on
         backup.stringValue = settings.backup?.path ?? ""
         backupRow?.isHidden = settings.backup == nil
@@ -224,7 +227,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     /// None, then the library's presets, the one chosen selected, and what it fills in.
     private func updatePresets() {
         let names = model.metadataPresets.map(\.name)
-        if presets.itemArray.compactMap({ $0.representedObject as? String }) != names {
+        if presets.numberOfItems == 0 || presets.itemArray.compactMap({ $0.representedObject as? String }) != names {
             presets.removeAllItems()
             presets.addItem(withTitle: "None")
             for name in names {

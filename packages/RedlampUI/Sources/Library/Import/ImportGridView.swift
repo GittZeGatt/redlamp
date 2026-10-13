@@ -70,7 +70,8 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
 
         sourceName.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         sourceName.lineBreakMode = .byTruncatingMiddle
-        sourceName.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // The detail gives way before the name.
+        sourceName.setContentCompressionResistancePriority(.init(260), for: .horizontal)
         sourceDetail.textColor = .secondaryLabelColor
         sourceDetail.lineBreakMode = .byTruncatingTail
         sourceDetail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
