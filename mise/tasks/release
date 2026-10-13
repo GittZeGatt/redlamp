@@ -286,9 +286,10 @@ git push origin "$TAG"
 # redlamp.app's download button, the Homebrew cask and the update feed follow the release marked Latest.
 ASSETS=("$ZIP" "$DSYMS_ZIP" "$OUT/appcast.xml")
 [ -n "${SKIP_DMG:-}" ] || ASSETS+=("$DMG")
-# GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
+# GitHub's generated notes are only its changelog link, since nothing lands through pull requests.
+# Left to find the previous release itself, it passes over those tagged off main.
 gh release create "$TAG" "${ASSETS[@]}" --verify-tag --latest --title "Redlamp $VERSION" \
-    --notes-file "$NOTES" --generate-notes
+    --notes-file "$NOTES" --generate-notes --notes-start-tag "$PREVIOUS"
 
 for _ in 1 2 3 4 5 6; do
     if grep -q "<sparkle:version>$BUILD</sparkle:version>" <<<"$(curl -fsSL "$FEED" 2>/dev/null || true)"; then
