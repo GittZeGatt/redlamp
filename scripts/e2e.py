@@ -98,10 +98,10 @@ def commit() -> tuple[str, bool]:
 # ---------------------------------------------------------------- building the test app
 
 def can_sign() -> bool:
-    """Whether the keychain holds a code signing identity; the build Mac's holds none (ARC-15)."""
+    """Whether the keychain holds a development identity, which the test app's build signs with; the
+    build Mac's holds none, though it may hold a Developer ID one (ARC-15)."""
     out = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"], capture_output=True, text=True).stdout
-    lines = out.strip().splitlines()
-    return bool(lines) and lines[-1].split()[0] != "0"
+    return any(f'"{kind} Development:' in out for kind in ("Apple", "Mac"))
 
 
 def build(configuration: str) -> Path:
