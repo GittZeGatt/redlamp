@@ -580,7 +580,7 @@ def run_tests(root: Path, args: argparse.Namespace, derived: Path, folder: Path,
     if bundle.exists() and summary.exists():
         found = subprocess.run([sys.executable, str(summary), "summary", str(bundle), "--out", str(folder / "tests.json")],
                                env=ENV, capture_output=True, text=True)
-        if found.returncode == 0 and found.stdout.strip():
+        if found.returncode == 0 and found.stdout.strip() and not found.stdout.startswith("Tests: 0 tests"):
             say(found.stdout.strip())
     if code == 0:
         shutil.rmtree(bundle, ignore_errors=True)
