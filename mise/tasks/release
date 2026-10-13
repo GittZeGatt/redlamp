@@ -243,12 +243,22 @@ dmg_app() {
     scripts/check-release-dmg.sh "$DMG" ${1:+"$1"} || fail "the disk image doesn't hold the app as it was signed; see above"
 }
 
+# The release's highlights, chosen in the release room, then its commits, or the comparison's link
+# when they won't fit in a GitHub release (scripts/release-notes.sh). The highlights are main's: a
+# release from an earlier commit is often chosen after its highlights were. A dry run makes them too.
+git fetch --quiet --tags origin
+NOTES="$OUT/notes.md"
+scripts/release-notes.sh "$VERSION" "$COMMIT" "$MAIN" >"$NOTES"
+# A release made from an earlier commit isn't on main, so the previous release is the latest tagged.
+PREVIOUS="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/v*' \
+    | awk -v tag="$TAG" '$0 != tag { print; exit }')"
+
 if [ "$DRY_RUN" = 1 ]; then
     zip_app
     dmg_app
     MADE="$ZIP"
     [ -n "${SKIP_DMG:-}" ] || MADE="$ZIP and $DMG"
-    echo "==> Dry run: signed but not notarized: $MADE (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP"
+    echo "==> Dry run: signed but not notarized: $MADE (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP, notes $NOTES"
     exit 0
 fi
 
@@ -266,30 +276,6 @@ mise run notarize -- "$APP"
 zip_app --notarized
 dmg_app --notarized
 
-# GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
-# The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them,
-# as main has it: a release from an earlier commit is often chosen after its highlights were.
-NOTES="$OUT/notes.md"
-# A release made from an earlier commit isn't on main, so the previous release is the latest
-# tagged, and the changes are what no release has yet.
-git fetch --quiet --tags origin
-PREVIOUS="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' 'refs/tags/v*' \
-    | awk -v tag="$TAG" '$0 != tag { print; exit }')"
-HIGHLIGHTS="docs/releases/$VERSION.md"
-{
-    if git cat-file -e "$MAIN:$HIGHLIGHTS" 2>/dev/null; then
-        git show "$MAIN:$HIGHLIGHTS"
-        echo
-    elif git cat-file -e "$COMMIT:$HIGHLIGHTS" 2>/dev/null; then
-        git show "$COMMIT:$HIGHLIGHTS"
-        echo
-    fi
-    echo "Changes since ${PREVIOUS#v}:"
-    echo
-    # shellcheck disable=SC2046
-    git log --no-merges --format='- %s' --invert-grep --grep='^Cask: ' --grep='^Version [0-9]' \
-        "$COMMIT" --not $(git for-each-ref --format='%(refname)' 'refs/tags/v*' | awk -v tag="refs/tags/$TAG" '$0 != tag')
-} >"$NOTES"
 "$SRC/scripts/appcast.sh" "$APP" "$ZIP" \
     "https://github.com/pdcgomes/redlamp/releases/download/$TAG/$(basename "$ZIP")" "$NOTES" >"$OUT/appcast.xml"
 xmllint --noout "$OUT/appcast.xml"
@@ -300,6 +286,7 @@ git push origin "$TAG"
 # redlamp.app's download button, the Homebrew cask and the update feed follow the release marked Latest.
 ASSETS=("$ZIP" "$DSYMS_ZIP" "$OUT/appcast.xml")
 [ -n "${SKIP_DMG:-}" ] || ASSETS+=("$DMG")
+# GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
 gh release create "$TAG" "${ASSETS[@]}" --verify-tag --latest --title "Redlamp $VERSION" \
     --notes-file "$NOTES" --generate-notes
 
