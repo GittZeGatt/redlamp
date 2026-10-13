@@ -938,7 +938,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
 - [ ] HDR and EDR editing and export <!-- tracker: TON-42 -->
 - [ ] Batch export <!-- tracker: EDT-16 -->
-- [ ] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->
+- [x] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->
 - [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
