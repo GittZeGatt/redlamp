@@ -25,8 +25,11 @@ HOST = os.environ.get("REDLAMP_BUILD_MAC", "build-mac")
 MENTIONS = re.compile(r"xcodebuild|push-gate\.py|e2e\.py")
 OPERATORS = "();<>|&\n"
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
-# Words that run the word after them: mise exec -- xcodebuild, python3 scripts/e2e.py.
-RUNNERS = {"python", "python3", "exec", "env", "time", "nice", "caffeinate", "mise", "xcrun", "--", "command"}
+# Words that run the word after them: mise exec -- xcodebuild, python3 scripts/e2e.py, timeout 600 xcodebuild.
+RUNNERS = {"python", "python3", "exec", "env", "time", "nice", "caffeinate", "mise", "xcrun", "--", "command",
+           "timeout", "gtimeout"}
+# timeout's durations (600, 10m, -k 5) and other runners' counts (nice -n 10).
+DURATION = re.compile(r"\d+(?:\.\d+)?[smhd]?")
 SHELLS = {"bash", "sh", "zsh"}
 # Recording references writes them into the checkout the tests run in, so such a run stays here.
 RECORDING = re.compile(r"(?:TEST_RUNNER_)?REDLAMP_(?:RECORD|UPDATE)_\w*=")
@@ -46,6 +49,14 @@ def without_heredocs(text: str) -> str:
         found = HEREDOC.search(line)
         end = found.group(2) if found else None
     return "\n".join(kept)
+
+
+def leads(words: list[str], index: int) -> bool:
+    """Whether the word at index can come before the program a command runs: a runner, an option, an assignment,
+    a duration, or the signal after timeout's -s (timeout -s KILL 600)."""
+    word = words[index]
+    return (Path(word).name in RUNNERS or word.startswith("-") or "=" in word or bool(DURATION.fullmatch(word))
+            or (index > 0 and words[index - 1] in ("-s", "--signal")))
 
 
 def commands(text: str, depth: int = 0) -> list[list[str]]:
@@ -70,8 +81,9 @@ def commands(text: str, depth: int = 0) -> list[list[str]]:
             current.append(word)
     inner = []
     for words in found:
-        name = Path(words[0]).name
-        for index, word in enumerate(words[1:], 1):
+        start = next((index for index in range(len(words)) if not leads(words, index)), 0)
+        name = Path(words[start]).name
+        for index, word in enumerate(words[start + 1:], start + 1):
             given = (name in SHELLS and words[index - 1] in ("-c", "-lc")) or (name == "ssh" and " " in word)
             if depth < 2 and given and MENTIONS.search(word):
                 inner += commands(word, depth + 1)
@@ -81,8 +93,7 @@ def commands(text: str, depth: int = 0) -> list[list[str]]:
 def program(words: list[str], name: str) -> int | None:
     """Where the command runs the program, rather than naming it as another program's argument."""
     for index, word in enumerate(words):
-        if Path(word).name == name and all(Path(before).name in RUNNERS or before.startswith("-") or "=" in before
-                                           for before in words[:index]):
+        if Path(word).name == name and all(leads(words, before) for before in range(index)):
             return index
     return None
 
