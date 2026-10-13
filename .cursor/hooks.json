@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/build-mac-first.py",
+        "matcher": "xcodebuild|push-gate\\.py|e2e\\.py",
+        "timeout": 30
+      }
+    ]
+  }
+}
