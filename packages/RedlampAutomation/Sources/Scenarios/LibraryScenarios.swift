@@ -30,10 +30,11 @@
     enum LibraryScenarios {
         static let all: [Scenario] = [subfolders, thumbnails, diskChanges, ratings, filmstripHiding]
 
-        /// UX-19: the three controls are one preference; kept up, the filmstrip has room of its own.
+        /// UX-19 and UX-43: the four controls are one preference; kept up, the filmstrip has room of its own.
         static let filmstripHiding = Scenario(
             "library.filmstrip-hide-automatically",
-            "Hide Automatically from the View menu, the filmstrip's own menu and Settings, the photo fitted above it",
+            "Hide Automatically from the View menu, the filmstrip's own menu, its pin and Settings, the photo fitted "
+                + "above it",
             claims: [.feature("library.filmstrip")],
             needsFocus: true,
         ) { app in
@@ -95,6 +96,33 @@
                 "The filmstrip's menu has \(stripMenu)",
             )
             try app.wait("the filmstrip floating again, its room given back", until: floats)
+            try app.wait("View › Filmstrip › \(item) checked") { _ in Menus.isChecked(item) == true }
+            app.covered(.feature("library.filmstrip"), via: .mouse)
+
+            // The pin at the end of its line of text (UX-43), on the filmstrip brought up as the pointer at the
+            // window's bottom edge brings it: pinned, it stays up once the pointer has gone, the photo fitted above
+            // it, and unpinned it floats again.
+            let pin = Target.identifier("filmstrip.pin")
+            try app.main { $0.keepsFilmstripShown = true }
+            defer { try? app.main { $0.keepsFilmstripShown = false } }
+            let pinPlace = PlaceBox()
+            try app.wait("the filmstrip up, its pin in place") { _ in
+                guard let window = Views.editorWindow, let frame = Views.find("filmstrip.pin", in: window),
+                      window.contentView?.bounds.contains(frame) == true
+                else { return false }
+                defer { pinPlace.last = frame }
+                return pinPlace.last == frame
+            }
+            try app.tap(pin)
+            try app.wait("the pin to keep the filmstrip up, the photo fitted above it", until: kept)
+            try app.main { $0.keepsFilmstripShown = false }
+            app.pause(0.5)
+            try app.expect(try app.exists(pin), "The pinned filmstrip went away once the pointer had gone")
+            try app.wait("View › Filmstrip › \(item) unchecked") { _ in Menus.isChecked(item) == false }
+            let pinned = try app.main { _ in UserDefaults.standard.object(forKey: key) as? Bool }
+            try app.expect(pinned == false, "The preference the pin saved is \(String(describing: pinned))")
+            try app.tap(pin)
+            try app.wait("the pin to let the filmstrip hide, its room given back", until: floats)
             try app.wait("View › Filmstrip › \(item) checked") { _ in Menus.isChecked(item) == true }
             app.covered(.feature("library.filmstrip"), via: .mouse)
 

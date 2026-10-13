@@ -677,9 +677,10 @@ public final class EditorModel {
     /// Library's left-hand Library and Collections sections, and which of their sources is shown (LIB-23).
     @ObservationIgnored public private(set) lazy var librarySources = LibrarySources(model: self)
     #if DEBUG || REDLAMP_PROFILING
-        /// `filmstrip=shown` in a capture script: the floating filmstrip stays up with a photo
-        /// selected, as it does while the pointer is over it.
-        var keepsFilmstripShown = false
+        /// `filmstrip=shown` in a capture script, and scenarios that click on the floating filmstrip: it stays up
+        /// with a photo selected, as it does while the pointer is over it. The events scenarios send through the
+        /// window can't bring it up, since SwiftUI reads hovers from the real pointer.
+        public var keepsFilmstripShown = false
     #endif
 
     // MARK: Shortcut-driven view state
