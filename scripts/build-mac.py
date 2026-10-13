@@ -1000,6 +1000,9 @@ def supervise(job: str) -> None:
                 os.killpg(process.pid, 0)
             except ProcessLookupError:
                 break
+            except PermissionError:
+                # What's left can't be signalled by this account (after a regression run), so isn't its own.
+                break
             time.sleep(0.5)
         awake.terminate()
         for handle in held:
