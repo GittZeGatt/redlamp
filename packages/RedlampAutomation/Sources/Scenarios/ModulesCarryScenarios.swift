@@ -2,7 +2,7 @@
     import AppKit
     import RedlampDocument
     import RedlampEngineAPI
-    import RedlampLibrary
+    @_spi(Harness) import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
     /// What carries across Library and Develop (LIB-13): one Undo for both, the filter and sort, and ⌘Z for an import
