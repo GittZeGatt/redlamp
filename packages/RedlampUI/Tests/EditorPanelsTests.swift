@@ -121,6 +121,8 @@ struct EditorPanelsTests {
             model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
         )
         let window = try #require(controller.window)
+        // The window keeps its frame by name, and other tests leave it at its smallest.
+        window.setContentSize(CGSize(width: 1600, height: 1000))
         window.orderFront(nil)
         defer { window.orderOut(nil) }
         let toolbar = try #require(window.toolbar)
