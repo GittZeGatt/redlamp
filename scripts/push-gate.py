@@ -305,6 +305,11 @@ def lock(commit: str):
 # ---------------------------------------------------------------- the worktree
 
 
+def wanted(path: Path, base: Path) -> bool:
+    """Not a partial download, nor a sidecar folder written by opening a sample, which CI never has."""
+    return not any(part.startswith(".") or part.endswith((".part", ".redlamp")) for part in path.relative_to(base).parts)
+
+
 def prepare(commit: str, level: str) -> None:
     """Puts the gate's worktree at the commit, with no file the commit doesn't have."""
     if (SRC / ".git").is_file():
@@ -332,16 +337,14 @@ def prepare(commit: str, level: str) -> None:
         # cameras) would stay, and be tested against a commit without their golden records.
         held = SRC / item
         for path in sorted(held.rglob("*"), reverse=True) if held.is_dir() else []:
-            if not (source / path.relative_to(held)).exists() and path not in listed:
+            if not wanted(path, held) or (not (source / path.relative_to(held)).exists() and path not in listed):
                 if path.is_dir():
-                    path.rmdir()
+                    shutil.rmtree(path)
                 else:
                     path.unlink()
         for path in sorted(source.rglob("*")) if source.is_dir() else []:
             target = SRC / item / path.relative_to(source)
-            # Not partial downloads, or sidecars written by opening a sample, which CI never has.
-            if path.is_file() and not path.name.startswith(".") and path.suffix not in (".part", ".redlamp") \
-                    and not target.exists():
+            if path.is_file() and wanted(path, source) and not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 subprocess.run(["cp", "-c", str(path), str(target)], check=True)
     # CI downloads every sample; here only what the main checkout lacks, and the tests skip what
