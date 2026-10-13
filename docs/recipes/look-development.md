@@ -112,6 +112,30 @@ Probed on 12 October, with the files read in memory and a ColorChecker chart ren
 - **Colour.** Mean ΔE (OKLab × 100) to the measured stills looks: PROVIA 2.1, Classic Chrome 3.5, Velvia 3.0–3.5, ASTIA 4.6–5.3. Against their own PROVIA, the LUTs make Classic Chrome 0.77 as chromatic and Velvia 1.12; the measured looks make them 0.96 and 1.00, which suggests the measured looks miss part of each simulation's character. TON-45 checks it on real photos.
 - **Brightness.** Redlamp Color renders scene middle grey at L* 64 and the LUTs at 46–49, and camera-log import adds no offset, so an imported LUT renders about a stop darker without TON-43's exposure offset. Decoding their output as sRGB matched the stills looks as well as Rec.709 at 2.4 gamma, or better.
 
+#### On real photos (TON-45)
+
+`redlamp recipe profile --evaluate <looks>` renders each pair with each look as the app does and scores it against the camera's JPEG on the same flat points: OKLab ΔE × 100 (mean and 90th percentile) and CIEDE2000 (mean and 95th percentile), as rendered and with each photo's exposure matched to the camera's midtones, by processor generation. Given one of Fujifilm's LUTs, it scores the import's every output decoding and exposure offset. Run on 13 October with the GFX ETERNA 55 pack's 65-point F-Log2 LUTs; exposure matched, OKLab:
+
+| Slot | Photos | Fujifilm's LUT (sRGB, +0.9 stops) | Bundled look | Redlamp Color |
+| --- | --- | --- | --- | --- |
+| `standard` (PROVIA) | 120 | 2.12 | 1.78 (measured on these photos) | 2.41 |
+| `vivid-slide` (Velvia) | 13 | 2.28 | 2.40 (measured on most of them) | 3.10 |
+| `soft-slide` (ASTIA) | 5 | 2.52 (2.01 at +1.3) | 2.35 (measured on these) | 4.86 |
+| `chrome` (Classic Chrome) | 18 | 2.57 | 2.46 (measured on these) | 3.47 |
+| `cinema` (ETERNA) | 4 (night) | 0.77 | 2.06 (hand-designed) | 3.84 |
+
+- **The import's defaults.** sRGB decoding beat Rec.709's 2.4 gamma for every simulation, and with +0.9 stops the median photo needed +0.01 EV more for PROVIA, −0.15 for Velvia and +0.11 for Classic Chrome (ASTIA's five photos, from bodies whose brightness differs from Redlamp's, wanted +0.77). Both stay as the import's defaults.
+- **How close.** Fujifilm's LUTs are closer to the cameras' JPEGs than Redlamp Color for every simulation, and within about 0.3 of Redlamp's measured looks scored on the photos they were fitted to; for Velvia and ETERNA they're closer. As rendered, before any exposure matching, PROVIA's LUT is the closest of all (3.51, against 3.89 for Redlamp Color and 4.40 for the bundled look).
+
+#### What the fits leave (TON-45)
+
+`redlamp recipe profile --diagnose` fits each slot's table to every photo and reports what's left:
+
+- **The camera adapts to the scene.** For PROVIA (120 photos), the fit leaves a mean ΔE of 1.79, and the camera's colour for the same input colour spreads by a median 2.39 from photo to photo: 95% of samples sit in colour cells that spread more than the fit's error. 88% of what's left is lightness (70–96% for the other slots). It's tone that changes with the scene, which no single table can follow, scene-referred or not (TON-46).
+- **Generation, light and ISO hardly matter.** Tables fitted to X-Processor 4 and 5 photos alone differ by 0.81, to daylight and warm light (an as-shot white balance below 4,200 K) by 0.87, and to ISO 800 and below and above by 0.82, all under half the fit's error and about what any two halves of the photos give. Pooling them is right.
+- **Raw exposure bias.** Every RAF carries one (tag 0x9650): −0.72 EV on most X-Trans bodies, 0 on the Bayer X-A, X-T100 and X-T200, −0.49 to −1.10 on GFX bodies. It correlates with each body's exposure offset against Redlamp (r = −0.52, slope −0.47 EV per EV), but taking it out narrows the spread between bodies only from 0.235 to 0.201 EV, so it isn't applied.
+- **No new CC0 pairs.** raw.pixls.us, rescanned on 13 October, has 152 Fujifilm files, 144 of them CC0, and the same 43 neutral pairs as on 30 September.
+
 ## Lint
 
 Five deterministic checks, run on a synthetic chart through the real pipeline. Each compares the recipe's render with a neutral render, with vignette and grain removed:

@@ -34,13 +34,13 @@ public struct FujifilmLUT: Sendable, Hashable {
     /// Where Fujifilm publishes them.
     public static let downloadPage = URL(string: "https://www.fujifilm-x.com/global/support/download/lut/")!
 
-    /// How their output is decoded. Provisional until the real-photo evaluation (TON-45):
-    /// sRGB matched cameras' JPEGs on a chart as well as BT.1886's 2.4 gamma, or better.
+    /// How their output is decoded: sRGB matched cameras' JPEGs better than BT.1886's 2.4
+    /// gamma for every simulation measured (TON-45, look-development.md).
     public static let output = LookTableOutput.sRGB
 
-    /// Stops added to Redlamp's scene light before it's encoded for the LUT. Fujifilm's LUTs
-    /// render middle grey at L* 46 to 49, Redlamp's tone curve at L* 64; provisional until
-    /// the real-photo evaluation (TON-45).
+    /// Stops added to Redlamp's scene light before it's encoded for the LUT, since Fujifilm's
+    /// LUTs render middle grey darker than Redlamp's tone curve. With it, the median photo's
+    /// midtones came within a fifth of a stop of the camera's (TON-45, look-development.md).
     public static let exposure: Float = 0.9
 
     /// The group imported Fujifilm LUTs join.
