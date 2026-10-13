@@ -24,6 +24,7 @@ GitHub refuses any push to `main` that carries a merge commit (repository rules:
    ```bash
    git reset --keep <rebased head>
    git push origin main
+   git worktree remove build/tmp-rebase
    ```
 
 5. A rebase gives every unpushed commit a new hash, other sessions' included. Replace each old hash the tracker, the README and the docs cite (match commits by subject), and tell the owner which commits changed, so canvases and chats citing them can be updated.

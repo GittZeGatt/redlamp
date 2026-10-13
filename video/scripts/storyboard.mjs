@@ -4,12 +4,12 @@
 // Writes out/<composition>-storyboard.jpg (or --out=<file>). The frames go to public/review/<composition>/,
 // which is never committed. --props='{"hook":"psst"}' passes props to the composition.
 
-import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderUntilPainted } from "./blank.mjs";
+import { bundle } from "./bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);

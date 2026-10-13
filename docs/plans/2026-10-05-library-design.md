@@ -709,7 +709,7 @@ What it changed:
 
 - **The budgets are this design's, set for a million photos;** at two million, three miss. Listing takes four times its budget. The first 1,000 photos take 11.0 s to become searchable, against 3.5 s at a million, which missed too. A launch that has to build the column store takes 1.29 s and 486 MB, where every launch after maps the snapshot the first saved, in 36 ms.
 - **Indexing's memory grows faster than the library:** 5.45 GB at its peak for two million photos, against 1.33 GB for a million.
-- **The index the query scenarios share** was made by `redlamp library index` in 7,186.5 s, 278 photos a second, under heavier load (45 to 60), and kept in `lib-2m.noindex/index`; search and facets searched it, and lists, groups, stacks and duplicates a copy.
+- **The index the query scenarios share** was made by `redlamp library index` in 7,186.5 s, 278 photos a second, under heavier load (45 to 60), and kept in `lib-2m.noindex/index`; search and facets searched it, and lists, groups, stacks and duplicates a copy. The fixture and its index were deleted on 13 October to free space; `redlamp library fixture --photos 2000000` and `redlamp library index` make them again.
 - **Not run at this size:** reconcile, metadata and collections, which clone the fixture or write its sidecars, too slow on this Mac at two million as at one; vanishing-volume, another full index; and store, naming, xmp, files, keywords and import, which measure sets of their own size, not the fixture's.
 
 ### Photo lists and selections (LIB-10)

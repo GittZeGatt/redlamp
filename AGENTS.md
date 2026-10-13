@@ -25,6 +25,7 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
   mise exec -- tuist generate --no-open
   ```
 
+- **Remove your worktree when your work is done.** Each worktree has its own build folder, and they all share the SSD, which filled up on 13 October 2026 with 67 of them checked out. Once what you need is committed to your branch, and pushed when your work goes to `main`, remove the worktree from the main checkout with `git worktree remove <path>`, which deletes its build folder with it. The branch keeps your commits, and `git worktree add <path> <branch>` brings the worktree back if you're asked for more. `git worktree remove` refuses while anything is uncommitted: commit what you need, and don't `--force` it over changes you haven't read. Delete the scratch you made outside the worktree too: copies of fixtures, homes and disk images under `/Volumes/SSD/redlamp-tmp`, recordings and renders once they're delivered, and what you left in `/tmp` and `$TMPDIR`. The worktrees that stay are the main checkout, the push gate's (`../darkroom-push-gate`) and the release room's (`~/src/redlamp-release`).
 - **Sandbox:** the npm and yarn registries are unreachable; don't add packages of any kind (Swift packages included). PyPI works for research scripts. Never print secrets (the Hugging Face token in `~/.cache/huggingface/token` included).
 - **Headless Chrome**, if you need it, starts only with `--no-sandbox --disable-gpu-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader` and a throwaway `--user-data-dir`.
 

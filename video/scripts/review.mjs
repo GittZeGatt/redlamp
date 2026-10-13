@@ -6,12 +6,12 @@
 // --gl=<renderer> for Chrome's OpenGL renderer (swangle, angle, …).
 // Each still is named <composition>-<frame>[-<cue>].jpg; one that comes out blank is rendered again.
 
-import { bundle } from "@remotion/bundler";
 import { renderStill, selectComposition } from "@remotion/renderer";
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderUntilPainted } from "./blank.mjs";
+import { bundle } from "./bundle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
