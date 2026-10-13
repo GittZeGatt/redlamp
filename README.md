@@ -937,7 +937,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] **Looks measured from other apps' filters at scale:** look references made on the iPhone with Redlamp Bench, fitted into ranked candidate looks in the Recipe Lab <!-- internal; tracker: TON-36, TON-37, TON-38 -->
 
 ### Phase 4: 1.0
-- [ ] **Edits made in Lightroom:** each photo's develop settings, from its XMP sidecar or a Lightroom Classic catalog, converted once with a report of what came across, and a catalog's virtual copies as versions <!-- tracker: EDT-12, EDT-23 -->
+- [ ] **Edits made in Lightroom:** each photo's develop settings, from its XMP sidecar or a Lightroom Classic catalog, converted once with a report of what came across, photos edited in Lightroom's first versions included, and a catalog's virtual copies as versions <!-- tracker: EDT-12, EDT-23, EDT-31 -->
 - [ ] HDR and EDR editing and export <!-- tracker: TON-42 -->
 - [ ] Batch export <!-- tracker: EDT-16 -->
 - [x] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->
@@ -952,6 +952,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] **Soft frames in bursts:** the sharpest frame of each burst at the camera's focus point, proposed for you to accept <!-- tracker: LIB-42 -->
 - [x] **Your own keyboard shortcuts:** any action on the key you choose, with keymaps for people coming from Lightroom Classic, Photo Mechanic and Bridge <!-- tracker: LIB-36 -->
 - [ ] **Keywords, metadata and collections:** a keyword list with sets and a painter, IPTC fields, metadata presets and corrected capture times, and collections and smart collections, with a target collection and a rule editor, in the left panel beside All Photographs, Previous Import, Marked and Rejected, saved with each photo and carried into exports; other apps' XMP read, and written when you turn it on in Settings › Library, as Lightroom's Automatically write changes into XMP does <!-- tracker: LIB-21, LIB-22, LIB-23, LIB-24 -->
+- [ ] **Versions in the library:** each version of a photo shown, rated, labelled and collected as a photo of its own, on the same file, as Lightroom Classic's virtual copies are <!-- tracker: LIB-48 -->
 - [ ] **Files on disk:** naming templates, batch rename, moving and copying files and new folders with Undo and Stop partway, removing photos to the Trash from their menu or the Delete key, importing from cards with a backup copy, stacks, and Library Health: exact duplicates, damaged and misnamed files, and a rule for raw and JPEG pairs, moved to the Trash only from a list you confirm, and photos whose files went missing, found again or removed <!-- tracker: LIB-25, LIB-26, LIB-27, LIB-28, LIB-39, LIB-40, LIB-46 -->
 - [ ] **Coming from Lightroom:** a Lightroom Classic catalog's ratings, keywords and collections, and other apps' libraries <!-- tracker: LIB-29, LIB-30 -->
 - [ ] Library research, and a design measured against a stress harness of up to two million photos on simulated spinning and network disks, with budgets that fail on regressions <!-- internal; tracker: LIB-01, LIB-02, LIB-03, LIB-04 -->

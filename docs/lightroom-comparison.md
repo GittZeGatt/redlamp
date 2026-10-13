@@ -189,7 +189,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | History and unlimited undo | Yes | Done | | | | The last 20 editing sessions are kept with the photo |
 | Snapshots | Yes | Done | | | | |
-| Virtual copies and versions | Yes | Planned | | P2 | EDT-09 | |
+| Virtual copies and versions | Yes | Planned | | P2 | EDT-09, LIB-48 | Versions of a photo in its one sidecar, each a photo of its own in the library with its own rating, label and collections, as Lightroom Classic's virtual copies are |
 | Before and after | Yes | Done | | | | Three layouts |
 | Before and after: your choice of layout, Copy and Swap | Yes | Undecided | | | UX-31 | Left/right or top/bottom by choice, Copy Before's or After's settings, and Swap; Redlamp orients side by side from the photo's shape |
 | Reference view | Yes | Planned | | P4 | UX-34 | |
