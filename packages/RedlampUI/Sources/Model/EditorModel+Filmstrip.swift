@@ -3,10 +3,11 @@ import Foundation
 import Observation
 
 public extension EditorModel {
-    /// View › Filmstrip › Hide Automatically, also on the filmstrip's own menu and in Settings ›
-    /// Appearance: the filmstrip slides in at the window's bottom edge and away once the pointer
-    /// leaves, as Lightroom Classic's Auto Hide & Show does. Turned off, it stays up and the photo
-    /// is fitted above it (`makesRoomForFilmstrip`). The app's, kept across launches; on at first.
+    /// View › Filmstrip › Hide Automatically, also on the filmstrip's own menu, in Settings ›
+    /// Appearance and as the pin on its line of text (UX-43): the filmstrip slides in at the window's
+    /// bottom edge and away once the pointer leaves, as Lightroom Classic's Auto Hide & Show does.
+    /// Turned off, it stays up and the photo is fitted above it (`makesRoomForFilmstrip`). The app's,
+    /// kept across launches; on at first.
     var filmstripHidesAutomatically: Bool {
         get { FilmstripPreference.shared.hidesAutomatically }
         set { FilmstripPreference.shared.hidesAutomatically = newValue }

@@ -9,7 +9,7 @@ import Testing
 @testable import RedlampUI
 
 /// The filmstrip's Hide Automatically (UX-19): one saved preference for the View menu, the
-/// filmstrip's own menu and Settings, and the room the photo makes for the filmstrip while it's off.
+/// filmstrip's own menu, Settings and its pin (UX-43), and the room the photo makes for the filmstrip while it's off.
 /// One test at a time: they set the app's preference, which every editor's filmstrip follows.
 @MainActor
 @Suite(.serialized)
@@ -217,6 +217,69 @@ struct FilmstripHidingTests {
 
         other.filmstripHidesAutomatically = true
         #expect(model.filmstripHidesAutomatically && !model.makesRoomForFilmstrip)
+    }
+
+    /// Where `identifier`'s view is in `window`, while it can be seen there.
+    private static func shownFrame(of identifier: String, in window: NSWindow) -> CGRect? {
+        guard let content = window.contentView else { return nil }
+        content.layoutSubtreeIfNeeded()
+        return views(NSView.self, in: content).first { view in
+            view.accessibilityIdentifier() == identifier && !view.isHiddenOrHasHiddenAncestor
+                && sequence(first: view, next: \.superview).allSatisfy { $0.alphaValue > 0 }
+                && content.bounds.intersects(view.convert(view.bounds, to: content))
+        }.map { $0.convert($0.bounds, to: nil) }
+    }
+
+    /// UX-43: the pin sits at the right end of the line of text above the photos, and goes with the line.
+    @Test func `the floating filmstrip's line of text ends in its pin, and hiding the line hides the pin`(
+    ) async throws {
+        defer { cleanUp() }
+        let preference = FilmstripPreference.shared
+        let kept = (hides: preference.hidesAutomatically, line: preference.showsInfoLine)
+        defer {
+            preference.hidesAutomatically = kept.hides
+            preference.showsInfoLine = kept.line
+        }
+        let model = try await editor()
+        model.filmstripHidesAutomatically = false
+        model.filmstripShowsInfoLine = true
+        let window = Self.window(showing: model)
+        defer { window.contentView = nil }
+
+        try await eventually { Self.shownFrame(of: "filmstrip.pin", in: window) != nil }
+        let pin = try #require(Self.shownFrame(of: "filmstrip.pin", in: window))
+        let strip = try #require(Self.views(FilmstripStripView.self, in: window.contentView).first)
+        let photos = strip.convert(strip.bounds, to: nil)
+        #expect(pin.minY >= photos.maxY - 0.5, "the pin at \(pin) is above the photos at \(photos)")
+        #expect(pin.maxX > photos.maxX - 40 && pin.maxX <= photos.maxX, "the pin at \(pin) ends the line")
+
+        model.filmstripShowsInfoLine = false
+        try await eventually { Self.shownFrame(of: "filmstrip.pin", in: window) == nil }
+        #expect(Self.shownFrame(of: "filmstrip.pin", in: window) == nil, "the line hidden, there's no pin")
+    }
+
+    /// UX-43: Library's filmstrip is docked, so its line of text has no pin.
+    @Test func `only the filmstrip that floats has a pin`() async throws {
+        defer { cleanUp() }
+        let kept = FilmstripPreference.shared.showsInfoLine
+        defer { FilmstripPreference.shared.showsInfoLine = kept }
+        let model = try await editor()
+        model.filmstripShowsInfoLine = true
+        func pin(floating: Bool) async throws -> CGRect? {
+            _ = NSApplication.shared
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1000, height: 200), styleMask: [.titled],
+                backing: .buffered, defer: false,
+            )
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: FilmstripView(floating: floating).environment(model))
+            defer { window.contentView = nil }
+            try await eventually { !Self.views(FilmstripStripView.self, in: window.contentView).isEmpty }
+            try #require(!Self.views(FilmstripStripView.self, in: window.contentView).isEmpty, "no filmstrip shown")
+            return Self.shownFrame(of: "filmstrip.pin", in: window)
+        }
+        #expect(try await pin(floating: true) != nil, "Develop's filmstrip, which floats, has it")
+        #expect(try await pin(floating: false) == nil, "Library's, docked, hasn't")
     }
 
     /// #344: the filmstrip that slid away once the pointer left it comes back as it was left, scrolled

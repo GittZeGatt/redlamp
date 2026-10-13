@@ -3,8 +3,10 @@ import RedlampEngineAPI
 import SwiftUI
 
 /// The filmstrip: its line of text (Show Info Line, UX-42) above its photos, at the size its thumbnails are, which
-/// dragging its top edge changes.
+/// dragging its top edge changes. Where it floats, the line ends in its pin (UX-43).
 struct FilmstripView: View {
+    /// Develop's filmstrip, which hides automatically unless it's pinned; Library's is docked.
+    let floating: Bool
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -22,6 +24,9 @@ struct FilmstripView: View {
                     Spacer()
                     FilmstripStackButton()
                     FilmstripPhotoInfo()
+                    if floating {
+                        FilmstripPin()
+                    }
                 }
                 .font(Theme.captionFont)
                 .foregroundStyle(Theme.secondaryLabel)
@@ -237,6 +242,32 @@ private struct FilmstripPhotoInfo: View {
             Text("\(info.pixelSize.width) × \(info.pixelSize.height)  ·  \(info.sensorDescription)")
                 .foregroundStyle(Theme.tertiaryLabel)
         }
+    }
+}
+
+/// The pin that keeps the floating filmstrip shown (UX-43), filled while it does: a click turns Hide Automatically off
+/// or on, as the menus' item and Settings' switch do.
+private struct FilmstripPin: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let pinned = !model.filmstripHidesAutomatically
+        Toggle(isOn: Binding(
+            get: { !model.filmstripHidesAutomatically },
+            set: { model.filmstripHidesAutomatically = !$0 },
+        )) {
+            Image(systemName: pinned ? "pin.fill" : "pin")
+                .frame(width: 26, height: 22)
+                .foregroundStyle(pinned ? Color.accentColor : Theme.secondaryLabel)
+                .background(Capsule().fill(pinned ? Theme.selection : .clear))
+                .contentShape(Capsule())
+        }
+        .toggleStyle(.button)
+        .buttonStyle(.plain)
+        .help(pinned ? "Hide the filmstrip automatically, once the pointer leaves it"
+            : "Keep the filmstrip shown, with the photo fitted above it")
+        .accessibilityLabel("Pin Filmstrip")
+        .automationIdentifier("filmstrip.pin")
     }
 }
 

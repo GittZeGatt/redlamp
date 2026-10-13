@@ -130,8 +130,9 @@ struct EditorOverlays: View {
 /// over it, and away shortly after the pointer leaves. With nothing selected it stays, as
 /// it is the way to pick a photo. It also comes up for a few seconds when a focus stack is
 /// found, so its banner is seen. With Hide Automatically off it stays up, and the photo is
-/// fitted above it. Its own menu, everywhere on it but its photos, has Hide Automatically, Show Info Line and
-/// the thumbnails' sizes; with the line hidden, what only it shows floats above it (`FilmstripStatus`).
+/// fitted above it; the pin at the end of its line of text turns it off and on (UX-43). Its own menu, everywhere
+/// on it but its photos, has Hide Automatically, Show Info Line and the thumbnails' sizes; with the line hidden,
+/// what only it shows floats above it (`FilmstripStatus`).
 private struct FloatingFilmstrip: View {
     @Environment(EditorModel.self) private var model
     @Environment(ThemeSettings.self) private var theme
@@ -159,7 +160,7 @@ private struct FloatingFilmstrip: View {
                     overEdge = inside
                     hoverChanged()
                 }
-            FilmstripView()
+            FilmstripView(floating: true)
                 .modifier(FloatingPane(opacity: theme.panelOpacity))
                 // On the pane, so its empty parts take it too; a photo's cell has its own.
                 .contextMenu {

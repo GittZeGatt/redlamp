@@ -258,13 +258,13 @@ final class LibraryModuleView: NSView {
 }
 
 /// The filmstrip in the Library module, in the pane the floating one has, with its menu but for Hide
-/// Automatically: it's docked here.
+/// Automatically, and without its pin: it's docked here.
 private struct LibraryFilmstrip: View {
     let model: EditorModel
     let theme: ThemeSettings
 
     var body: some View {
-        FilmstripView()
+        FilmstripView(floating: false)
             .modifier(FloatingPane(opacity: theme.panelOpacity))
             .contextMenu {
                 FilmstripMenuItems(floating: false)
