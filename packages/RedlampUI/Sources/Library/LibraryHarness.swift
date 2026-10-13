@@ -96,6 +96,9 @@ import RedlampLibrary
     func prepareHarnessLibrary() async {
         let sources = librarySources
         selectAllPhotos()
+        for _ in 0 ..< 100 where libraryPanels.selection.ids.isEmpty {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
         if sources.collections.isEmpty {
             let set = CollectionPath(names: [LibraryHarnessFixture.collectionSet])
             sources.create(.set, named: LibraryHarnessFixture.collectionSet)

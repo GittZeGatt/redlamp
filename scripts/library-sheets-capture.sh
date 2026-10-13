@@ -14,11 +14,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${1:?usage: scripts/library-sheets-capture.sh <out folder> [harness arguments...]}"
+mkdir -p "${1:?usage: scripts/library-sheets-capture.sh <out folder> [harness arguments...]}"
+# Absolute: the harness, launched by open, starts in /.
+OUT="$(cd "$1" && pwd)"
 shift
 BUNDLE="$ROOT/build/DerivedData/Build/Products/${CONFIGURATION:-Debug}/RedlampHarness.app"
 [[ -d "$BUNDLE" ]] || { echo "error: build the harness first (mise run h)" >&2; exit 1; }
-mkdir -p "$OUT"
 
 SHOTS=(
     library-import:import-photos:opened library-import:import-photos:finished

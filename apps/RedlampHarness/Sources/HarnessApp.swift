@@ -74,7 +74,8 @@ final class HarnessAppDelegate: NSObject, NSApplicationDelegate {
     /// `view` drawn over its window's background colour: a sheet's glass is its window's, not drawn by its views.
     @MainActor
     private static func image(of view: NSView, in window: NSWindow) -> NSBitmapImageRep? {
-        let scale = window.backingScaleFactor
+        // At 1x: a view drawn into a context of its own doesn't take the context's scale.
+        let scale: CGFloat = 1
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width * scale),
             pixelsHigh: Int(view.bounds.height * scale), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
