@@ -881,6 +881,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction that keeps a clipped sky's colour <!-- tracker: CAM-05, CAM-06, CAM-08, CAM-31 -->
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube`, `.3dl` and HaldCLUT import (with LUTs for S-Log3, LogC3, V-Log and Apple Log footage), 39 bundled recipes, and the Recipe Lab <!-- tracker: EDT-07, TON-11, TON-28 -->
 - [x] Before/After layouts, themes and a Settings window
+- [ ] Versions of a photo, as Lightroom's virtual copies, kept in its one sidecar <!-- tracker: EDT-09 -->
 - [x] Edge-aware Highlights and Shadows, and edge-refined Dehaze <!-- tracker: TON-05, TON-27 -->
 - [x] **Film effects for recipes:** halation (the red glow around bright lights), bloom and diffusion, and film grain that varies with density and scales with output size <!-- tracker: TON-17, TON-18, TON-19 -->
 - [x] DNG camera profiles: dual-illuminant colour, the embedded HueSatMap, and the profile's own look offered as a Base Look <!-- tracker: CAM-04 -->
@@ -936,7 +937,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] **Looks measured from other apps' filters at scale:** look references made on the iPhone with Redlamp Bench, fitted into ranked candidate looks in the Recipe Lab <!-- internal; tracker: TON-36, TON-37, TON-38 -->
 
 ### Phase 4: 1.0
-- [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
+- [ ] **Edits made in Lightroom:** each photo's develop settings, from its XMP sidecar or a Lightroom Classic catalog, converted once with a report of what came across, and a catalog's virtual copies as versions <!-- tracker: EDT-12, EDT-23 -->
 - [ ] HDR and EDR editing and export <!-- tracker: TON-42 -->
 - [ ] Batch export <!-- tracker: EDT-16 -->
 - [x] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->

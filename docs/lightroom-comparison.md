@@ -180,7 +180,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Batch export | Yes | Planned | | P4 | EDT-16 | |
 | Batch rename | Yes | In progress | | P4 | LIB-25, LIB-26 | Rename Photos (F2): naming templates shared with importing, batch export and capture sessions, a live preview of every new name, and Undo; Move to Folder and Copy to Folder from the menus, photos dragged onto a folder (⌥ to copy), and Stop partway |
 | Open photos edited in Lightroom | Yes | Planned | | P4 | EDT-12 | Converts Lightroom's XMP sidecars once, and never writes them |
-| Bring a Lightroom Classic catalog across | Yes (Lightroom's migration from Classic) | Undecided | | | EDT-23 | Each photo's develop settings, rating, flag and label, read without changing the catalog |
+| Bring a Lightroom Classic catalog's edits across | Yes (Lightroom's migration from Classic) | Planned | | P4 | EDT-23 | Each photo's develop settings, converted once with a report, and its virtual copies as versions, read without changing the catalog; its ratings, keywords and collections come across with the library |
 | Match Total Exposures | Yes (Classic) | Undecided | | | EDT-21 | |
 
 ## History and versions
