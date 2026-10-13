@@ -210,17 +210,34 @@ final class ActionButton: NSButton {
     }
 }
 
-/// A sheet of labelled fields with Cancel and a default button, over the editor window. Shortcuts stay off
-/// while it's up.
+/// A sheet of labelled fields with Cancel and a default button, over the editor window: the source list's (New
+/// Collection…, Rename…, Add to a Collection…, the smart collection editor) and the panels' (Custom Labels, the
+/// Keyword List's, Code Replacements, Edit Capture Time, Metadata Presets). On macOS 26 a sheet has no title bar, so
+/// its title heads it, as the Mac's own sheets do; then its fields, each label trailing in its column at the field's
+/// first baseline, and at the bottom any leading buttons, then Cancel and the default button, which Return presses
+/// and the regression suite finds as `panelSheet.ok`. Shortcuts stay off while it's up.
 @MainActor
 final class PanelSheet: NSObject, NSWindowDelegate {
     let window: NSWindow
+    private let heading: NSTextField
     private let grid = NSGridView()
     private let model: EditorModel
     private var done: (@MainActor () -> Bool)?
     /// Buttons at the leading edge of the sheet's bottom row, such as Delete Preset.
     var leadingButtons: [NSView] = []
     private static var shown: [PanelSheet] = []
+
+    /// The Mac's spacing for a sheet: its margins, under its heading, between its rows and their columns, and above
+    /// its buttons; and its push buttons' least width, so a short title doesn't make a small target.
+    @MainActor enum Layout {
+        static let margin: CGFloat = 20
+        static let belowHeading: CGFloat = 14
+        static let rowSpacing: CGFloat = 10
+        static let columnSpacing: CGFloat = 8
+        static let aboveButtons: CGFloat = 20
+        static let buttonSpacing: CGFloat = 12
+        static let buttonWidth: CGFloat = 80
+    }
 
     init(title: String, model: EditorModel) {
         self.model = model
@@ -229,28 +246,33 @@ final class PanelSheet: NSObject, NSWindowDelegate {
             defer: false,
         )
         window.title = title
+        heading = NSTextField(labelWithString: title)
+        heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        heading.lineBreakMode = .byTruncatingTail
+        heading.setAccessibilityIdentifier("sourceSheet.heading")
         super.init()
-        grid.rowSpacing = 8
-        grid.columnSpacing = 8
-        grid.rowAlignment = .firstBaseline
+        grid.rowSpacing = Layout.rowSpacing
+        grid.columnSpacing = Layout.columnSpacing
         grid.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    /// A row: a label and a control, or a control alone across both columns.
+    /// A row: a label and a control, or a control alone, under the controls before it.
     func add(_ label: String?, _ control: NSView) {
         if let label {
             let text = NSTextField(labelWithString: label)
             text.alignment = .right
-            grid.addRow(with: [text, control])
+            let row = grid.addRow(with: [text, control])
+            row.cell(at: 0).xPlacement = .trailing
+            row.rowAlignment = .firstBaseline
         } else {
             let row = grid.addRow(with: [NSGridCell.emptyContentView, control])
             row.cell(at: 0).xPlacement = .trailing
         }
     }
 
-    /// Shows the sheet over the editor window; `done` runs on the default button and says whether the sheet
-    /// may close. With `lines`, the sheet holds text of many lines, where Return starts a new one, and ⌘Return
-    /// is the default button's. False when there's no window to show it over.
+    /// Shows the sheet over the editor window; `done` runs on the default button and says whether the sheet may close.
+    /// With `lines`, the sheet holds text of many lines, where Return starts a new one, and ⌘Return is the default
+    /// button's. False when there's no window to show it over.
     @discardableResult
     func begin(
         button: String, first: NSView? = nil, lines: Bool = false, done: @escaping @MainActor () -> Bool,
@@ -260,6 +282,7 @@ final class PanelSheet: NSObject, NSWindowDelegate {
         let content = NSView()
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel))
         cancel.keyEquivalent = "\u{1B}"
+        cancel.setAccessibilityIdentifier("panelSheet.cancel")
         let ok = NSButton(title: button, target: self, action: #selector(confirm))
         ok.keyEquivalent = "\r"
         if lines {
@@ -267,19 +290,24 @@ final class PanelSheet: NSObject, NSWindowDelegate {
         }
         ok.setAccessibilityIdentifier("panelSheet.ok")
         let buttons = PanelSheet.buttons(cancel: cancel, ok: ok, leading: leadingButtons)
-        buttons.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(grid)
-        content.addSubview(buttons)
-        if !leadingButtons.isEmpty {
-            buttons.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20).isActive = true
+        for view in [heading, grid, buttons] as [NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(view)
         }
+        let margin = Layout.margin
         NSLayoutConstraint.activate([
-            grid.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
-            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
-            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            buttons.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 24),
-            buttons.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
+            heading.topAnchor.constraint(equalTo: content.topAnchor, constant: margin),
+            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: margin),
+            heading.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -margin),
+            grid.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: Layout.belowHeading),
+            grid.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: margin),
+            grid.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -margin),
+            buttons.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: Layout.aboveButtons),
+            buttons.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -margin),
+            buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -margin),
+            leadingButtons.isEmpty
+                ? buttons.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: margin)
+                : buttons.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: margin),
         ])
         window.contentView = content
         window.setContentSize(content.fittingSize)
@@ -294,18 +322,15 @@ final class PanelSheet: NSObject, NSWindowDelegate {
     /// Cancel and the default button.
     static func buttons(cancel: NSButton, ok: NSButton, leading: [NSView] = []) -> NSStackView {
         for button in [cancel, ok] {
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: minimumButtonWidth).isActive = true
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: Layout.buttonWidth).isActive = true
         }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let stack = NSStackView(views: leading + (leading.isEmpty ? [] : [spacer]) + [cancel, ok])
         stack.orientation = .horizontal
-        stack.spacing = 12
+        stack.spacing = Layout.buttonSpacing
         return stack
     }
-
-    /// A dialog's push buttons are no narrower than this, so a short title doesn't make a small target.
-    static let minimumButtonWidth: CGFloat = 80
 
     @objc private func confirm() {
         guard done?() ?? true else { return }

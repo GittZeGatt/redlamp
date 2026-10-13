@@ -97,7 +97,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         rollBackButton.toolTip = "Moves the copies the import made to the Trash, takes its photos out of the library "
             + "and removes the folders it made"
         for button in [rollBackButton, resumeButton, cancelButton, importButton] {
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.Layout.buttonWidth).isActive = true
         }
         let bar = NSStackView(views: [status, progress, rollBackButton, resumeButton, cancelButton, importButton])
         bar.orientation = .horizontal

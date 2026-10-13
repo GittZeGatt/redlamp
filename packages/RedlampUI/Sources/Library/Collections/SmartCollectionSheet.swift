@@ -12,7 +12,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
     /// The smart collection edited; nil for a new one.
     private let editing: CollectionPath?
     private var rules: SmartRules
-    private let sheet: SourceSheet
+    private let sheet: PanelSheet
     private let name: NSTextField
     private let inside: (button: NSPopUpButton, chosen: @MainActor () -> CollectionPath?)
     private let match = NSPopUpButton()
@@ -53,7 +53,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         self.model = model
         self.editing = editing
         self.rules = rules
-        sheet = SourceSheet(title: editing == nil ? "New Smart Collection" : "Edit Smart Collection", model: model)
+        sheet = PanelSheet(title: editing == nil ? "New Smart Collection" : "Edit Smart Collection", model: model)
         self.name = CollectionSheets.nameField(name)
         inside = CollectionSheets.setPopUp(model.librarySources, selecting: set)
         super.init()
@@ -73,8 +73,9 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
             NSTextField(labelWithString: "Photos matching"), match, NSTextField(labelWithString: "of these rules:"),
         ])
         rows.orientation = .vertical
-        rows.alignment = .leading
+        rows.alignment = .width
         rows.spacing = 6
+        rows.widthAnchor.constraint(equalToConstant: Self.rulesWidth).isActive = true
         let addRule = NSButton(title: "Add Rule", target: nil, action: nil)
         addRule.setAccessibilityIdentifier("smart.addRule")
         addRule.onAction { [weak self] _ in self?.insert(.rule(SmartRules.Rule()), after: []) }
@@ -87,7 +88,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         text.placeholderString = "flag:pick edited:no"
         text.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         text.delegate = self
-        text.widthAnchor.constraint(equalToConstant: 420).isActive = true
+        text.widthAnchor.constraint(equalToConstant: Self.rulesWidth).isActive = true
         count.textColor = .secondaryLabelColor
         count.setAccessibilityIdentifier("smart.count")
         sheet.add("Name:", name)
@@ -157,7 +158,8 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         value.placeholderString = Self.placeholder(for: rule.field)
         value.setAccessibilityIdentifier(identifier + ".value")
         value.delegate = self
-        value.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        value.widthAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        value.setContentHuggingPriority(.defaultLow, for: .horizontal)
         values[ObjectIdentifier(value)] = path
         return line(path, [field, comparison, value] + buttons(at: path, identifier: identifier))
     }
@@ -180,9 +182,14 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
             guard let self, case let .group(group)? = rules[path] else { return }
             insert(.rule(SmartRules.Rule()), after: path + [group.rows.count - 1])
         }
+        let room = NSView()
+        room.setContentHuggingPriority(.init(1), for: .horizontal)
         return line(
             path,
-            [match, NSTextField(labelWithString: "of these:"), inside] + buttons(at: path, identifier: identifier),
+            [match, NSTextField(labelWithString: "of these:"), inside, room] + buttons(
+                at: path,
+                identifier: identifier,
+            ),
         )
     }
 
@@ -209,14 +216,19 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         return button
     }
 
-    /// A row's controls, indented by how deep in groups it is.
+    /// A row's controls, indented by how deep in groups it is, across the rules' width, so every row's − and + line
+    /// up at its trailing edge.
     private func line(_ path: [Int], _ views: [NSView]) -> NSView {
         let indent = NSView()
         indent.widthAnchor.constraint(equalToConstant: CGFloat(path.count - 1) * 24).isActive = true
         let stack = NSStackView(views: [indent] + views)
         stack.spacing = 6
+        stack.setClippingResistancePriority(.defaultLow, for: .horizontal)
         return stack
     }
+
+    /// The width of the rules and of the text they're written as.
+    private static let rulesWidth: CGFloat = 460
 
     private func insert(_ row: SmartRules.Row, after path: [Int]) {
         rules.insert(row, after: path)

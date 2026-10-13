@@ -19,6 +19,8 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         presets: NamingPreset.builtIn.map { ($0.name, $0.template) }, store: model.presets,
     )
     private let texts = NSStackView()
+    /// The label of the texts' row: the first text the template uses.
+    private let textsLabel = RenameSheetController.label("Custom Text")
     /// The form's rows of the template's error and of the texts it uses, hidden while there's none.
     private var errorRow: NSGridRow?
     private var textsRow: NSGridRow?
@@ -85,7 +87,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         }
         template.options = { [weak self] in self?.model.options ?? NamingOptions() }
         texts.orientation = .vertical
-        texts.alignment = .leading
+        texts.alignment = .width
 
         start.stringValue = String(model.options.sequenceStart)
         start.delegate = self
@@ -105,7 +107,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
             [Self.label("Preset"), presets],
             [Self.label("Template"), field],
             [NSGridCell.emptyContentView, error],
-            [NSGridCell.emptyContentView, texts],
+            [textsLabel, texts],
             [Self.label("Start Numbers At"), start],
             [Self.label("Extensions"), extensions],
         ])
@@ -113,10 +115,15 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         form.columnSpacing = 8
         form.rowAlignment = .firstBaseline
         form.column(at: 0).xPlacement = .trailing
-        form.cell(for: field)?.xPlacement = .fill
-        form.cell(for: error)?.xPlacement = .fill
-        field.trailingAnchor.constraint(equalTo: form.trailingAnchor).isActive = true
-        template.error.preferredMaxLayoutWidth = Self.size.width - 200
+        // Both columns at their own widths, so the form sits at the sheet's leading margin under its heading.
+        form.column(at: 0).width = (0 ..< form.numberOfRows).compactMap {
+            form.cell(atColumnIndex: 0, rowIndex: $0).contentView?.fittingSize.width
+        }.max() ?? 0
+        form.column(at: 1).width = Self.controlsWidth
+        for view in [presets, field, error, texts] {
+            form.cell(for: view)?.xPlacement = .fill
+        }
+        template.error.preferredMaxLayoutWidth = Self.controlsWidth
         errorRow = form.row(at: 2)
         textsRow = form.row(at: 3)
 
@@ -172,7 +179,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         stopButton.isHidden = true
         stopButton.setAccessibilityIdentifier("rename.stop")
         for button in [stopButton, cancel, rename] {
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.Layout.buttonWidth).isActive = true
         }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -191,7 +198,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         stack.setCustomSpacing(16, after: form)
         stack.setCustomSpacing(20, after: status)
         stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        for view in [note, form, scroll, summary, progress, status, buttons] as [NSView] {
+        for view in [note, scroll, summary, progress, status, buttons] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         }
@@ -210,6 +217,9 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
     }
 
     /// A form's label: the name and a colon, its trailing edge against its control.
+    /// The width of the form's controls, which its fields fill.
+    private static let controlsWidth: CGFloat = 400
+
     static func label(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text + ":")
         label.alignment = .right
@@ -280,6 +290,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         texts.arrangedSubviews.forEach { $0.removeFromSuperview() }
         textFields = [:]
         textsRow?.isHidden = wanted.isEmpty
+        textsLabel.stringValue = (wanted.first.map { $0.isEmpty ? "Custom Text" : $0.capitalized + " Name" } ?? "") + ":"
         for name in wanted {
             let field = NSTextField()
             field.placeholderString = name.isEmpty ? "Custom Text" : name.capitalized + " Name"
@@ -287,7 +298,6 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
             field.delegate = self
             field.identifier = NSUserInterfaceItemIdentifier("rename.text." + name)
             field.setAccessibilityIdentifier("rename.text." + name)
-            field.widthAnchor.constraint(equalToConstant: 280).isActive = true
             texts.addArrangedSubview(field)
             textFields[name] = field
         }

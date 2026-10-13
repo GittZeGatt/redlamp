@@ -61,6 +61,7 @@ final class MoveEditsSheetController: NSViewController {
         kept = sheet
         sheet.title = "Move Edits and Metadata"
         sheet.contentViewController = controller
+        sheet.setContentSize(controller.view.fittingSize)
         editor.isModalDialogOpen = true
         current = controller
         window.beginSheet(sheet)
@@ -81,6 +82,7 @@ final class MoveEditsSheetController: NSViewController {
         grid.columnSpacing = 8
         grid.rowAlignment = .firstBaseline
         grid.column(at: 0).xPlacement = .trailing
+        grid.setContentHuggingPriority(.required, for: .vertical)
         let how = Self.note(MoveEditsModel.how)
 
         status.font = .systemFont(ofSize: 11)
@@ -104,7 +106,7 @@ final class MoveEditsSheetController: NSViewController {
         showSetAside.isHidden = true
         showSetAside.setAccessibilityIdentifier("moveEdits.showSetAside")
         for button in [cancel, move] {
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.minimumButtonWidth).isActive = true
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: PanelSheet.Layout.buttonWidth).isActive = true
         }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
