@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The build Mac: heavy checks run on the owner's MacBook Pro, over SSH from this Mac (ARC-15).
 
-Run from the owner's own Terminal. Agents' shells can't reach the local network, so for them a
-check runs here, as it would without the build Mac:
+Run from the owner's own Terminal, or from an agent's shell through the sandbox relay
+(scripts/sandbox-relay.py). Without it agents' shells can't reach the local network, and a check
+runs here, as it would without the build Mac:
 
     scripts/build-mac.py status               # whether it answers, its versions, what it's running
     scripts/build-mac.py gate [<commit>]      # the push gate on a commit (HEAD by default)
