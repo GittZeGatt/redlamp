@@ -342,10 +342,34 @@ private struct RuleMapper {
     // MARK: - Words
 
     /// The rule as Lightroom's editor shows it, near enough: `rating >= 3`, `keywords any birds`.
+    /// A rule as Lightroom Classic's Smart Collection editor words it, such as "Edit Date is in the last 7 days"; a
+    /// criterion or an operation it doesn't name as the catalog writes it.
     static func describe(_ rule: LuaTable) -> String {
-        [rule.text("criteria"), rule.text("operation"), rule.text("value"), rule.text("value2")]
-            .compactMap { $0.flatMap(LightroomCatalogReader.text) }.joined(separator: " ")
+        let criteria = rule.text("criteria").flatMap(LightroomCatalogReader.text)
+        let operation = rule.text("operation").flatMap(LightroomCatalogReader.text)
+        return [
+            criteria.map { criteriaWords[$0.lowercased()] ?? $0 },
+            operation.map { operationWords[$0] ?? $0 },
+            rule.text("value").flatMap(LightroomCatalogReader.text),
+            rule.text("value2").flatMap(LightroomCatalogReader.text),
+        ].compactMap(\.self).joined(separator: " ")
     }
+
+    private static let criteriaWords: [String: String] = [
+        "rating": "Rating", "pick": "Pick Flag", "labelcolor": "Label Color", "labeltext": "Label Text",
+        "keywords": "Keywords", "capturetime": "Capture Date", "touchtime": "Edit Date", "filename": "Filename",
+        "fileformat": "File Type", "camera": "Camera", "lens": "Lens", "isospeedrating": "ISO Speed Rating",
+        "focallength": "Focal Length", "aperture": "Aperture", "shutterspeed": "Shutter Speed",
+        "collection": "Collection", "folder": "Folder", "title": "Title", "caption": "Caption",
+        "all": "Any Searchable Text", "hasadjustments": "Has Edits", "aspectratio": "Aspect Ratio",
+    ]
+
+    private static let operationWords: [String: String] = [
+        "==": "is", "!=": "is not", ">": "is greater than", "<": "is less than", ">=": "is greater than or equal to",
+        "<=": "is less than or equal to", "in": "is in the range", "inLast": "is in the last",
+        "notInLast": "is not in the last", "any": "contains", "all": "contains all", "words": "contains words",
+        "noneOf": "doesn't contain", "beginsWith": "starts with", "endsWith": "ends with",
+    ]
 
     /// A text rule's words: split at commas when it has any, else at spaces.
     static func words(_ text: String) -> [String] {

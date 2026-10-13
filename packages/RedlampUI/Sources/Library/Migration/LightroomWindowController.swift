@@ -54,24 +54,22 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
     }
 
     private func makeContent() -> NSView {
-        let heading = NSTextField(labelWithString: "Catalog")
-        heading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        let heading = NSTextField(labelWithString: "Catalog:")
         catalogLabel.lineBreakMode = .byTruncatingMiddle
         catalogLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        catalogLabel.setContentHuggingPriority(.init(1), for: .horizontal)
         catalogLabel.setAccessibilityIdentifier("lightroom.catalog")
         chooseButton.target = self
         chooseButton.action = #selector(chooseCatalog)
         chooseButton.setAccessibilityIdentifier("lightroom.choose")
-        let header = NSStackView(views: [heading, catalogLabel, chooseButton])
-        header.orientation = .horizontal
-        header.spacing = 8
+        let header = Self.row([heading, catalogLabel, chooseButton], spacing: 8)
 
-        let rootsHeading = NSTextField(labelWithString: "Root folders")
+        let rootsHeading = NSTextField(labelWithString: "Root Folders")
         rootsHeading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
         roots.orientation = .vertical
         roots.alignment = .leading
         roots.spacing = 6
-        roots.edgeInsets = NSEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
+        roots.setClippingResistancePriority(.defaultLow, for: .horizontal)
         roots.setAccessibilityIdentifier("lightroom.roots")
         roots.translatesAutoresizingMaskIntoConstraints = false
         let rootsContainer = FlippedView()
@@ -108,7 +106,7 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
         status.font = .systemFont(ofSize: 12)
         status.maximumNumberOfLines = 3
         status.setAccessibilityIdentifier("lightroom.status")
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        status.setContentHuggingPriority(.init(1), for: .horizontal)
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         progress.isIndeterminate = false
         progress.minValue = 0
@@ -128,19 +126,56 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
             button.setAccessibilityIdentifier(identifier)
         }
         importButton.keyEquivalent = "\r"
-        let bar = NSStackView(views: [status, progress, undoButton, stopButton, importButton])
-        bar.orientation = .horizontal
-        bar.spacing = 10
+        let bar = Self.row([status, progress, undoButton, stopButton, importButton], spacing: 10)
 
         let line = NSBox()
         line.boxType = .separator
         let content = NSStackView(views: [header, rootsHeading, rootsScroll, scroll, line, bar])
         content.orientation = .vertical
-        content.alignment = .width
+        content.alignment = .leading
         content.spacing = 10
         content.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 12, right: 16)
-        content.setCustomSpacing(4, after: rootsHeading)
+        for view in [header, rootsScroll, scroll, line, bar] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -32).isActive = true
+        }
+        content.setCustomSpacing(6, after: rootsHeading)
+        content.setCustomSpacing(14, after: line)
         return content
+    }
+
+    /// A row of views across its width, centred on one line, the one that hugs least taking what's left and
+    /// truncating.
+    private static func row(_ views: [NSView], spacing: CGFloat) -> NSStackView {
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.distribution = .fill
+        row.alignment = .centerY
+        row.spacing = spacing
+        return row
+    }
+
+    /// The report's lines without the indent they share, those at it in bold and capitalised, as the headings of the
+    /// lines indented under them.
+    private static func report(_ lines: [String]) -> NSAttributedString {
+        let text = NSMutableAttributedString()
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 2
+        let indent = lines.map { $0.prefix { $0 == " " }.count }.min() ?? 0
+        for (place, whole) in lines.enumerated() {
+            var line = String(whole.dropFirst(indent))
+            let section = !line.hasPrefix(" ")
+            if section, let first = line.first {
+                line = first.uppercased() + line.dropFirst()
+            }
+            text.append(NSAttributedString(string: (place == 0 ? "" : "\n") + line, attributes: [
+                .font: section ? NSFont.boldSystemFont(ofSize: NSFont.smallSystemFontSize)
+                    : NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paragraph,
+            ]))
+        }
+        return text
     }
 
     // MARK: - Showing
@@ -176,7 +211,9 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
         if shown.map({ $0.report != model.report || $0.locating == model.isBusy }) ?? true {
             shown = (model.report, !model.isBusy)
             showRoots(model.report?.roots ?? [])
-            reportView.string = model.report.map { $0.lines(roots: false).dropFirst().joined(separator: "\n") } ?? ""
+            reportView.textStorage?.setAttributedString(Self.report(model.report.map {
+                Array($0.lines(roots: false).dropFirst())
+            } ?? []))
         }
         status.stringValue = model.status
         chooseButton.isEnabled = !model.isBusy
@@ -208,11 +245,13 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
             roots.addArrangedSubview(NSTextField(labelWithString: model.report == nil ? "—" : "None"))
             return
         }
+        var states: [NSTextField] = []
         for (place, root) in list.enumerated() {
             let location = root.path.map { root.moved ? "\(root.lightroomPath) → \($0)" : $0 } ?? root.lightroomPath
             let label = NSTextField(labelWithString: location)
             label.lineBreakMode = .byTruncatingMiddle
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            label.setContentHuggingPriority(.init(1), for: .horizontal)
             let state = NSTextField(labelWithString: Self.describe(root))
             state.textColor = root.state == .missing || root.state == .offline ? .systemRed : .secondaryLabelColor
             state.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -222,10 +261,15 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
             locate.isEnabled = !model.isBusy
             locate.setAccessibilityIdentifier("lightroom.locate.\(place)")
             rootPaths[place] = root.lightroomPath
-            let row = NSStackView(views: [label, state, locate])
-            row.orientation = .horizontal
-            row.spacing = 8
+            states.append(state)
+            let row = Self.row([label, state, locate], spacing: 10)
             roots.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: roots.widthAnchor).isActive = true
+        }
+        // The states in a column of their own, as wide as the widest, the paths taking the room left.
+        let widest = states.map(\.intrinsicContentSize.width).max() ?? 0
+        for state in states {
+            state.widthAnchor.constraint(equalToConstant: widest).isActive = true
         }
     }
 
